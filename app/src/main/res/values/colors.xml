@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="darkBase">#0B0F2A</color>
+    <color name="darkMid">#111636</color>
+    <color name="softGray">#2A2E42</color>
+    <color name="primaryGold">#D4AF37</color>
+    <color name="goldRich">#E8C547</color>
+    <color name="mutedGold">#C9A961</color>
+    <color name="goldGlow">#1AD4AF37</color>
+    <color name="bronze">#8B7355</color>
+    <color name="lightNeutral">#E8E6E1</color>
+    <color name="cardBorderGold">#26D4AF37</color>
+    <color name="dividerGold">#40D4AF37</color>
+    <color name="cardBackground">#2A2E42</color>
+    <color name="titleColor">#E8E6E1</color>
+    <color name="subtitleColor">#C9A961</color>
+    <color name="categoryColor">#C9A961</color>
+    <color name="arabicColor">#F0EDE8</color>
+    <color name="urduColor">#E0DDD8</color>
+</resources>

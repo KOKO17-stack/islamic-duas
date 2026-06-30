@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Simple dome silhouette for notification -->
+    <path
+        android:fillColor="#D4AF37"
+        android:pathData="M12,4 C12,4 6,12 6,18 L18,18 C18,12 12,4 12,4 Z" />
+    <path
+        android:fillColor="#D4AF37"
+        android:pathData="M8,18 L8,22 L16,22 L16,18 Z" />
+</vector>
