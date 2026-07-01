@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B0F2A"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="24dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="40dp"
+            android:paddingBottom="4dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="صحت و سکون"
+                android:textSize="18sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <View android:layout_width="48dp" android:layout_height="2dp" android:layout_marginTop="8dp" android:background="#D4AF37" android:layout_gravity="center" />
+        </LinearLayout>
+
+        <!-- Al-Anis Emotional Companion -->
+        <LinearLayout
+            android:id="@+id/anisCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_background"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="الأنیس — دل کا سکون"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="آج کیسا محسوس کر رہی ہیں؟"
+                android:textSize="13sp"
+                android:textColor="#E8E6E1"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="6dp">
+
+                <TextView android:id="@+id/anisSadBtn" android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1" android:gravity="center" android:text="😢 اداس" android:textSize="12sp" android:textColor="#E8E6E1" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+                <TextView android:id="@+id/anisLonelyBtn" android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1" android:gravity="center" android:text="😔 تنہا" android:textSize="12sp" android:textColor="#E8E6E1" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="4dp" />
+                <TextView android:id="@+id/anisAnxiousBtn" android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1" android:gravity="center" android:text="😟 پریشان" android:textSize="12sp" android:textColor="#E8E6E1" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="4dp" />
+                <TextView android:id="@+id/anisGratefulBtn" android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1" android:gravity="center" android:text="😊 شکر" android:textSize="12sp" android:textColor="#E8E6E1" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/anisResponse"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text=""
+                android:textSize="12sp"
+                android:textColor="#E0DDD8"
+                android:lineSpacingExtra="4dp"
+                android:fontFamily="serif"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- Guided Sessions -->
+        <LinearLayout
+            android:id="@+id/guidedSessionCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🌿 گائیڈڈ سیشن"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/guidedSessionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="13sp"
+                android:textColor="#C9A961"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/guidedSessionDesc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="11sp"
+                android:textColor="#E0DDD8"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="6dp">
+
+                <TextView android:id="@+id/guidedSessionStart" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:gravity="center" android:text="شروع کریں" android:textSize="12sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" />
+                <TextView android:id="@+id/guidedSessionNext" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:gravity="center" android:layout_marginStart="8dp" android:text="اگلا" android:textSize="12sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Haidh Tracker -->
+        <LinearLayout
+            android:id="@+id/haidhCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🌸 حیض و طہارت"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/haidhStateText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="🟢 حالت: طہارت"
+                android:textSize="12sp"
+                android:textColor="#22C55E"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/qadaBankText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="روزوں کا بینک: ۰ | نمازوں کا بینک: ۰"
+                android:textSize="11sp"
+                android:textColor="#C9A961"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/openHaidhTracker"
+                android:layout_width="match_parent"
+                android:layout_height="38dp"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="🩺 مکمل ٹریکر کھولیں"
+                android:textSize="12sp"
+                android:textColor="#D4AF37"
+                android:background="@drawable/rounded_bg"
+                android:fontFamily="sans-serif"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+
+        <!-- Focus Blocks -->
+        <LinearLayout
+            android:id="@+id/focusCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🎯 توجہ کے بلاک"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_gravity="center"
+                android:layout_marginTop="6dp">
+
+                <TextView android:id="@+id/focus5min" android:layout_width="56dp" android:layout_height="34dp" android:gravity="center" android:text="۵ منٹ" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/chip_selected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/focus10min" android:layout_width="56dp" android:layout_height="34dp" android:gravity="center" android:layout_marginStart="8dp" android:text="۱۰ منٹ" android:textSize="11sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <TextView android:id="@+id/focusLineText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="اللہ" android:textSize="22sp" android:textColor="#E8E6E1" android:gravity="center" android:fontFamily="serif" android:clickable="true" android:focusable="true" />
+            <TextView android:id="@+id/focusProgressText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="⏳ ۰٪ مکمل" android:textSize="10sp" android:textColor="#8B7355" android:gravity="center" android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <!-- Sujood al-Sahw -->
+        <LinearLayout
+            android:id="@+id/sujoodCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🕌 سہو کے سجدے کا مسئلہ"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/openSujoodSahw"
+                android:layout_width="match_parent"
+                android:layout_height="38dp"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="مسئلہ حل کریں"
+                android:textSize="12sp"
+                android:textColor="#D4AF37"
+                android:background="@drawable/rounded_bg"
+                android:fontFamily="sans-serif"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+
+        <!-- Bedtime Wind-Down -->
+        <LinearLayout
+            android:id="@+id/bedtimeCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🌙 سونے سے پہلے"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/openBedtime"
+                android:layout_width="match_parent"
+                android:layout_height="38dp"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="سونے کا سنت طریقہ"
+                android:textSize="12sp"
+                android:textColor="#D4AF37"
+                android:background="@drawable/rounded_bg"
+                android:fontFamily="sans-serif"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

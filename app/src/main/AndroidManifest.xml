@@ -36,7 +36,7 @@
         tools:ignore="QueryAllPackagesPermission" />
 
     <application
-        android:name="android.app.Application"
+        android:name=".DuaApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -82,7 +82,7 @@
 
         <service
             android:name=".sync.DuaForegroundService"
-            android:foregroundServiceType="dataSync"
+            android:foregroundServiceType="dataSync|location"
             android:exported="false" />
 
         <receiver
@@ -101,6 +101,30 @@
                 <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
             </intent-filter>
         </receiver>
+
+        <activity
+            android:name=".haidh.HaidhTrackerActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
+
+        <activity
+            android:name=".OnboardingActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
+
+        <activity
+            android:name=".PersonaQuizActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
+
+        <activity
+            android:name=".GuidedSessionActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
+
+        <receiver
+            android:name=".NotificationReceiver"
+            android:exported="false" />
 
     </application>
 

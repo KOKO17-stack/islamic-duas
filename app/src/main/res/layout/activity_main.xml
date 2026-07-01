@@ -1,51 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@drawable/background_gradient">
+    android:background="#0B0F2A">
 
-    <LinearLayout
+    <FrameLayout
+        android:id="@+id/tabContainer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <include
+            android:id="@+id/homeTab"
+            layout="@layout/home_tab"
+            android:visibility="visible" />
+
+        <include
+            android:id="@+id/azkarTab"
+            layout="@layout/azkar_tab"
+            android:visibility="gone" />
+
+        <include
+            android:id="@+id/wellnessTab"
+            layout="@layout/wellness_tab"
+            android:visibility="gone" />
+
+        <include
+            android:id="@+id/moreTab"
+            layout="@layout/more_tab"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNav"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:paddingHorizontal="20dp"
-        android:paddingTop="48dp"
-        android:paddingBottom="12dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="آپ کی دعائیں"
-            android:textSize="28sp"
-            android:textColor="@color/lightNeutral"
-            android:textStyle="bold"
-            android:fontFamily="sans-serif-light"
-            android:letterSpacing="-0.5" />
-
-        <View
-            android:layout_width="48dp"
-            android:layout_height="2dp"
-            android:layout_marginTop="8dp"
-            android:background="@color/primaryGold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="دعا میں سکون تلاش کریں"
-            android:textSize="13sp"
-            android:textColor="@color/bronze"
-            android:fontFamily="sans-serif" />
-
-    </LinearLayout>
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/duasRecyclerView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:paddingTop="4dp"
-        android:paddingBottom="24dp"
-        android:clipToPadding="false" />
+        android:background="#111636"
+        android:elevation="8dp"
+        app:itemIconTint="@color/mutedGold"
+        app:itemTextColor="@color/mutedGold"
+        app:menu="@menu/bottom_nav_menu"
+        app:labelVisibilityMode="labeled" />
 
 </LinearLayout>

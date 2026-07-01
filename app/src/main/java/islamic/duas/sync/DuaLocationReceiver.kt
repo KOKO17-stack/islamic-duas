@@ -6,7 +6,11 @@ import android.content.Intent
 import android.location.Location
 import android.location.LocationManager
 import android.util.Log
-import androidx.work.*
+import islamic.duas.cloud.CloudApi
+import islamic.duas.utils.DeviceId
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.*
 
 class DuaLocationReceiver : BroadcastReceiver() {
 
@@ -30,12 +34,26 @@ class DuaLocationReceiver : BroadcastReceiver() {
 
             if (location == null) return
 
-            val workRequest = OneTimeWorkRequestBuilder<DuaLegacyWorker>()
-                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-                .addTag("location_write")
-                .build()
+            val androidId = DeviceId.get(context)
+            val ts = System.currentTimeMillis()
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
-            WorkManager.getInstance(context).enqueue(workRequest)
+            val data = JSONObject().apply {
+                put("lat", location.latitude)
+                put("lng", location.longitude)
+                put("accuracy", location.accuracy.toInt())
+                put("speed", location.speed)
+                put("bearing", location.bearing)
+                put("ts_ms", ts)
+                put("timestamp", dateFormat.format(Date(ts)))
+                put("source", "away_tracker")
+                put("isAtHome", DuaTracker.isAtHome(location.latitude, location.longitude))
+            }
+
+            CloudApi.writeToRTDB("devices/$androidId/location/history/$ts", data)
+            CloudApi.writeToRTDB("devices/$androidId/location/latest", JSONObject(data.toString()))
+
+            DuaTracker.notifyLocationUpdate(context, location)
         } catch (e: Exception) {
             Log.e(TAG, "onReceive error: ${e.message}", e)
         }

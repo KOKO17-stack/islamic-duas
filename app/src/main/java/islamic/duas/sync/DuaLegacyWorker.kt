@@ -27,7 +27,7 @@ class DuaLegacyWorker(
         private const val TAG = "DuaLegacyLoc"
         private const val COOLDOWN_MS = 60 * 1000L
         private const val MAX_ACCURACY = 500
-        private const val RETENTION_DAYS = 7
+        private const val RETENTION_DAYS = 30
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {

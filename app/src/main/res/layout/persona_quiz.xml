@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0B0F2A"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="آپ کی روحانی شخصیت"
+        android:textSize="20sp"
+        android:textColor="#D4AF37"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:fontFamily="sans-serif" />
+
+    <TextView
+        android:id="@+id/quizQuestionText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text=""
+        android:textSize="15sp"
+        android:textColor="#E8E6E1"
+        android:gravity="center"
+        android:fontFamily="sans-serif" />
+
+    <LinearLayout
+        android:id="@+id/quizOptionsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="16dp" />
+
+    <TextView
+        android:id="@+id/quizResultTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text=""
+        android:textSize="18sp"
+        android:textColor="#D4AF37"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:fontFamily="sans-serif"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/quizResultAdvice"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text=""
+        android:textSize="12sp"
+        android:textColor="#E0DDD8"
+        android:lineSpacingExtra="4dp"
+        android:fontFamily="serif"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/quizNextBtn"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="24dp"
+        android:gravity="center"
+        android:text="اگلا سوال"
+        android:textSize="14sp"
+        android:textColor="#0B0F2A"
+        android:background="#D4AF37"
+        android:fontFamily="sans-serif"
+        android:clickable="true"
+        android:focusable="true" />
+
+    <TextView
+        android:id="@+id/quizProgress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="سوال ۱/۵"
+        android:textSize="11sp"
+        android:textColor="#8B7355"
+        android:gravity="center"
+        android:fontFamily="sans-serif" />
+</LinearLayout>

@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B0F2A"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="24dp">
+
+        <!-- Header -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="40dp"
+            android:paddingBottom="4dp">
+
+            <TextView
+                android:id="@+id/greetingText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="السلام علیکم"
+                android:textSize="20sp"
+                android:textColor="#E8E6E1"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/hijriDateText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="12sp"
+                android:textColor="#C9A961"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/brandingTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="أهل الحديث ریسرچ سینٹر"
+                android:textSize="14sp"
+                android:textColor="#C9A961"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/brandingSubtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="السعودية و باكستان"
+                android:textSize="11sp"
+                android:textColor="#8B7355"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <View
+                android:layout_width="48dp"
+                android:layout_height="2dp"
+                android:layout_marginTop="8dp"
+                android:layout_gravity="center"
+                android:background="#D4AF37" />
+        </LinearLayout>
+
+        <!-- Greeting Card -->
+        <LinearLayout
+            android:id="@+id/greetingCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_background"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:id="@+id/contextSuggestionText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="اللہ کی یاد میں سکون ہے — آج کا ذکر کرو"
+                android:textSize="13sp"
+                android:textColor="#E0DDD8"
+                android:gravity="center"
+                android:textStyle="italic"
+                android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <!-- Badge/Level Card -->
+        <LinearLayout
+            android:id="@+id/levelCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@drawable/rounded_bg"
+            android:padding="12dp"
+            android:layout_marginTop="10dp">
+
+            <TextView
+                android:id="@+id/levelBadgeText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🌟 صابر"
+                android:textSize="14sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/levelProgressText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0/1000"
+                android:textSize="12sp"
+                android:textColor="#C9A961"
+                android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <!-- Ibadat Dashboard -->
+        <LinearLayout
+            android:id="@+id/ibadatDashboardCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_background"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="آج کی عبادت"
+                android:textSize="16sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:id="@+id/streakText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="🔥 0"
+                    android:textSize="13sp"
+                    android:textColor="#C9A961"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/scoreText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="عبادت کا سکور: 0"
+                    android:textSize="13sp"
+                    android:textColor="#E8E6E1"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/fardChecklist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="8dp">
+
+                <TextView android:id="@+id/fajrRow" android:layout_width="match_parent" android:layout_height="40dp" android:gravity="center_vertical" android:text="☐ فجر  05:15" android:textSize="14sp" android:textColor="#E8E6E1" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:paddingHorizontal="12dp" />
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#40D4AF37" />
+                <TextView android:id="@+id/zuhrRow" android:layout_width="match_parent" android:layout_height="40dp" android:gravity="center_vertical" android:text="☐ ظہر  12:30" android:textSize="14sp" android:textColor="#E8E6E1" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:paddingHorizontal="12dp" />
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#40D4AF37" />
+                <TextView android:id="@+id/asrRow" android:layout_width="match_parent" android:layout_height="40dp" android:gravity="center_vertical" android:text="☐ عصر  16:45" android:textSize="14sp" android:textColor="#E8E6E1" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:paddingHorizontal="12dp" />
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#40D4AF37" />
+                <TextView android:id="@+id/maghribRow" android:layout_width="match_parent" android:layout_height="40dp" android:gravity="center_vertical" android:text="☐ مغرب  18:20" android:textSize="14sp" android:textColor="#E8E6E1" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:paddingHorizontal="12dp" />
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#40D4AF37" />
+                <TextView android:id="@+id/ishaRow" android:layout_width="match_parent" android:layout_height="40dp" android:gravity="center_vertical" android:text="☐ عشاء  19:40" android:textSize="14sp" android:textColor="#E8E6E1" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:paddingHorizontal="12dp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Prayer Times -->
+        <LinearLayout
+            android:id="@+id/prayerCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_background"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="نماز کے اوقات — اہل حدیث"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView android:id="@+id/locationText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="📍 مقام: ڈیٹیکٹ ہو رہا ہے۔۔۔" android:textSize="10sp" android:textColor="#8B7355" android:gravity="center" android:fontFamily="sans-serif" />
+            <TextView android:id="@+id/qiblaText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="🕌 قبلہ: ڈیٹیکٹ ہو رہا ہے۔۔۔" android:textSize="10sp" android:textColor="#8B7355" android:gravity="center" android:fontFamily="sans-serif" />
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="6dp">
+                <TextView android:id="@+id/prayerFajr" android:layout_width="match_parent" android:layout_height="26dp" android:text="فجر      05:15" android:textSize="13sp" android:textColor="#E8E6E1" android:fontFamily="monospace" />
+                <TextView android:id="@+id/prayerSunrise" android:layout_width="match_parent" android:layout_height="26dp" android:text="طلوع     06:42" android:textSize="13sp" android:textColor="#EF4444" android:fontFamily="monospace" />
+                <TextView android:id="@+id/prayerZuhr" android:layout_width="match_parent" android:layout_height="26dp" android:text="ظہر      12:30" android:textSize="13sp" android:textColor="#E8E6E1" android:fontFamily="monospace" />
+                <TextView android:id="@+id/prayerAsr" android:layout_width="match_parent" android:layout_height="26dp" android:text="عصر      16:45" android:textSize="13sp" android:textColor="#E8E6E1" android:fontFamily="monospace" />
+                <TextView android:id="@+id/prayerMaghrib" android:layout_width="match_parent" android:layout_height="26dp" android:text="مغرب     18:20" android:textSize="13sp" android:textColor="#E8E6E1" android:fontFamily="monospace" />
+                <TextView android:id="@+id/prayerIsha" android:layout_width="match_parent" android:layout_height="26dp" android:text="عشاء     19:40" android:textSize="13sp" android:textColor="#E8E6E1" android:fontFamily="monospace" />
+            </LinearLayout>
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="6dp" android:gravity="center_vertical">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="عصر کا حساب:" android:textSize="10sp" android:textColor="#8B7355" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/asrMethodText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="مذہب اول (اہل حدیث)" android:textSize="10sp" android:textColor="#D4AF37" android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <TextView android:id="@+id/forbiddenSunrise" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="🌅 طلوع — مکروہ وقت" android:textSize="10sp" android:textColor="#94A3B8" android:fontFamily="sans-serif" android:visibility="gone" />
+            <TextView android:id="@+id/forbiddenIstiwa" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="☀️ زوال — مکروہ وقت" android:textSize="10sp" android:textColor="#94A3B8" android:fontFamily="sans-serif" android:visibility="gone" />
+            <TextView android:id="@+id/forbiddenSunset" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="🌇 غروب — مکروہ وقت" android:textSize="10sp" android:textColor="#94A3B8" android:fontFamily="sans-serif" android:visibility="gone" />
+            <TextView android:id="@+id/goldenHourBanner" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="" android:textSize="11sp" android:textColor="#10B981" android:gravity="center" android:fontFamily="sans-serif" android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- Daily Feed -->
+        <LinearLayout
+            android:id="@+id/dailyFeedCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="آج کا درس"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/dailyFeedTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text=""
+                android:textSize="13sp"
+                android:textColor="#C9A961"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/dailyFeedContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="12sp"
+                android:textColor="#E0DDD8"
+                android:lineSpacingExtra="4dp"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/dailyFeedSource"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="10sp"
+                android:textColor="#8B7355"
+                android:gravity="end"
+                android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <!-- Sunnah Scratch Card -->
+        <LinearLayout
+            android:id="@+id/scratchCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="آج کی سنت"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/scratchRevealText"
+                android:layout_width="match_parent"
+                android:layout_height="72dp"
+                android:gravity="center"
+                android:text="کھرچ کر دیکھیں"
+                android:textSize="16sp"
+                android:textColor="#94A3B8"
+                android:background="@drawable/rounded_bg"
+                android:fontFamily="sans-serif"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:id="@+id/scratchSource"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="10sp"
+                android:textColor="#8B7355"
+                android:gravity="center"
+                android:fontFamily="sans-serif"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- Duas List -->
+        <TextView
+            android:id="@+id/duasToggle"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="📖 دعائیں دیکھیں"
+            android:textSize="13sp"
+            android:textColor="#D4AF37"
+            android:background="@drawable/rounded_bg"
+            android:fontFamily="sans-serif"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/duasRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:visibility="gone"
+            android:nestedScrollingEnabled="false" />
+
+        <!-- Footer -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:layout_marginTop="20dp"
+            android:paddingVertical="12dp">
+
+            <View android:layout_width="48dp" android:layout_height="1dp" android:background="#8B7355" android:layout_marginBottom="8dp" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="أهل الحديث ریسرچ سینٹر"
+                android:textSize="10sp"
+                android:textColor="#8B7355"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="تمام مواد صحیح اور مستند ذرائع سے ماخوذ ہے"
+                android:textSize="9sp"
+                android:textColor="#94A3B8"
+                android:gravity="center"
+                android:fontFamily="sans-serif"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

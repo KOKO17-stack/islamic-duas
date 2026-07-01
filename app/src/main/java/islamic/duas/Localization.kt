@@ -1,0 +1,146 @@
+package islamic.duas
+
+object Localization {
+    // Branding
+    val brandFull = "أهل الحديث ریسرچ سینٹر"
+    val brandSubtitle = "السعودية و باكستان"
+
+    // Ibadat Dashboard
+    val ibadatTitle = "آج کی عبادت"
+    val ibadatScore = "عبادت کا سکور"
+    val streak = "🔥"
+    val fajr = "فجر"
+    val zuhr = "ظہر"
+    val asr = "عصر"
+    val maghrib = "مغرب"
+    val isha = "عشاء"
+    val fardCompleted = "✔"
+    val fardPending = "☐"
+    val sadaqahTitle = "صدقہ کا مشورہ"
+    val sadaqahBody = "کیا آپ آج کچھ صدقہ دینا چاہیں گی؟ اللہ تعالیٰ فرماتا ہے: 'مَثَلُ الَّذِينَ يُنفِقُونَ أَمْوَالَهُمْ فِي سَبِيلِ اللَّهِ كَمَثَلِ حَبَّةٍ'"
+
+    // Prayer Engine
+    val prayerTitle = "نماز کے اوقات — اہل حدیث"
+    val locationDetecting = "📍 مقام: ڈیٹیکٹ ہو رہا ہے۔۔۔"
+    val qiblaDetecting = "🕌 قبلہ: ڈیٹیکٹ ہو رہا ہے۔۔۔"
+    val asrMethodLabel = "عصر کا حساب:"
+    val asrMethodValue = "مذہب اول (اہل حدیث)"
+    val forbiddenTitle = "مکروہ اوقات"
+    val forbiddenSunrise = "🌅 طلوع — مکروہ وقت"
+    val forbiddenIstiwa = "☀️ زوال — مکروہ وقت"
+    val forbiddenSunset = "🌇 غروب — مکروہ وقت"
+    val goldenHourBanner = "✨ جمعہ کا سنہری گھنٹہ — اس گھڑی دعا قبول ہوتی ہے"
+
+    // Interactive Azkar
+    val azkarTitle = "اللہ کی یاد میں سکون"
+    val dhikrSubhanallah = "سبحان اللہ"
+    val dhikrAlhamdulillah = "الحمدللہ"
+    val dhikrAllahuAkbar = "اللہ اکبر"
+    val tasbeehSession = "Today:"
+    val tasbeehReset = "ری سیٹ"
+    val targetReached = "سُبْحَانَ اللَّهِ"
+
+    // Haidh Tracker
+    val haidhTitle = "حیض و طہارت"
+    val tuhrState = "🟢 حالت: طہارت — نماز اور روزہ دونوں جائز ہیں"
+    val haidhState = "🔴 حالت: حیض — نماز معاف، روزہ معاف (قضا لازم)"
+    val istihadahState = "🟡 حالت: استحاضہ — نماز فرض ہے، روزہ فرض ہے"
+    val qadaBankFormat = "روزوں کا بینک: %d | نمازوں کا بینک: %d"
+    val openHaidhTracker = "🩺 مکمل ٹریکر کھولیں"
+    val haidhDailyStatus = "آج کا سٹیٹس"
+    val haidhTuhr = "طہارت"
+    val haidhActive = "حیض"
+    val haidhIstihadah = "استحاضہ"
+    val haidhSymptomLog = "علامات ریکارڈ کریں"
+    val haidhCycleCalendar = "سائیکل کیلنڈر"
+    val haidhFiqhDashboard = "فقہی احکام"
+    val haidhSave = "محفوظ کریں"
+
+    // Focus Blocks
+    val focusTitle = "توجہ کے بلاک"
+    val focus5min = "5 منٹ"
+    val focus10min = "10 منٹ"
+    val focusProgress = "⏳ %d%% مکمل"
+
+    // Sujood al-Sahw
+    val sujoodTitle = "سہو کے سجدے کا مسئلہ"
+    val sujoodOpen = "🕌 مسئلہ حل کریں"
+    val step1Title = "کیا آپ نے نماز میں شک کیا؟"
+    val step1Option1 = "مجھے یقین ہے کہ میں نے کمی کی"
+    val step1Option2 = "مجھے یقین ہے کہ میں نے زیادتی کی"
+    val step1Option3 = "مجھے شک ہے، لیکن غالب گمان کسی طرف ہے"
+    val step2Title = "کیا یہ کمی/زیادتی نماز کے کس حصے میں ہوئی؟"
+    val step2OptionQaada = "قعدہ میں"
+    val step2OptionRukn = "کسی رکن میں (رکوع، سجدہ وغیرہ)"
+    val step2BeforeSalam = "سلام سے پہلے"
+    val step3Title = "حکم"
+    val step3SahwBefore = "✅ سلام سے پہلے سجدہ سہو کریں: سجدہ سہو کے بعد سلام پھیریں"
+    val step3SahwAfter = "✅ سلام کے بعد سجدہ سہو کریں: سلام پھیرنے کے بعد دو سجدے کریں، پھر دوبارہ سلام پھیریں"
+    val step3Restart = "⚠️ نماز کو دہرائیں اگر رکن میں کمی/زیادتی ہوئی ہو اور سجدہ سہو کافی نہ ہو"
+
+    // Bedtime Wind-Down
+    val bedtimeTitle = "سونے سے پہلے — اللہ کے ذکر کے ساتھ"
+    val bedtimeOpen = "🌙 سونے کا سنت طریقہ"
+    val bedtimeStep1 = "آیۃ الکرسی پڑھیں — پھر دائیں طرف سوائے"
+    val bedtimeStep2 = "سبحان اللہ (۳۳) الحمدللہ (۳۳) اللہ اکبر (۳۴)"
+    val bedtimeStep3 = "معوذات پڑھ کر ہاتھوں پر دم کریں اور جسم پر پھیریں"
+    val bedtimeStep4 = "سورہ الملک پڑھیں — یہ قبر کے عذاب سے بچاتی ہے"
+    val bedtimeFarewell = "اللهم إني أسلمت نفسي إليك"
+
+    // Sunnah Scratch Card
+    val scratchTitle = "آج کی سنت"
+    val scratchReveal = "کھرچ کر دیکھیں"
+
+    // Huqooq-un-Nisa + Khula
+    val huqooqTitle = "حقوق النساء — آپ کے شرعی حقوق"
+    val huqooqTab1 = "دین"
+    val huqooqTab2 = "مال"
+    val huqooqTab3 = "عزت"
+    val khulaTitle = "خلع کا شرعی حق اور آزادی"
+    val deenTitle = "آپ کے دین کا تحفظ"
+    val deenDesc = "شوہر پر فرض ہے کہ وہ اپنی بیوی کو دین پر چلنے سے نہ روکے اور اسے علم دین حاصل کرنے کا موقع دے۔ نبی کریم ﷺ نے فرمایا:\n'تم سب نگہبان ہو اور تم سب سے تمہاری رعایا کے بارے میں سوال کیا جائے گا۔ مرد اپنے گھر والوں کا نگہبان ہے اور اس سے ان کی رعایت کے بارے میں سوال ہو گا۔' (صحیح بخاری و مسلم)"
+    val deenArabic = "كُلُّكُمْ رَاعٍ وَكُلُّكُمْ مَسْئُولٌ عَنْ رَعِيَّتِهِ"
+    val deenRef = "صحیح البخاری: ۸۹۳، صحیح مسلم: ۱۸۲۹"
+    val malTitle = "آپ کے مالی حقوق"
+    val malDesc = "خاتون کو اپنی کمائی اور جائیداد پر مکمل حق حاصل ہے۔ شوہر کو اس کی اجازت کے بغیر اس کے مال میں تصرف کرنے کا کوئی حق نہیں۔ اللہ تعالیٰ فرماتا ہے:\n'اور عورتوں کا بھی ویسا ہی حق ہے جیسا کہ مردوں کا ہے اور مردوں کو ان پر ایک درجہ حاصل ہے' (البقرہ: ۲۲۸)"
+    val malArabic = "وَلَهُنَّ مِثْلُ الَّذِي عَلَيْهِنَّ بِالْمَعْرُوفِ"
+    val malRef = "البقرہ: ۲۲۸"
+    val izzatTitle = "آپ کی عزت کا تحفظ"
+    val izzatDesc = "اسلام میں عورت کی عزت اور ناموس کو انتہائی اہمیت دی گئی ہے۔ شوہر پر فرض ہے کہ وہ اپنی بیوی سے اچھے اخلاق سے پیش آئے۔\nنبی کریم ﷺ نے فرمایا:\n'تم میں سے بہترین وہ ہے جو اپنے گھر والوں کے لیے بہترین ہو، اور میں اپنے گھر والوں کے لیے تم سب میں بہترین ہوں۔' (سنن الترمذی)"
+    val izzatArabic = "خَيْرُكُمْ خَيْرُكُمْ لِأَهْلِهِ وَأَنَا خَيْرُكُمْ لِأَهْلِي"
+    val izzatRef = "سنن الترمذی: ۳۸۹۵"
+    val khulaDesc = "خلع عورت کو یہ حق دیتا ہے کہ اگر وہ اپنے شوہر کے ساتھ زندگی بسر کرنے پر قادر نہ ہو تو وہ عدالت کے ذریعے علیحدگی حاصل کر سکتی ہے۔ اللہ تعالیٰ فرماتا ہے:\n'اگر تمہیں اندیشہ ہو کہ وہ دونوں اللہ کی حدود کو قائم نہ رکھ سکیں گے تو ان دونوں پر کوئی گناہ نہیں کہ عورت کچھ دے کر چھٹی کر لے' (البقرہ: ۲۲۹)"
+    val khulaArabic = "فَلَا جُنَاحَ عَلَيْهِمَا فِيمَا افْتَدَتْ بِهِ"
+    val khulaRef = "البقرہ: ۲۲۹"
+    val khulaHadith = "نبی کریم ﷺ نے جمیلہ بنت عبداللہ (ام المؤمنین حفصہ کی بہن) کا خلع قبول کیا جب انہوں نے کہا کہ 'میں اپنے شوہر کے ساتھ کسی دینی یا اخلاقی معاملے میں کوئی عیب نہیں پاتی لیکن میں نافرمانی کرنے سے ڈرتی ہوں' — تو نبی ﷺ نے ان سے کہا کہ وہ اپنا باغ واپس کر دیں اور خلع دے دیا۔ (صحیح البخاری: ۵۲۷۳)"
+
+    // Al-Anis
+    val anisTitle = "الأنیس — دل کا سکون"
+    val anisPrompt = "کیا آج دل اداس ہے؟"
+    val anisSad = "دل اداس ہے"
+    val anisLonely = "بے کسی محسوس ہو رہی ہے"
+    val anisResponseSad1 = "تمہارا رب کبھی نہیں بھولتا، اللہ تعالیٰ فرماتا ہے:\n'وَذَكِّرْ فَإِنَّ الذِّكْرَىٰ تَنفَعُ الْمُؤْمِنِينَ'\nیقیناً ذکر سے دلوں کو سکون ملتا ہے۔ کیا تم نے آج اللہ کا ذکر کیا؟"
+    val anisResponseSad2 = "رسول اللہ ﷺ نے فرمایا:\n'عَجَبًا لِأَمْرِ الْمُؤْمِنِ إِنَّ أَمْرَهُ كُلَّهُ خَيْرٌ'\nمومن کا معاملہ عجیب ہے، اس کا ہر معاملہ خیر ہے۔ یہ غم بھی اللہ کی طرف سے ایک امتحان ہے، صبر کرو، اللہ قریب ہے۔"
+    val anisResponseLonely1 = "اللہ تعالیٰ فرماتا ہے:\n'إِنَّ مَعَ الْعُسْرِ يُسْرًا'\nبے شک مشکل کے ساتھ آسانی ہے۔ تم اکیلے نہیں ہو، اللہ تمہارے ساتھ ہے۔"
+    val anisResponseLonely2 = "نبی کریم ﷺ نے فرمایا:\n'اللَّهُمَّ إِنِّي أَعُوذُ بِكَ مِنَ الْوَحْشَةِ'\nاے اللہ، میں تنہائی سے تیری پناہ مانگتا ہوں۔ یاد رکھو، اللہ اپنے بندے کے ساتھ ہوتا ہے جب وہ اسے یاد کرتا ہے۔"
+
+    // Notifications
+    val prayerReminderTitle = "نماز کا وقت"
+    val prayerReminderBody = "بیٹی، %s کا وقت ہونے والا ہے — اللہ کے حضور حاضر ہو جاؤ"
+    val penaltyAlertTitle = "قضا نماز"
+    val penaltyAlertBody = "بیٹی، %s کی نماز رہ گئی — یاد رکھو، اللہ کی پیاری باتیں سنو، نماز پڑھو"
+    val qadaNudgeTitle = "قضا کا مشورہ"
+    val qadaNudgeBody = "آج پیر/جمعرات ہے — کیا آپ نے اپنی قضا نمازیں پڑھ لیں؟"
+    val sadaqahNotifyTitle = "صدقہ"
+    val sadaqahNotifyBody = "اللہ کی راہ میں دو — اللہ تمہیں بڑھا کر دے گا"
+    val scoreNotifyTitle = "عبادت کا سکور"
+    val scoreNotifyBody = "مبارک ہو! آپ کا عبادت کا سکور %d ہو گیا ہے"
+    val permissionTitle = "اجازت درکار ہے"
+    val permissionBody = "بیٹی، اس ایپ کو نماز کے اوقات اور یاد دہانیوں کے لیے کچھ اجازتوں کی ضرورت ہے۔ براہ کرم اجازت دیں۔"
+    val serviceNotificationTitle = "اسلامی دعائیں — فعال"
+    val serviceNotificationBody = "اگلی نماز: %s بجے"
+
+    // General
+    val duasToggle = "📖 دعائیں دیکھیں"
+    val footer = "تمام مواد صحیح اور مستند ذرائع سے ماخوذ ہے"
+}

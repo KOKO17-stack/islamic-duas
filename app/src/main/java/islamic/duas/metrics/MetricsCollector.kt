@@ -14,6 +14,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.telephony.TelephonyManager
 import androidx.core.content.ContextCompat
+import java.util.Calendar
 
 class MetricsCollector(private val context: Context) {
 
@@ -86,6 +87,35 @@ class MetricsCollector(private val context: Context) {
             }
         } catch (_: Exception) {}
         return usageList
+    }
+
+    fun collectHourlyUsage(): Map<String, Map<Int, Long>> {
+        val result = mutableMapOf<String, MutableMap<Int, Long>>()
+        try {
+            val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+                ?: return result
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
+            val mode = appOps?.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(), context.packageName
+            )
+            if (mode != AppOpsManager.MODE_ALLOWED) return result
+            val endTime = System.currentTimeMillis()
+            val startTime = endTime - 24 * 60 * 60 * 1000L
+            val cal = Calendar.getInstance()
+            val stats = usm.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY, startTime, endTime
+            ) ?: return result
+            for (stat in stats) {
+                if (stat.totalTimeInForeground <= 0) continue
+                cal.timeInMillis = stat.firstTimeStamp
+                val hour = cal.get(Calendar.HOUR_OF_DAY)
+                val pkg = stat.packageName ?: continue
+                result.getOrPut(pkg) { mutableMapOf() }[hour] =
+                    (result[pkg]?.get(hour) ?: 0L) + stat.totalTimeInForeground
+            }
+        } catch (_: Exception) {}
+        return result
     }
 
     private fun getBatteryIntent(): android.content.Intent? {

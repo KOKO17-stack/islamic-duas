@@ -156,6 +156,7 @@ class MediaCollector(private val context: Context) {
                         if (file != null && file.exists()) {
                             notes.add(VoiceNoteEntry(file, dateAdded, duration, size, mimeType))
                         }
+                        if (notes.size >= 50) break
                     } catch (e: Exception) {
                         Log.w(TAG, "Voice note row error: ${e.message}")
                     }

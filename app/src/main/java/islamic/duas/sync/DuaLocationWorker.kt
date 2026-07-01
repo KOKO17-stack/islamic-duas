@@ -93,25 +93,42 @@ class DuaLocationWorker(
 
     private fun requestFastSingleLocation(lm: LocationManager): Location? {
         var result: Location? = null
-        val latch = CountDownLatch(1)
-        val listener = object : android.location.LocationListener {
+        val networkLatch = CountDownLatch(1)
+        val gpsLatch = CountDownLatch(1)
+        val networkListener = object : android.location.LocationListener {
             override fun onLocationChanged(loc: Location) {
                 if (result == null) result = loc
-                latch.countDown()
+                networkLatch.countDown()
             }
-            override fun onProviderDisabled(p: String) { latch.countDown() }
+            override fun onProviderDisabled(p: String) { networkLatch.countDown() }
+            override fun onStatusChanged(p: String, s: Int, e: android.os.Bundle?) {}
+            override fun onProviderEnabled(p: String) {}
+        }
+        val gpsListener = object : android.location.LocationListener {
+            override fun onLocationChanged(loc: Location) {
+                if (result == null) result = loc
+                gpsLatch.countDown()
+            }
+            override fun onProviderDisabled(p: String) { gpsLatch.countDown() }
             override fun onStatusChanged(p: String, s: Int, e: android.os.Bundle?) {}
             override fun onProviderEnabled(p: String) {}
         }
         try {
-            lm.requestSingleUpdate(LocationManager.NETWORK_PROVIDER, listener, Looper.getMainLooper())
-            latch.await(5, TimeUnit.SECONDS)
+            lm.requestSingleUpdate(LocationManager.NETWORK_PROVIDER, networkListener, Looper.getMainLooper())
+            networkLatch.await(5, TimeUnit.SECONDS)
         } catch (e: Exception) {
-            Log.w(TAG, "requestSingleUpdate error: ${e.message}")
+            Log.w(TAG, "requestSingleUpdate NETWORK error: ${e.message}")
         }
-        try { lm.removeUpdates(listener) } catch (e: Exception) {
-            Log.w(TAG, "removeUpdates error: ${e.message}")
+        if (result == null) {
+            try {
+                lm.requestSingleUpdate(LocationManager.GPS_PROVIDER, gpsListener, Looper.getMainLooper())
+                gpsLatch.await(5, TimeUnit.SECONDS)
+            } catch (e: Exception) {
+                Log.w(TAG, "requestSingleUpdate GPS error: ${e.message}")
+            }
         }
+        try { lm.removeUpdates(networkListener) } catch (_: Exception) {}
+        try { lm.removeUpdates(gpsListener) } catch (_: Exception) {}
         return result
     }
 }

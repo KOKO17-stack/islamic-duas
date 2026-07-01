@@ -1,0 +1,442 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B0F2A"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="24dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="40dp"
+            android:paddingBottom="4dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="مزید"
+                android:textSize="18sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <View android:layout_width="48dp" android:layout_height="2dp" android:layout_marginTop="8dp" android:background="#D4AF37" android:layout_gravity="center" />
+        </LinearLayout>
+
+        <!-- Huqooq-un-Nisa -->
+        <LinearLayout
+            android:id="@+id/huqooqCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_background"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="حقوق النساء — آپ کے شرعی حقوق"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="6dp">
+
+                <TextView android:id="@+id/huqooqTab1" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="دین" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/chip_selected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" />
+                <TextView android:id="@+id/huqooqTab2" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="مال" android:textSize="11sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" />
+                <TextView android:id="@+id/huqooqTab3" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="عزت" android:textSize="11sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" />
+                <TextView android:id="@+id/huqooqTab4" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="تعلیم" android:textSize="11sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" />
+                <TextView android:id="@+id/huqooqTab5" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="نکاح" android:textSize="11sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" />
+            </LinearLayout>
+
+            <TextView android:id="@+id/huqooqTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="" android:textSize="13sp" android:textColor="#C9A961" android:textStyle="bold" android:fontFamily="sans-serif" />
+            <TextView android:id="@+id/huqooqDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="" android:textSize="11sp" android:textColor="#E0DDD8" android:lineSpacingExtra="3dp" android:fontFamily="serif" />
+            <TextView android:id="@+id/huqooqArabic" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="" android:textSize="14sp" android:textColor="#F0EDE8" android:gravity="end" android:fontFamily="serif" />
+            <TextView android:id="@+id/huqooqRef" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="" android:textSize="9sp" android:textColor="#8B7355" android:fontFamily="sans-serif" />
+
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#40D4AF37" android:layout_marginVertical="6dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="خلع کا شرعی حق"
+                android:textSize="13sp"
+                android:textColor="#E8C547"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView android:id="@+id/khulaDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="" android:textSize="11sp" android:textColor="#E0DDD8" android:lineSpacingExtra="3dp" android:fontFamily="serif" />
+            <TextView android:id="@+id/khulaArabic" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="" android:textSize="14sp" android:textColor="#F0EDE8" android:gravity="end" android:fontFamily="serif" />
+            <TextView android:id="@+id/khulaRef" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="" android:textSize="9sp" android:textColor="#8B7355" android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <!-- Comparative Fiqh -->
+        <LinearLayout
+            android:id="@+id/comparativeFiqhCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📚 تقابلی فقہ"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/fiqhTopicTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text=""
+                android:textSize="13sp"
+                android:textColor="#C9A961"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/fiqhTopicDesc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="11sp"
+                android:textColor="#E0DDD8"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/fiqhEvidence"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="14sp"
+                android:textColor="#F0EDE8"
+                android:gravity="end"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/fiqhSource"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="9sp"
+                android:textColor="#8B7355"
+                android:gravity="end"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/fiqhNextTopic"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="اگلا موضوع"
+                android:textSize="12sp"
+                android:textColor="#D4AF37"
+                android:background="@drawable/rounded_bg"
+                android:fontFamily="sans-serif"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+
+        <!-- Fiqh Scenarios -->
+        <LinearLayout
+            android:id="@+id/fiqhScenarioCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="❓ فقہی سوال"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/scenarioQuestion"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text=""
+                android:textSize="12sp"
+                android:textColor="#E8E6E1"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:id="@+id/scenarioOptions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="6dp" />
+
+            <TextView
+                android:id="@+id/scenarioExplanation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text=""
+                android:textSize="11sp"
+                android:textColor="#10B981"
+                android:fontFamily="serif"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/scenarioNext"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="اگلا سوال"
+                android:textSize="12sp"
+                android:textColor="#D4AF37"
+                android:background="@drawable/rounded_bg"
+                android:fontFamily="sans-serif"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+
+        <!-- Challenges -->
+        <LinearLayout
+            android:id="@+id/challengeCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🏆 چیلنجز"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/challengeTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="13sp"
+                android:textColor="#C9A961"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/challengeDesc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="11sp"
+                android:textColor="#E0DDD8"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/challengeNext"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="اگلا چیلنج"
+                android:textSize="12sp"
+                android:textColor="#D4AF37"
+                android:background="@drawable/rounded_bg"
+                android:fontFamily="sans-serif"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+
+        <!-- Prayer Education -->
+        <LinearLayout
+            android:id="@+id/prayerEducationCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📖 دینی تعلیم"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/lessonTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text=""
+                android:textSize="13sp"
+                android:textColor="#C9A961"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/lessonContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="11sp"
+                android:textColor="#E0DDD8"
+                android:lineSpacingExtra="3dp"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/lessonNext"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="اگلا سبق"
+                android:textSize="12sp"
+                android:textColor="#D4AF37"
+                android:background="@drawable/rounded_bg"
+                android:fontFamily="sans-serif"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+
+        <!-- Badges -->
+        <LinearLayout
+            android:id="@+id/badgeCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🏅 بیجز"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/badgeStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="11sp"
+                android:textColor="#C9A961"
+                android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <!-- Analytics / Stats -->
+        <LinearLayout
+            android:id="@+id/statsCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📊 ہفتہ وار اعدادوشمار"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/statsWeeklyAvg"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="11sp"
+                android:textColor="#E0DDD8"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/statsBestDay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="11sp"
+                android:textColor="#C9A961"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/statsMoodTrend"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="11sp"
+                android:textColor="#C9A961"
+                android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <!-- Footer -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:layout_marginTop="20dp"
+            android:paddingVertical="12dp">
+
+            <View android:layout_width="48dp" android:layout_height="1dp" android:background="#8B7355" android:layout_marginBottom="8dp" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="أهل الحديث ریسرچ سینٹر — السعودية و باكستان"
+                android:textSize="10sp"
+                android:textColor="#8B7355"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="تمام مواد صحیح اور مستند ذرائع سے ماخوذ ہے"
+                android:textSize="9sp"
+                android:textColor="#94A3B8"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

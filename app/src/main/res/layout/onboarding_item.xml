@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/onboardingItemTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textSize="22sp"
+        android:textColor="#D4AF37"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:fontFamily="sans-serif" />
+
+    <TextView
+        android:id="@+id/onboardingItemSubtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text=""
+        android:textSize="15sp"
+        android:textColor="#E8E6E1"
+        android:gravity="center"
+        android:fontFamily="sans-serif" />
+
+    <View
+        android:layout_width="48dp"
+        android:layout_height="2dp"
+        android:layout_marginTop="16dp"
+        android:background="#D4AF37" />
+
+    <TextView
+        android:id="@+id/onboardingItemDesc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text=""
+        android:textSize="13sp"
+        android:textColor="#C9A961"
+        android:gravity="center"
+        android:lineSpacingExtra="6dp"
+        android:fontFamily="serif" />
+</LinearLayout>

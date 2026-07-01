@@ -23,7 +23,7 @@ class DuaTracker private constructor() {
         private const val TAG = "DuaTracker"
         private const val AWAY_INTERVAL_MS = 60 * 1000L
         private const val MIN_DISTANCE_M = 10f
-        private const val HOME_THRESHOLD_M = 5000.0
+        private const val HOME_THRESHOLD_M = 1000.0
 
         private var isTracking = false
         private var homeLat: Double? = null
