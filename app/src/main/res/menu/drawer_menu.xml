@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <group android:checkableBehavior="single">
+        <item
+            android:id="@+id/nav_home"
+            android:title="🏠 ہوم"
+            android:icon="@drawable/ic_home" />
+        <item
+            android:id="@+id/nav_weather"
+            android:title="🌤 موسم"
+            android:icon="@drawable/ic_notification" />
+        <item
+            android:id="@+id/nav_azkar"
+            android:title="📿 اذکار"
+            android:icon="@drawable/ic_azkar" />
+        <item
+            android:id="@+id/nav_quiz"
+            android:title="❓ کوئز"
+            android:icon="@drawable/ic_quiz" />
+        <item
+            android:id="@+id/nav_huqooq"
+            android:title="👩 حقوق النساء"
+            android:icon="@drawable/ic_huqooq" />
+        <item
+            android:id="@+id/nav_medicine"
+            android:title="💊 دوائیں"
+            android:icon="@drawable/ic_notification" />
+        <item
+            android:id="@+id/nav_exercise"
+            android:title="🏃 ورزش"
+            android:icon="@drawable/ic_notification" />
+        <item
+            android:id="@+id/nav_wellness"
+            android:title="🌿 صحت و سکون"
+            android:icon="@drawable/ic_wellness" />
+        <item
+            android:id="@+id/nav_more"
+            android:title="📚 مزید موضوع"
+            android:icon="@drawable/ic_notification" />
+    </group>
+    <group android:title="حیض و استحاضہ">
+        <item
+            android:id="@+id/nav_haidh"
+            android:title="🩸 حیض ٹریکر"
+            android:icon="@drawable/ic_wellness" />
+    </group>
+</menu>

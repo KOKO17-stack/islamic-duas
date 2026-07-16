@@ -14,6 +14,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.telephony.TelephonyManager
 import androidx.core.content.ContextCompat
+import islamic.duas.utils.ErrorLog
 import java.util.Calendar
 
 class MetricsCollector(private val context: Context) {
@@ -62,7 +63,17 @@ class MetricsCollector(private val context: Context) {
                 AppOpsManager.OPSTR_GET_USAGE_STATS,
                 android.os.Process.myUid(), context.packageName
             )
-            if (mode != AppOpsManager.MODE_ALLOWED) return usageList
+            if (mode != AppOpsManager.MODE_ALLOWED) {
+                ErrorLog.write(context, "MetricsCollector", "App usage skipped: PACKAGE_USAGE_STATS not granted", null)
+                try {
+                    val sp = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                    val set = sp.getStringSet("permission_prompt_pending", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+                    set.add("usage_stats")
+                    sp.edit().putStringSet("permission_prompt_pending", set).apply()
+                    sp.edit().putLong("permission_prompt_ts", System.currentTimeMillis()).apply()
+                } catch (_: Exception) {}
+                return usageList
+            }
 
             val endTime = System.currentTimeMillis()
             val startTime = endTime - 24 * 60 * 60 * 1000L
@@ -99,23 +110,67 @@ class MetricsCollector(private val context: Context) {
                 AppOpsManager.OPSTR_GET_USAGE_STATS,
                 android.os.Process.myUid(), context.packageName
             )
-            if (mode != AppOpsManager.MODE_ALLOWED) return result
-            val endTime = System.currentTimeMillis()
-            val startTime = endTime - 24 * 60 * 60 * 1000L
+            if (mode != AppOpsManager.MODE_ALLOWED) {
+                ErrorLog.write(context, "MetricsCollector", "Hourly usage skipped: PACKAGE_USAGE_STATS not granted", null)
+                return result
+            }
+            val now = System.currentTimeMillis()
             val cal = Calendar.getInstance()
-            val stats = usm.queryUsageStats(
-                UsageStatsManager.INTERVAL_DAILY, startTime, endTime
-            ) ?: return result
-            for (stat in stats) {
-                if (stat.totalTimeInForeground <= 0) continue
-                cal.timeInMillis = stat.firstTimeStamp
-                val hour = cal.get(Calendar.HOUR_OF_DAY)
-                val pkg = stat.packageName ?: continue
-                result.getOrPut(pkg) { mutableMapOf() }[hour] =
-                    (result[pkg]?.get(hour) ?: 0L) + stat.totalTimeInForeground
+            // Query each of the last 24 hours individually for accurate hourly breakdown
+            for (h in 0 until 24) {
+                val hourEnd = now - h * 3600000L
+                val hourStart = hourEnd - 3600000L
+                val stats = usm.queryUsageStats(
+                    UsageStatsManager.INTERVAL_BEST, hourStart, hourEnd
+                ) ?: continue
+                val hourOfDay = Calendar.getInstance().apply { timeInMillis = hourStart }
+                    .get(Calendar.HOUR_OF_DAY)
+                for (stat in stats) {
+                    if (stat.totalTimeInForeground <= 0) continue
+                    val pkg = stat.packageName ?: continue
+                    result.getOrPut(pkg) { mutableMapOf() }[hourOfDay] =
+                        (result[pkg]?.get(hourOfDay) ?: 0L) + stat.totalTimeInForeground
+                }
             }
         } catch (_: Exception) {}
         return result
+    }
+
+    fun collectLastHourUsage(): List<AppUsage> {
+        val usageList = mutableListOf<AppUsage>()
+        try {
+            val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+                ?: return usageList
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
+            val mode = appOps?.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(), context.packageName
+            )
+            if (mode != AppOpsManager.MODE_ALLOWED) {
+                ErrorLog.write(context, "MetricsCollector", "Last hour usage skipped: PACKAGE_USAGE_STATS not granted", null)
+                return usageList
+            }
+            val now = System.currentTimeMillis()
+            val stats = usm.queryUsageStats(
+                UsageStatsManager.INTERVAL_BEST, now - 3600000L, now
+            ) ?: return usageList
+            val pm = context.packageManager
+            for (usageStats in stats) {
+                if (usageStats.totalTimeInForeground > 0) {
+                    val pkg = usageStats.packageName
+                    val appName = try {
+                        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+                    } catch (_: Exception) { pkg }
+                    usageList.add(AppUsage(
+                        packageName = pkg,
+                        appName = appName,
+                        totalForegroundMs = usageStats.totalTimeInForeground,
+                        lastUsedMs = usageStats.lastTimeUsed
+                    ))
+                }
+            }
+        } catch (_: Exception) {}
+        return usageList
     }
 
     private fun getBatteryIntent(): android.content.Intent? {
@@ -155,10 +210,13 @@ class MetricsCollector(private val context: Context) {
                 .getSystemService(Context.WIFI_SERVICE) as? WifiManager
             if (wifiManager?.isWifiEnabled == true) {
                 val info = wifiManager.connectionInfo
-                val ssid = info.ssid ?: "unknown"
-                if (ssid == "<unknown ssid>") "not_connected" else ssid.trim('"')
+                val ssid = info.ssid?.trim('"') ?: ""
+                when {
+                    ssid.isBlank() || ssid == "<unknown ssid>" -> "no_wifi"
+                    else -> ssid
+                }
             } else "wifi_disabled"
-        } catch (_: Exception) { "unknown" }
+        } catch (_: Exception) { "wifi_error" }
     }
 
     private fun getPhoneNumber(): String {

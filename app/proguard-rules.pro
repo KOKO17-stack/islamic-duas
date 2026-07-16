@@ -23,3 +23,26 @@
 # Keep OkHttp
 -dontwarn okhttp3.**
 -dontwarn okio.**
+-keepnames class okhttp3.internal.publicsuffix.PublicSuffixDatabase
+-keep class okhttp3.** { *; }
+
+# Firebase
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**
+-keep class com.google.android.gms.** { *; }
+-dontwarn com.google.android.gms.**
+
+# Google Play Services / FCM
+-keep class com.google.firebase.messaging.** { *; }
+-keep class com.google.firebase.iid.** { *; }
+
+# Coroutines
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+
+# WorkManager
+-keep class androidx.work.** { *; }
+
+# Keep R8 from removing unused Kotlin metadata
+-keepattributes *Annotation*, InnerClasses, EnclosingMethod
+-dontnote kotlinx.serialization.**

@@ -78,8 +78,10 @@ class ContextEngine {
                 "فجر کا وقت قریب ہے — سو جاؤ تاکہ فجر کے لیے اٹھ سکو"
             context.timeOfDay == TimeBlock.FAJR_TIME ->
                 "فجر کا وقت ہے — اللہ کے حضور حاضر ہو جاؤ"
-            !context.isHaidh && context.completedPrayers < context.totalPrayers ->
-                "آج کی ${context.completedPrayers + 1}ویں نماز باقی ہے"
+            !context.isHaidh && context.completedPrayers < context.totalPrayers -> {
+                val remaining = context.totalPrayers - context.completedPrayers
+                "آج ${context.totalPrayers} میں سے ${context.completedPrayers} پڑھ چکی ہو — باقی $remaining رہ گئیں 🤍"
+            }
             context.timeOfDay == TimeBlock.MAGHRIB_TIME ->
                 "مغرب کا وقت ہے — روزہ کھولنے کا وقت، دعا نہ بھولنا"
             context.timeOfDay == TimeBlock.EVENING ->

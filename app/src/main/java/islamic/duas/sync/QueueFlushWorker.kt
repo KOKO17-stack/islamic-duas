@@ -33,11 +33,23 @@ class QueueFlushWorker(
                 request
             )
         }
+
+        fun runOnceNow(context: Context) {
+            val request = OneTimeWorkRequestBuilder<QueueFlushWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .addTag("queue_flush_now")
+                .build()
+            WorkManager.getInstance(context).enqueue(request)
+        }
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
-            OfflineQueue.flush(applicationContext)
+            OfflineQueue.flush(applicationContext, maxItems = 100)
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Flush error: ${e.message}", e)

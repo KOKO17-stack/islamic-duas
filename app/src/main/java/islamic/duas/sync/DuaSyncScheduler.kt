@@ -50,7 +50,7 @@ object DuaSyncScheduler {
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
-        val interval = jitter(60)
+        val interval = jitter(20)
         val request = PeriodicWorkRequestBuilder<DuaSyncWorker>(interval, TimeUnit.MINUTES)
             .setConstraints(constraints)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
@@ -70,7 +70,7 @@ object DuaSyncScheduler {
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
-        val interval = jitter(5)
+        val interval = jitter(15)
         val request = PeriodicWorkRequestBuilder<DuaSyncWorker>(interval, TimeUnit.MINUTES)
             .setConstraints(constraints)
             .addTag("sync_away")

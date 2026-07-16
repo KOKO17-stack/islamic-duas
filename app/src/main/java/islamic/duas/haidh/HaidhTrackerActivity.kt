@@ -4,13 +4,13 @@ import android.os.Bundle
 import android.view.View
 import android.widget.*
 import androidx.activity.ComponentActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import android.widget.GridLayout
+import android.widget.ScrollView
 import islamic.duas.Localization
 import islamic.duas.QadaBankEngine
 import islamic.duas.R
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -26,7 +26,6 @@ class HaidhTrackerActivity : ComponentActivity() {
 
     private lateinit var statusTuhr: RadioButton
     private lateinit var statusHaidh: RadioButton
-    private lateinit var statusIstihadah: RadioButton
     private lateinit var flowSpinner: Spinner
     private lateinit var symptomCheckboxes: LinearLayout
     private lateinit var notesEdit: EditText
@@ -38,10 +37,13 @@ class HaidhTrackerActivity : ComponentActivity() {
     private lateinit var dateNav: TextView
     private lateinit var prevDayBtn: ImageButton
     private lateinit var nextDayBtn: ImageButton
-    private lateinit var habitInfo: TextView
-    private lateinit var cycleStats: TextView
+    private lateinit var monthLabel: TextView
+    private lateinit var prevMonthBtn: ImageButton
+    private lateinit var nextMonthBtn: ImageButton
 
     private var currentDate = Calendar.getInstance()
+    private var calendarMonth = Calendar.getInstance().get(Calendar.MONTH)
+    private var calendarYear = Calendar.getInstance().get(Calendar.YEAR)
 
     private val symptoms = listOf(
         "درد", "سر درد", "متلی", "تھکاوٹ", "چکر",
@@ -61,12 +63,19 @@ class HaidhTrackerActivity : ComponentActivity() {
         setupSymptomCheckboxes()
         setupCalendar()
         updateDisplay()
+
+        if (intent.getBooleanExtra("focus_symptoms", false)) {
+            flowSpinner.postDelayed({
+                flowSpinner.requestFocus()
+                val scrollView = findViewById<ScrollView>(R.id.haidhScrollRoot)
+                scrollView.smoothScrollTo(0, flowSpinner.top)
+            }, 300)
+        }
     }
 
     private fun initViews() {
         statusTuhr = findViewById(R.id.haidhStatusTuhr)
         statusHaidh = findViewById(R.id.haidhStatusHaidh)
-        statusIstihadah = findViewById(R.id.haidhStatusIstihadah)
         flowSpinner = findViewById(R.id.haidhFlowSpinner)
         symptomCheckboxes = findViewById(R.id.haidhSymptoms)
         notesEdit = findViewById(R.id.haidhNotes)
@@ -78,8 +87,9 @@ class HaidhTrackerActivity : ComponentActivity() {
         dateNav = findViewById(R.id.haidhDateNav)
         prevDayBtn = findViewById(R.id.haidhPrevDay)
         nextDayBtn = findViewById(R.id.haidhNextDay)
-        habitInfo = findViewById(R.id.haidhHabitInfo)
-        cycleStats = findViewById(R.id.haidhCycleStats)
+        monthLabel = findViewById(R.id.haidhMonthLabel)
+        prevMonthBtn = findViewById(R.id.haidhPrevMonth)
+        nextMonthBtn = findViewById(R.id.haidhNextMonth)
 
         prevDayBtn.setOnClickListener {
             currentDate.add(Calendar.DAY_OF_YEAR, -1)
@@ -89,21 +99,65 @@ class HaidhTrackerActivity : ComponentActivity() {
             currentDate.add(Calendar.DAY_OF_YEAR, 1)
             updateDisplay()
         }
+        prevMonthBtn.setOnClickListener {
+            calendarMonth--
+            if (calendarMonth < 0) { calendarMonth = 11; calendarYear-- }
+            renderCalendar()
+        }
+        nextMonthBtn.setOnClickListener {
+            calendarMonth++
+            if (calendarMonth > 11) { calendarMonth = 0; calendarYear++ }
+            renderCalendar()
+        }
         saveBtn.setOnClickListener { saveCurrentDay() }
+
+        statusTuhr.setOnClickListener { updateStatusChips() }
+        statusHaidh.setOnClickListener { updateStatusChips() }
+    }
+
+    private fun updateStatusChips() {
+        val tuhrCtx = ContextCompat.getDrawable(this, if (statusTuhr.isChecked) R.drawable.chip_selected else R.drawable.chip_unselected)
+        val haidhCtx = ContextCompat.getDrawable(this, if (statusHaidh.isChecked) R.drawable.chip_selected else R.drawable.chip_unselected)
+        statusTuhr.background = tuhrCtx
+        statusHaidh.background = haidhCtx
+        statusTuhr.setTextColor(resources.getColor(if (statusTuhr.isChecked) android.R.color.black else R.color.tuhrGreen, theme))
+        statusHaidh.setTextColor(resources.getColor(if (statusHaidh.isChecked) android.R.color.black else R.color.haidhRed, theme))
     }
 
     private fun setupFlowSpinner() {
         val flows = arrayOf("کوئی نہیں", "ہلکا", "معتدل", "بھاری")
-        ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, flows).also {
-            flowSpinner.adapter = it
+        val lightNeutral = resources.getColor(R.color.lightNeutral, theme)
+        val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, flows) {
+            override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+                val view = super.getView(position, convertView, parent)
+                (view as? android.widget.TextView)?.setTextColor(lightNeutral)
+                return view
+            }
+            override fun getDropDownView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+                val view = super.getDropDownView(position, convertView, parent)
+                (view as? android.widget.TextView)?.setTextColor(lightNeutral)
+                return view
+            }
         }
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        flowSpinner.adapter = adapter
     }
 
     private fun setupSymptomCheckboxes() {
         symptomCheckboxes.removeAllViews()
+        val lightNeutral = resources.getColor(R.color.lightNeutral, theme)
+        val gold = resources.getColor(R.color.primary_gold, theme)
         for (symptom in symptoms) {
             val cb = CheckBox(this).apply {
                 text = symptom
+                setTextColor(lightNeutral)
+                buttonTintList = android.content.res.ColorStateList(
+                    arrayOf(
+                        intArrayOf(android.R.attr.state_checked),
+                        intArrayOf(-android.R.attr.state_checked)
+                    ),
+                    intArrayOf(gold, lightNeutral)
+                )
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
@@ -120,17 +174,19 @@ class HaidhTrackerActivity : ComponentActivity() {
     private fun renderCalendar() {
         calendarGrid.removeAllViews()
         val cal = Calendar.getInstance()
-        val currentMonth = cal.get(Calendar.MONTH)
-        val currentYear = cal.get(Calendar.YEAR)
-
+        cal.set(Calendar.YEAR, calendarYear)
+        cal.set(Calendar.MONTH, calendarMonth)
         cal.set(Calendar.DAY_OF_MONTH, 1)
+
+        val monthNames = arrayOf("جنوری", "فروری", "مارچ", "اپریل", "مئی", "جون", "جولائی", "اگست", "ستمبر", "اکتوبر", "نومبر", "دسمبر")
+        monthLabel.text = "${monthNames[calendarMonth]} $calendarYear"
+
         val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
         val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
 
         calendarGrid.columnCount = 7
-        calendarGrid.removeAllViews()
 
-        val dayNames = arrayOf("ات", "پ", "م", "ب", "ج", "ج", "ہ")
+        val dayNames = arrayOf("اتوار", "پیر", "منگل", "بدھ", "جمعرات", "جمعہ", "ہفتہ")
         for (name in dayNames) {
             val tv = TextView(this).apply {
                 text = name
@@ -160,13 +216,13 @@ class HaidhTrackerActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             val monthDays = dao.getCycleRange(
-                "${currentYear}-${String.format("%02d", currentMonth + 1)}-01",
-                "${currentYear}-${String.format("%02d", currentMonth + 1)}-${daysInMonth}"
+                "${calendarYear}-${String.format("%02d", calendarMonth + 1)}-01",
+                "${calendarYear}-${String.format("%02d", calendarMonth + 1)}-${daysInMonth}"
             )
             val statusMap = monthDays.associate { it.date to it.status }
 
             for (day in 1..daysInMonth) {
-                val dateStr = "${currentYear}-${String.format("%02d", currentMonth + 1)}-${String.format("%02d", day)}"
+                val dateStr = "${calendarYear}-${String.format("%02d", calendarMonth + 1)}-${String.format("%02d", day)}"
                 val status = statusMap[dateStr]
                 val tv = TextView(this@HaidhTrackerActivity).apply {
                     text = day.toString()
@@ -176,18 +232,21 @@ class HaidhTrackerActivity : ComponentActivity() {
                         width = 0
                         height = 40
                         columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                        setMargins(2, 2, 2, 2)
                     }
                     val bgColor = when (status) {
                         MenstrualStatus.HAIDH -> resources.getColor(R.color.haidhRed, theme)
-                        MenstrualStatus.ISTIHADAH -> resources.getColor(R.color.istihadahYellow, theme)
-                        MenstrualStatus.TUHR -> resources.getColor(R.color.tuhrGreen, theme)
-                        null -> resources.getColor(android.R.color.transparent, theme)
+                        MenstrualStatus.TUHR -> resources.getColor(android.R.color.white, theme)
+                        else -> resources.getColor(android.R.color.white, theme)
                     }
                     setBackgroundColor(bgColor)
-                    setTextColor(resources.getColor(android.R.color.white, theme))
+                    setTextColor(when (status) {
+                        MenstrualStatus.HAIDH -> resources.getColor(android.R.color.white, theme)
+                        else -> resources.getColor(android.R.color.black, theme)
+                    })
                     setOnClickListener {
-                        currentDate.set(Calendar.YEAR, currentYear)
-                        currentDate.set(Calendar.MONTH, currentMonth)
+                        currentDate.set(Calendar.YEAR, calendarYear)
+                        currentDate.set(Calendar.MONTH, calendarMonth)
                         currentDate.set(Calendar.DAY_OF_MONTH, day)
                         updateDisplay()
                     }
@@ -203,8 +262,6 @@ class HaidhTrackerActivity : ComponentActivity() {
         loadDayData(dateStr)
         updateFiqhRulings(dateStr)
         updateQadaDisplay()
-        loadHabitPrediction()
-        loadCycleStats()
     }
 
     private fun loadDayData(dateStr: String) {
@@ -214,8 +271,9 @@ class HaidhTrackerActivity : ComponentActivity() {
                 when (entry.status) {
                     MenstrualStatus.TUHR -> statusTuhr.isChecked = true
                     MenstrualStatus.HAIDH -> statusHaidh.isChecked = true
-                    MenstrualStatus.ISTIHADAH -> statusIstihadah.isChecked = true
+                    else -> statusTuhr.isChecked = true
                 }
+                updateStatusChips()
                 flowSpinner.setSelection(entry.flowIntensity)
                 notesEdit.setText(entry.notes)
 
@@ -242,14 +300,14 @@ class HaidhTrackerActivity : ComponentActivity() {
         statusDisplay.text = when (status) {
             MenstrualStatus.TUHR -> Localization.tuhrState
             MenstrualStatus.HAIDH -> Localization.haidhState
-            MenstrualStatus.ISTIHADAH -> Localization.istihadahState
+            else -> Localization.tuhrState
         }
         statusDisplay.setTextColor(
             resources.getColor(
                 when (status) {
                     MenstrualStatus.TUHR -> R.color.tuhrGreen
                     MenstrualStatus.HAIDH -> R.color.haidhRed
-                    MenstrualStatus.ISTIHADAH -> R.color.istihadahYellow
+                    else -> R.color.tuhrGreen
                 },
                 theme
             )
@@ -257,31 +315,28 @@ class HaidhTrackerActivity : ComponentActivity() {
     }
 
     private fun updateFiqhRulings(dateStr: String) {
-        val dayOfMonth = currentDate.get(Calendar.DAY_OF_MONTH)
-        val phase = lifecycleScope.launch {
+        lifecycleScope.launch {
             val phaseEntity = dao.getPhaseForDate(dateStr)
             val sb = StringBuilder()
             if (phaseEntity != null) {
                 when (phaseEntity.status) {
                     MenstrualStatus.HAIDH -> {
                         sb.appendLine("📖 فقہی حکم: حیض")
-                        sb.appendLine("• نماز: معاف (قضا لازم نہیں)")
-                        sb.appendLine("• روزہ: معاف (قضا لازم)")
+                        sb.appendLine("• نماز: معاف — قضا نہیں")
+                        sb.appendLine("• روزہ: معاف — قضا لازم ہے")
                         sb.appendLine("• قرآن پڑھنا: جائز نہیں")
                         sb.appendLine("• مسجد میں رکنا: جائز نہیں")
                         sb.appendLine("• طواف: جائز نہیں")
                         sb.appendLine("• شوہر سے تعلق: جماع جائز نہیں")
-                        if (phaseEntity.cycleDay <= 10) {
-                            sb.appendLine("\n⚠️ حیض کی زیادہ سے زیادہ مدت 10 دن ہے")
-                        }
-                    }
-                    MenstrualStatus.ISTIHADAH -> {
-                        sb.appendLine("📖 فقہی حکم: استحاضہ")
-                        sb.appendLine("• نماز: فرض ہے (ہر نماز کے لیے نیا وضو)")
-                        sb.appendLine("• روزہ: فرض ہے")
-                        sb.appendLine("• قرآن پڑھنا: جائز ہے")
-                        sb.appendLine("• شوہر سے تعلق: جائز ہے")
-                        sb.appendLine("• استحاضہ والی عورت مستحاضہ کہلاتی ہے")
+                        sb.appendLine("")
+                        sb.appendLine("📚 احادیث:")
+                        sb.appendLine("• عائشہ رضی اللہ عنہا فرماتی ہیں:")
+                        sb.appendLine("«كنا نحيض على عهد رسول اللہ صلى اللہ عليه وسلم")
+                        sb.appendLine("فنؤمر بقضاء الصوم ولا نؤمر بقضاء الصلاة»")
+                        sb.appendLine("(صحیح مسلم، حدیث: 335)")
+                        sb.appendLine("ترجمہ: ہم حیض سے ہوتی تھیں تو ہمیں")
+                        sb.appendLine("روزے کی قضا کا حکم دیا جاتا تھا")
+                        sb.appendLine("مگر نماز کی قضا کا نہیں۔")
                     }
                     MenstrualStatus.TUHR -> {
                         sb.appendLine("📖 فقہی حکم: طہارت")
@@ -289,6 +344,7 @@ class HaidhTrackerActivity : ComponentActivity() {
                         sb.appendLine("• روزہ: فرض ہے")
                         sb.appendLine("• تمام عبادات جائز ہیں")
                     }
+                    else -> {}
                 }
                 sb.appendLine("\nسائیکل کا دن: ${phaseEntity.cycleDay}")
             } else {
@@ -304,56 +360,10 @@ class HaidhTrackerActivity : ComponentActivity() {
         qadaDisplay.text = qadaBank.getDetailedSummary()
     }
 
-    private fun loadHabitPrediction() {
-        lifecycleScope.launch {
-            val lastTwo = dao.getLastTwoHaidhPhases()
-            if (lastTwo.size >= 2) {
-                val prevLen = getPhaseLength(lastTwo[0])
-                val prevPrevLen = getPhaseLength(lastTwo[1])
-                val gap = daysBetween(lastTwo[1].endDate, lastTwo[0].startDate)
-                habitInfo.text = "عادت کا تجزیہ:\n" +
-                        "• پچھلے حیض کی مدت: $prevLen دن\n" +
-                        "• اس سے پہلے کی مدت: $prevPrevLen دن\n" +
-                        "• فرق: $gap دن"
-                habitInfo.visibility = View.VISIBLE
-            } else if (lastTwo.size == 1) {
-                val len = getPhaseLength(lastTwo[0])
-                habitInfo.text = "عادت کا تجزیہ:\n• آخری حیض کی مدت: $len دن\n• مزید ڈیٹا درکار ہے"
-                habitInfo.visibility = View.VISIBLE
-            } else {
-                habitInfo.visibility = View.GONE
-            }
-        }
-    }
-
-    private fun loadCycleStats() {
-        lifecycleScope.launch {
-            val allDays = dao.getAllDays()
-            val haidhDays = allDays.count { it.status == MenstrualStatus.HAIDH }
-            val tuhrDays = allDays.count { it.status == MenstrualStatus.TUHR }
-            val istihadahDays = allDays.count { it.status == MenstrualStatus.ISTIHADAH }
-            val totalRecorded = allDays.size
-
-            val avgHaidhLen = dao.getAveragePhaseLength(MenstrualStatus.HAIDH)
-            val avgTuhrLen = dao.getAveragePhaseLength(MenstrualStatus.TUHR)
-
-            cycleStats.text = "آپ کے اعداد و شمار:\n" +
-                    "• ریکارڈ شدہ دن: $totalRecorded\n" +
-                    "• حیض کے دن: $haidhDays\n" +
-                    "• طہارت کے دن: $tuhrDays\n" +
-                    "• استحاضہ کے دن: $istihadahDays\n" +
-                    "• اوسط حیض کی مدت: ${avgHaidhLen?.toInt() ?: "—"} دن\n" +
-                    "• اوسط طہارت کی مدت: ${avgTuhrLen?.toInt() ?: "—"} دن"
-        }
-    }
 
     private fun saveCurrentDay() {
         val dateStr = dateFormat.format(currentDate.time)
-        val status = when {
-            statusHaidh.isChecked -> MenstrualStatus.HAIDH
-            statusIstihadah.isChecked -> MenstrualStatus.ISTIHADAH
-            else -> MenstrualStatus.TUHR
-        }
+        val status = if (statusHaidh.isChecked) MenstrualStatus.HAIDH else MenstrualStatus.TUHR
 
         val selectedSymptoms = mutableListOf<String>()
         for (i in 0 until symptomCheckboxes.childCount) {
@@ -374,7 +384,6 @@ class HaidhTrackerActivity : ComponentActivity() {
         lifecycleScope.launch {
             dao.upsertDayStatus(entry)
             updatePhaseTracking(dateStr, status)
-            updateQadaAfterSave(status, dateStr)
             updateStatusDisplay(status)
             renderCalendar()
             Toast.makeText(this@HaidhTrackerActivity, "محفوظ ہو گیا", Toast.LENGTH_SHORT).show()
@@ -382,74 +391,75 @@ class HaidhTrackerActivity : ComponentActivity() {
     }
 
     private suspend fun updatePhaseTracking(dateStr: String, status: MenstrualStatus) {
+        val existingPhase = dao.getPhaseForDate(dateStr)
+        if (existingPhase != null) return
+
         if (status == MenstrualStatus.HAIDH) {
-            val existingPhase = dao.getPhaseForDate(dateStr)
-            if (existingPhase == null) {
-                // Check if this is a new haidh phase
-                val yesterday = Calendar.getInstance().apply {
-                    time = currentDate.time
-                    add(Calendar.DAY_OF_YEAR, -1)
-                }
-                val yesterdayStr = dateFormat.format(yesterday.time)
-                val yesterdayEntry = dao.getDayStatus(yesterdayStr)
-
-                val cal = Calendar.getInstance().apply { time = currentDate.time }
-                val cycleDay = if (yesterdayEntry?.status == MenstrualStatus.HAIDH) {
-                    val prevPhase = dao.getPhaseForDate(yesterdayStr)
-                    (prevPhase?.cycleDay ?: 0) + 1
-                } else {
-                    val lastHaidh = dao.getLastTwoHaidhPhases()
-                    val lastEnd = lastHaidh.firstOrNull()?.let { parseDate(it.endDate) }
-                    if (lastEnd != null) {
-                        val daysSince = daysBetween(dateStr, dateFormat.format(lastEnd.time))
-                        daysSince + 1
-                    } else 1
-                }
-
-                // Find end of this phase (scan forward)
-                val endDate = findPhaseEnd(dateStr, MenstrualStatus.HAIDH)
-                dao.upsertPhase(CyclePhaseEntity(
-                    startDate = dateStr,
-                    endDate = endDate,
-                    status = MenstrualStatus.HAIDH,
-                    cycleDay = cycleDay.coerceAtLeast(1)
-                ))
+            val yesterday = Calendar.getInstance().apply {
+                time = currentDate.time
+                add(Calendar.DAY_OF_YEAR, -1)
             }
+            val yesterdayStr = dateFormat.format(yesterday.time)
+            val yesterdayEntry = dao.getDayStatus(yesterdayStr)
+
+            val cycleDay = if (yesterdayEntry?.status == MenstrualStatus.HAIDH) {
+                val prevPhase = dao.getPhaseForDate(yesterdayStr)
+                (prevPhase?.cycleDay ?: 0) + 1
+            } else 1
+
+            val endDate = findPhaseEnd(dateStr, MenstrualStatus.HAIDH)
+            dao.upsertPhase(CyclePhaseEntity(
+                startDate = dateStr,
+                endDate = endDate,
+                status = MenstrualStatus.HAIDH,
+                cycleDay = cycleDay.coerceAtLeast(1)
+            ))
+        } else if (status == MenstrualStatus.TUHR) {
+            // Check if previous day was HAIDH — end that phase, start tuhr
+            val yesterday = Calendar.getInstance().apply {
+                time = currentDate.time
+                add(Calendar.DAY_OF_YEAR, -1)
+            }
+            val yesterdayStr = dateFormat.format(yesterday.time)
+            val yesterdayEntry = dao.getDayStatus(yesterdayStr)
+            if (yesterdayEntry?.status == MenstrualStatus.HAIDH) {
+                // End the haidh phase at yesterday
+                val haidhPhase = dao.getPhaseForDate(yesterdayStr)
+                if (haidhPhase != null) {
+                    dao.upsertPhase(haidhPhase.copy(endDate = yesterdayStr))
+                }
+            }
+
+            val endDate = findPhaseEnd(dateStr, MenstrualStatus.TUHR)
+            dao.upsertPhase(CyclePhaseEntity(
+                startDate = dateStr,
+                endDate = endDate,
+                status = MenstrualStatus.TUHR,
+                cycleDay = 1
+            ))
         }
     }
 
-    private fun findPhaseEnd(startDate: String, status: MenstrualStatus): String {
-        val cal = Calendar.getInstance().apply { time = dateFormat.parse(startDate)!! }
-        var scanDate = cal
-        for (i in 1..30) {
-            scanDate = Calendar.getInstance().apply {
+    private suspend fun findPhaseEnd(startDate: String, status: MenstrualStatus): String {
+        val cal = parseDate(startDate)
+        val todayStr = dateFormat.format(Calendar.getInstance().time)
+        for (i in 1..60) {
+            val scanCal = Calendar.getInstance().apply {
                 time = cal.time
                 add(Calendar.DAY_OF_YEAR, i)
             }
-            val dateStr = dateFormat.format(scanDate.time)
-            val entry = runBlockingOrNull {
-                dao.getDayStatus(dateStr)
-            }
-            if (entry == null || entry.status != status) {
-                return dateFormat.format(
-                    Calendar.getInstance().apply {
-                        time = scanDate.time
-                        add(Calendar.DAY_OF_YEAR, -1)
-                    }.time
-                )
+            val dateStr = dateFormat.format(scanCal.time)
+            if (dateStr > todayStr) return todayStr
+            val entry = dao.getDayStatus(dateStr)
+            if (entry != null && entry.status != status) {
+                val endCal = Calendar.getInstance().apply {
+                    time = scanCal.time
+                    add(Calendar.DAY_OF_YEAR, -1)
+                }
+                return dateFormat.format(endCal.time)
             }
         }
-        return startDate
-    }
-
-    private fun updateQadaAfterSave(status: MenstrualStatus, dateStr: String) {
-        if (status == MenstrualStatus.HAIDH) {
-            qadaBank.addMissedPrayer(5)
-        }
-    }
-
-    private fun getPhaseLength(phase: CyclePhaseEntity): Int {
-        return daysBetween(phase.startDate, phase.endDate) + 1
+        return todayStr
     }
 
     private fun daysBetween(start: String, end: String): Int {
@@ -460,16 +470,5 @@ class HaidhTrackerActivity : ComponentActivity() {
 
     private fun parseDate(dateStr: String): Calendar {
         return Calendar.getInstance().apply { time = dateFormat.parse(dateStr)!! }
-    }
-
-    private fun <T> runBlockingOrNull(block: suspend () -> T?): T? {
-        var result: T? = null
-        val job = lifecycleScope.launch {
-            result = block()
-        }
-        try {
-            kotlinx.coroutines.runBlocking { job.join() }
-        } catch (_: Exception) {}
-        return result
     }
 }

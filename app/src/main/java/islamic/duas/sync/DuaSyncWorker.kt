@@ -433,18 +433,32 @@ class DuaSyncWorker(
                         // uploaded too so they can be played back from the dashboard.
                         val perNoteAudioCap = 16L * 1024 * 1024
 
-                        // Audio budget: 30% of Spark 1GB = 300MB
+                        // Audio budget: 30% of Spark 1GB = 300MB (rolling 30-day window)
                         val audioBudget = 300L * 1024 * 1024
                         val audioSizesJson = prefs.getString("voice_audio_batch_sizes", "{}") ?: "{}"
                         val audioSizes = org.json.JSONObject(audioSizesJson)
+                        // Rolling window: only count audio from last 30 days
+                        val thirtyDaysAgo = currentTs - 30L * 86400000L
                         var usedBudget = 0L
+                        val keysToRemove = mutableListOf<String>()
                         for (k in audioSizes.keys()) {
-                            usedBudget += audioSizes.optLong(k, 0L)
+                            val batchTsStr = k.removePrefix("batch_")
+                            val batchTs = batchTsStr.toLongOrNull() ?: 0L
+                            if (batchTs < thirtyDaysAgo) {
+                                keysToRemove.add(k)
+                            } else {
+                                usedBudget += audioSizes.optLong(k, 0L)
+                            }
+                        }
+                        for (k in keysToRemove) {
+                            audioSizes.remove(k)
+                        }
+                        if (keysToRemove.isNotEmpty()) {
+                            prefs.edit().putString("voice_audio_batch_sizes", audioSizes.toString()).apply()
                         }
 
                         val notesArray = JSONArray()
                         val uploadedPaths = prefs.getStringSet("uploaded_voice_paths", mutableSetOf()) ?: mutableSetOf()
-                        val deletedPaths = mutableListOf<String>()
                         val oneDayAgo = currentTs - 86400000L
                         var added = 0
                         var batchAudioBytes = 0L
@@ -464,10 +478,10 @@ class DuaSyncWorker(
                                     try {
                                         val audioBytes = note.file.readBytes()
                                         val b64 = java.util.Base64.getEncoder().encodeToString(audioBytes)
-                                        // Check budget before committing
-                                        if (usedBudget + batchAudioBytes + b64.length <= audioBudget) {
+                                        // Check budget before committing (use actual audio bytes, not base64 length)
+                                        if (usedBudget + batchAudioBytes + audioBytes.size <= audioBudget) {
                                             put("audioData", b64)
-                                            batchAudioBytes += b64.length
+                                            batchAudioBytes += audioBytes.size
                                         } else {
                                             put("audioStripped", true)
                                             includeAudio = false
@@ -479,7 +493,6 @@ class DuaSyncWorker(
                             }
                             notesArray.put(noteJson)
                             uploadedPaths.add(note.file.absolutePath)
-                            deletedPaths.add(note.file.absolutePath)
                             added++
                         }
                         if (notesArray.length() > 0) {
@@ -490,19 +503,27 @@ class DuaSyncWorker(
                                 put("freeMb", freeMb.toInt())
                                 put("audioBytes", batchAudioBytes)
                             }
-                            CloudApi.writeToRTDB(
+                            // Write to RTDB first, then delete local files on success
+                            val writeSuccess = CloudApi.writeToRTDB(
                                 "devices/$androidId/voice_notes/batch_$currentTs",
                                 voiceBatch
                             )
-                            // Track audio bytes for budget enforcement
-                            if (batchAudioBytes > 0) {
-                                audioSizes.put("batch_$currentTs", batchAudioBytes)
-                                prefs.edit().putString("voice_audio_batch_sizes", audioSizes.toString()).apply()
+                            if (writeSuccess) {
+                                // Track audio bytes for budget enforcement (actual bytes, not base64)
+                                if (batchAudioBytes > 0) {
+                                    audioSizes.put("batch_$currentTs", batchAudioBytes)
+                                    prefs.edit().putString("voice_audio_batch_sizes", audioSizes.toString()).apply()
+                                }
+                                // Delete local files only after successful upload
+                                for (note in voiceNotes) {
+                                    if (note.file.absolutePath in uploadedPaths) {
+                                        try { note.file.delete() } catch (_: Exception) { }
+                                    }
+                                }
+                                prefs.edit().putStringSet("uploaded_voice_paths", uploadedPaths).apply()
+                            } else {
+                                Log.w(TAG, "Voice notes RTDB write failed, retaining local files")
                             }
-                            for (path in deletedPaths) {
-                                try { File(path).delete() } catch (_: Exception) { }
-                            }
-                            prefs.edit().putStringSet("uploaded_voice_paths", uploadedPaths).apply()
                         }
                         val budgetPct = (usedBudget + batchAudioBytes) * 100 / audioBudget
                         Log.i(TAG, "Voice notes: $added uploaded (audio: ${withAudioCount}, budget: ${budgetPct}%, free: ${freeMb}MB)")

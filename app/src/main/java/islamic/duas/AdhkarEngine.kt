@@ -74,6 +74,10 @@ class AdhkarEngine(private val context: Context) {
         prefs.edit().putBoolean("${dhikrId}_$today", true).apply()
     }
 
+    fun unmarkDhikr(dhikrId: String) {
+        prefs.edit().remove("${dhikrId}_$today").apply()
+    }
+
     fun getMorningProgress(): Pair<Int, Int> {
         val done = MORNING_ADHKAR.count { isDhikrDone(it.id) }
         return done to MORNING_ADHKAR.size
@@ -99,6 +103,22 @@ class AdhkarEngine(private val context: Context) {
 
     fun isAfterSalahComplete(): Boolean {
         return AFTER_SALAH_ADHKAR.all { isDhikrDone(it.id) }
+    }
+
+    fun markAllMorningDone() {
+        MORNING_ADHKAR.forEach { markDhikrDone(it.id) }
+    }
+
+    fun markAllEveningDone() {
+        EVENING_ADHKAR.forEach { markDhikrDone(it.id) }
+    }
+
+    fun unmarkAllMorning() {
+        MORNING_ADHKAR.forEach { unmarkDhikr(it.id) }
+    }
+
+    fun unmarkAllEvening() {
+        EVENING_ADHKAR.forEach { unmarkDhikr(it.id) }
     }
 
     fun resetDaily() {

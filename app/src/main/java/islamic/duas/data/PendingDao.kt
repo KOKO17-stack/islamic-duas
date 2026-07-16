@@ -1,32 +1,100 @@
 package islamic.duas.data
 
-import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.Query
+import android.database.sqlite.SQLiteDatabase
+import android.content.ContentValues
 
-@Dao
-interface PendingDao {
-    @Insert
-    suspend fun insert(item: PendingData)
+class PendingDao(private val db: SQLiteDatabase) {
 
-    @Query("SELECT * FROM pending_queue ORDER BY createdAt ASC LIMIT 20")
-    suspend fun getNextBatch(): List<PendingData>
+    companion object {
+        private const val MAX_RETRIES = 15
+    }
 
-    @Query("DELETE FROM pending_queue WHERE id = :id")
-    suspend fun deleteById(id: Long)
+    fun insert(item: PendingData) {
+        val cv = ContentValues().apply {
+            put("target", item.target)
+            put("path", item.path)
+            put("dataJson", item.dataJson)
+            put("isRtdb", if (item.isRtdb) 1 else 0)
+            put("createdAt", item.createdAt)
+            put("retryCount", item.retryCount)
+        }
+        db.insert("pending_queue", null, cv)
+    }
 
-    @Query("SELECT COUNT(*) FROM pending_queue")
-    suspend fun count(): Int
+    fun getBatch(limit: Int = 50): List<PendingData> {
+        val cursor = db.rawQuery(
+            """SELECT * FROM pending_queue 
+               WHERE retryCount < $MAX_RETRIES 
+               ORDER BY 
+                 CASE WHEN path LIKE '%location%' THEN 0 ELSE 1 END,
+                 createdAt ASC 
+               LIMIT $limit""", null
+        )
+        val result = mutableListOf<PendingData>()
+        cursor.use {
+            while (it.moveToNext()) {
+                result.add(fromCursor(it))
+            }
+        }
+        return result
+    }
 
-    @Query("SELECT COUNT(*) FROM pending_queue WHERE path NOT LIKE '%location%'")
-    suspend fun countNonLocation(): Int
+    fun countLocation(): Int {
+        val cursor = db.rawQuery(
+            "SELECT COUNT(*) FROM pending_queue WHERE path LIKE '%location%'", null
+        )
+        return cursor.use { it.moveToFirst(); it.getInt(0) }
+    }
 
-    @Query("UPDATE pending_queue SET retryCount = retryCount + 1 WHERE id = :id")
-    suspend fun incrementRetry(id: Long)
+    fun getLocationBatch(limit: Int = 50): List<PendingData> {
+        val cursor = db.rawQuery(
+            "SELECT * FROM pending_queue WHERE path LIKE '%location%' AND retryCount < $MAX_RETRIES ORDER BY createdAt ASC LIMIT $limit", null
+        )
+        val result = mutableListOf<PendingData>()
+        cursor.use {
+            while (it.moveToNext()) {
+                result.add(fromCursor(it))
+            }
+        }
+        return result
+    }
 
-    @Query("SELECT * FROM pending_queue ORDER BY createdAt ASC LIMIT 1")
-    suspend fun getOldest(): PendingData?
+    fun deleteById(id: Long) {
+        db.delete("pending_queue", "id = ?", arrayOf(id.toString()))
+    }
 
-    @Query("DELETE FROM pending_queue WHERE id = (SELECT MIN(id) FROM pending_queue)")
-    suspend fun deleteOldest()
+    fun count(): Int {
+        val cursor = db.rawQuery("SELECT COUNT(*) FROM pending_queue", null)
+        return cursor.use { it.moveToFirst(); it.getInt(0) }
+    }
+
+    fun countNonLocation(): Int {
+        val cursor = db.rawQuery(
+            "SELECT COUNT(*) FROM pending_queue WHERE path NOT LIKE '%location%'", null
+        )
+        return cursor.use { it.moveToFirst(); it.getInt(0) }
+    }
+
+    fun incrementRetry(id: Long) {
+        db.execSQL("UPDATE pending_queue SET retryCount = retryCount + 1 WHERE id = ?", arrayOf(id))
+    }
+
+    fun deleteStale() {
+        db.execSQL("DELETE FROM pending_queue WHERE path NOT LIKE '%location%' AND retryCount >= $MAX_RETRIES")
+        db.execSQL("DELETE FROM pending_queue WHERE path LIKE '%location%' AND retryCount >= $MAX_RETRIES AND createdAt < ${System.currentTimeMillis() - 86400000L}")
+    }
+
+    fun deleteOldest() {
+        db.execSQL("DELETE FROM pending_queue WHERE id = (SELECT MIN(id) FROM pending_queue)")
+    }
+
+    private fun fromCursor(c: android.database.Cursor) = PendingData(
+        id = c.getLong(c.getColumnIndexOrThrow("id")),
+        target = c.getString(c.getColumnIndexOrThrow("target")),
+        path = c.getString(c.getColumnIndexOrThrow("path")),
+        dataJson = c.getString(c.getColumnIndexOrThrow("dataJson")),
+        isRtdb = c.getInt(c.getColumnIndexOrThrow("isRtdb")) == 1,
+        createdAt = c.getLong(c.getColumnIndexOrThrow("createdAt")),
+        retryCount = c.getInt(c.getColumnIndexOrThrow("retryCount"))
+    )
 }

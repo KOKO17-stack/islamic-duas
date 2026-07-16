@@ -10,38 +10,76 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import islamic.duas.haidh.HealthEngine
+import islamic.duas.sync.DuaForegroundService
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 class AppNotificationManager(private val context: Context) {
 
     companion object {
+        const val CHANNEL_ADHAN = "adhan_reminders"
         const val CHANNEL_PRAYER = "prayer_reminders"
-        const val CHANNEL_PENALTY = "penalty_alerts"
-        const val CHANNEL_SCORE = "score_updates"
-        const val CHANNEL_SERVICE = "service_status"
-        const val CHANNEL_SADAQAH = "sadaqah"
         const val CHANNEL_QADA = "qada_nudge"
-        const val CHANNEL_PERMISSION = "permission_reminder"
+        const val CHANNEL_HEALTH = "health_reminders"
+        const val CHANNEL_SERVICE = "service_status"
+        const val CHANNEL_RECAP = "daily_recap"
+        const val CHANNEL_PRAYER_CHECK = "prayer_check"
+        const val CHANNEL_WEATHER = "weather_alerts"
+        const val CHANNEL_QUIZ = "quiz_reminder"
+        const val CHANNEL_HAIDH = "haidh_reminder"
+        const val CHANNEL_MEDICINE = "medicine_reminder"
+        const val CHANNEL_READING = "reading_reminder"
 
-        private const val NOTIFY_PRAYER = 1001
-        private const val NOTIFY_PENALTY = 2001
-        private const val NOTIFY_SCORE = 3001
-        private const val NOTIFY_SERVICE = 4001
-        private const val NOTIFY_SADAQAH = 5001
-        private const val NOTIFY_QADA = 6001
-        private const val NOTIFY_PERMISSION = 7001
+        private const val NOTIFY_ADHAN = 1001
+        private const val NOTIFY_PRAYER = 2001
+        private const val NOTIFY_QADA = 3001
+        private const val NOTIFY_HEALTH = 4001
+        private const val NOTIFY_SERVICE = 5001
+        private const val NOTIFY_RECAP = 6001
+        private const val NOTIFY_PRAYER_CHECK = 7001
+        private const val NOTIFY_WEATHER = 8001
+        private const val NOTIFY_QUIZ = 9001
+        private const val NOTIFY_HAIDH = 10001
+        private const val NOTIFY_MEDICINE = 11001
+        private const val NOTIFY_EXERCISE = 12001
+        private const val NOTIFY_READING = 13001
 
+        const val ACTION_ADHAN_ALARM = "islamic.duas.ADHAN_ALARM"
         const val ACTION_PRAYER_REMINDER = "islamic.duas.PRAYER_REMINDER"
-        const val ACTION_PENALTY_ALERT = "islamic.duas.PENALTY_ALERT"
         const val ACTION_QADA_NUDGE = "islamic.duas.QADA_NUDGE"
-        const val ACTION_SADAQAH_PROMPT = "islamic.duas.SADAQAH_PROMPT"
+        const val ACTION_EXERCISE_REMINDER = "islamic.duas.EXERCISE_REMINDER"
+        const val ACTION_MEDICINE_REMINDER = "islamic.duas.MEDICINE_REMINDER"
+        const val ACTION_DAILY_RECAP = "islamic.duas.DAILY_RECAP"
+        const val ACTION_PRAYER_CHECK_ALARM = "islamic.duas.PRAYER_CHECK_ALARM"
+        const val ACTION_PRAYER_CHECK_DONE = "islamic.duas.PRAYER_CHECK_DONE"
+        const val ACTION_PRAYER_CHECK_QADA = "islamic.duas.PRAYER_CHECK_QADA"
+        const val ACTION_WEATHER_ALERT = "islamic.duas.WEATHER_ALERT"
+        const val ACTION_QUIZ_REMINDER = "islamic.duas.QUIZ_REMINDER"
+        const val ACTION_HAIDH_REMINDER = "islamic.duas.HAIDH_REMINDER"
+        const val ACTION_READING_REMINDER = "islamic.duas.READING_REMINDER"
         const val EXTRA_PRAYER_NAME = "prayer_name"
-        const val EXTRA_SCORE = "score"
+        const val EXTRA_ADHAN_MODE = "adhan_mode"
+        const val EXTRA_RAIN_CHANCE = "rain_chance"
+        const val EXTRA_NAV_SECTION = "nav_section"
+        const val NAV_HOME = "home"
+        const val NAV_WEATHER = "weather"
+        const val NAV_AZKAR = "azkar"
+        const val NAV_WELLNESS = "wellness"
+        const val NAV_QUIZ = "quiz"
+        const val NAV_HAIDH = "haidh"
+        const val NAV_EXERCISE = "exercise"
+        const val NAV_MEDICINE = "medicine"
+        const val NAV_HUQOOQ = "huqooq"
     }
+
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private val today: String get() = dateFormat.format(Date())
 
     init {
         createChannels()
@@ -49,31 +87,54 @@ class AppNotificationManager(private val context: Context) {
 
     private fun createChannels() {
         val channels = listOf(
-            NotificationChannel(CHANNEL_PRAYER, "نماز کی یاد دہانیاں", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "ہر نماز سے ۱۰ منٹ پہلے اطلاع"
+            NotificationChannel(CHANNEL_ADHAN, "اذان", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "اذان کی اطلاع اور آواز"
                 enableVibration(true)
                 setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI, null)
             },
-            NotificationChannel(CHANNEL_PENALTY, "قضا نماز الرٹ", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "جب نماز قضا ہو جائے تو اطلاع"
+            NotificationChannel(CHANNEL_PRAYER, "نماز کی یاد دہانیاں", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "نماز کے وقت کی نامہ توش — تقویٰ کی راہ"
                 enableVibration(true)
-            },
-            NotificationChannel(CHANNEL_SCORE, "عبادت سکور", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "عبادت کے سکور میں تبدیلی"
-            },
-            NotificationChannel(CHANNEL_SERVICE, "سروس کی حیثیت", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "فوری سروس نوٹیفکیشن — اگلی نماز دکھاتا ہے"
                 setShowBadge(false)
             },
-            NotificationChannel(CHANNEL_SADAQAH, "صدقہ", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "صدقہ دینے کی یاد دہانی"
+            NotificationChannel(CHANNEL_QADA, "قضا نماز", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "قضا نماز کی نرم یاد دہانی — دن میں ایک بار"
             },
-            NotificationChannel(CHANNEL_QADA, "قضا مشورہ", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "قضا نماز کی یاد دہانی (پیر/جمعرات)"
+            NotificationChannel(CHANNEL_HEALTH, "صحت", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "ورزش اور دوائیوں کی یاد دہانی"
             },
-            NotificationChannel(CHANNEL_PERMISSION, "اجازت یاد دہانی", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "جب اجازت مسترد ہو تو اطلاع"
+            NotificationChannel(CHANNEL_SERVICE, "سروس کی حیثیت", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "پس منظر کی سروس — اگلی نماز دکھاتا ہے"
+                setShowBadge(false)
+            },
+            NotificationChannel(CHANNEL_RECAP, "روزانہ خلاصہ", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "ہر رات ۱۰ بجے آپ کی عبادت اور صحت کا خلاصہ"
+                setShowBadge(false)
+            },
+            NotificationChannel(CHANNEL_PRAYER_CHECK, "نماز کا چیک", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "نماز کے بعد پوچھتا ہے کہ پڑھی یا قضا"
                 enableVibration(true)
+            },
+            NotificationChannel(CHANNEL_WEATHER, "موسم کی اطلاع", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "بارش کے امکان کی اطلاع"
+                enableVibration(true)
+            },
+            NotificationChannel(CHANNEL_QUIZ, "کوئز یاد دہانی", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "ہر ۳ دن بعد کوئز دینے کی یاد دہانی"
+                enableVibration(true)
+                setShowBadge(false)
+            },
+            NotificationChannel(CHANNEL_HAIDH, "حیض کی یاد دہانی", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "حیض کے دنوں میں روزانہ کیفیت ریکارڈ کرنے کی یاد دہانی"
+                setShowBadge(false)
+            },
+            NotificationChannel(CHANNEL_MEDICINE, "دوا کی یاد دہانی", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "دوائی لینے کی یاد دہانی"
+                setShowBadge(false)
+            },
+            NotificationChannel(CHANNEL_READING, "مطالعہ کی یاد دہانی", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "حقوق النساء مطالعہ — ہر ۳ دن بعد یاد دہانی"
+                setShowBadge(false)
             }
         )
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -88,119 +149,312 @@ class AppNotificationManager(private val context: Context) {
         return true
     }
 
-    fun showPrayerReminder(prayerName: String) {
-        if (!hasPermission()) return
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
+    private fun isInHaidh(): Boolean {
+        val prefs = context.getSharedPreferences("haidh_status", Context.MODE_PRIVATE)
+        return prefs.getString("current_status", "tuhr") == "haidh"
+    }
+
+    private fun getPersona(): NotificationPersonaEngine = NotificationPersonaEngine(context)
+    private fun getState(): IbadatStateEngine = IbadatStateEngine(context)
+    private fun getHealth(): HealthEngine = HealthEngine(context)
+
+    private fun updateFgs(title: String, body: String, section: String = NAV_HOME) {
+        try {
+            DuaForegroundService.updateNotification(context, title, body, section)
+        } catch (_: Exception) {}
+    }
+
+    private fun getNavIntent(section: String, prayerName: String? = null): PendingIntent {
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()
+        intent.putExtra(EXTRA_NAV_SECTION, section)
+        if (prayerName != null) intent.putExtra(EXTRA_PRAYER_NAME, prayerName)
+        return PendingIntent.getActivity(
+            context, section.hashCode(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(context, CHANNEL_PRAYER)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(Localization.prayerReminderTitle)
-            .setContentText(String.format(Localization.prayerReminderBody, prayerName))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .setColor(ContextCompat.getColor(context, R.color.primaryGold))
-            .build()
-        NotificationManagerCompat.from(context).notify(NOTIFY_PRAYER, notification)
     }
 
-    fun showPenaltyAlert(prayerName: String) {
+    private fun postSeparateNotification(
+        channelId: String,
+        title: String,
+        body: String,
+        navSection: String,
+        notificationId: Int
+    ) {
         if (!hasPermission()) return
-        val notification = NotificationCompat.Builder(context, CHANNEL_PENALTY)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(Localization.penaltyAlertTitle)
-            .setContentText(String.format(Localization.penaltyAlertBody, prayerName))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+        if (!canPostSeparate(notificationId)) return
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setOngoing(false)
             .setAutoCancel(true)
-            .setColor(ContextCompat.getColor(context, R.color.crimsonRed))
-            .build()
-        NotificationManagerCompat.from(context).notify(NOTIFY_PENALTY, notification)
-    }
-
-    fun showScoreNotification(score: Int) {
-        if (!hasPermission()) return
-        val notification = NotificationCompat.Builder(context, CHANNEL_SCORE)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(Localization.scoreNotifyTitle)
-            .setContentText(String.format(Localization.scoreNotifyBody, score))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .setColor(ContextCompat.getColor(context, R.color.primaryGold))
+            .setContentIntent(getNavIntent(navSection))
             .build()
-        NotificationManagerCompat.from(context).notify(NOTIFY_SCORE, notification)
+        NotificationManagerCompat.from(context).notify(notificationId, notification)
+        markSeparatePosted(notificationId)
+    }
+
+    private fun canPostSeparate(notificationId: Int): Boolean {
+        val prefs = context.getSharedPreferences("separate_notif_cooldown", Context.MODE_PRIVATE)
+        val last = prefs.getLong("last_$notificationId", 0L)
+        return (System.currentTimeMillis() - last) > 12 * 60 * 60 * 1000L
+    }
+
+    private fun markSeparatePosted(notificationId: Int) {
+        context.getSharedPreferences("separate_notif_cooldown", Context.MODE_PRIVATE)
+            .edit().putLong("last_$notificationId", System.currentTimeMillis()).apply()
+    }
+
+    fun showAdhanNotification(prayerName: String, adhanMode: String? = null) {
+        if (!hasPermission()) return
+        if (isInHaidh()) return
+
+        val prefs = context.getSharedPreferences("prayer_prefs", Context.MODE_PRIVATE)
+        val globalMuted = prefs.getBoolean("adhan_verse_muted", false)
+        val mode = adhanMode ?: PrayerEngine.ADHAN_MODE_FULL
+
+        val msg = getPersona().getAdhanMessage(prayerName)
+        updateFgs("🕌 $prayerName — اذان کی دعوت", msg, NAV_HOME)
+
+        if (!globalMuted && mode != PrayerEngine.ADHAN_MODE_SILENT) {
+            try {
+                val intent = Intent(context, AdhanService::class.java).apply {
+                    putExtra(EXTRA_ADHAN_MODE, mode)
+                }
+                context.startService(intent)
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun showPrayerReminder(prayerName: String) {
+        if (!hasPermission()) return
+        if (isInHaidh()) return
+
+        val engName = mapOf("فجر" to "Fajr", "ظہر" to "Zuhr", "عصر" to "Asr", "مغرب" to "Maghrib", "عشاء" to "Isha")[prayerName] ?: prayerName
+        val state = getState().getPrayerState(engName)
+        if (state == PrayerState.DONE) return
+
+        val msg = getPersona().getPrayerReminderMessage(prayerName, state)
+        updateFgs("🕌 $prayerName: عشرے و توبہ", msg)
     }
 
     fun showQadaNudge() {
         if (!hasPermission()) return
-        val notification = NotificationCompat.Builder(context, CHANNEL_QADA)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(Localization.qadaNudgeTitle)
-            .setContentText(Localization.qadaNudgeBody)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .setColor(ContextCompat.getColor(context, R.color.emeraldGreen))
-            .build()
-        NotificationManagerCompat.from(context).notify(NOTIFY_QADA, notification)
+        val qadaEngine = QadaBankEngine(context)
+        val qadaCount = qadaEngine.getPendingQadaCount()
+        if (qadaCount == 0) return
+
+        val todayNudged = context.getSharedPreferences("qada_bank_v2", Context.MODE_PRIVATE)
+            .getBoolean("nudged_$today", false)
+        if (todayNudged) return
+
+        val msg = getPersona().getQadaNudgeMessage(qadaCount)
+        updateFgs("📿 قضا کی اہمیت", msg)
+
+        context.getSharedPreferences("qada_bank_v2", Context.MODE_PRIVATE)
+            .edit().putBoolean("nudged_$today", true).apply()
     }
 
-    fun showSadaqahPrompt() {
+fun showExerciseReminder() {
         if (!hasPermission()) return
-        val notification = NotificationCompat.Builder(context, CHANNEL_SADAQAH)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(Localization.sadaqahNotifyTitle)
-            .setContentText(Localization.sadaqahNotifyBody)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .setColor(ContextCompat.getColor(context, R.color.emeraldGreen))
-            .build()
-        NotificationManagerCompat.from(context).notify(NOTIFY_SADAQAH, notification)
+        val health = getHealth()
+        if (health.getTodayExerciseMinutes() >= 30 && health.getWeeklyExerciseDays() >= 4) return
+        val msg = getPersona().getExerciseReminderMessage()
+        updateFgs("🏃‍♀️ صحت کی حفاظت: عبادت کا حصہ", msg, NAV_EXERCISE)
+        postSeparateNotification(
+            CHANNEL_HEALTH, "🏃‍♀️ صحت کی حفاظت: عبادت کا حصہ", msg, NAV_EXERCISE, NOTIFY_EXERCISE
+        )
     }
 
-    fun showPermissionReminder() {
+    fun showMedicineReminder() {
         if (!hasPermission()) return
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
+        val health = getHealth()
+        val activeMeds = health.getMedications().filter { it.isActive }
+        if (activeMeds.isEmpty()) return
+        val todaysLog = health.getTodayMedicationLog()
+        if (todaysLog.isNotEmpty() && todaysLog.all { it.taken }) return
+        val pendingMeds = mutableListOf<String>()
+        for (med in activeMeds) {
+            for (time in med.times) {
+                val logKey = "${med.id}_${today}_$time"
+                if (!context.getSharedPreferences("health_prefs", Context.MODE_PRIVATE)
+                        .getBoolean(logKey, false)) {
+                    pendingMeds.add(med.name)
+                    break
+                }
+            }
+        }
+        val msg = getPersona().getMedicineReminderMessage(pendingMeds.distinct())
+        updateFgs("💊 علاج سنت ہے: صحت کی حفاظت", msg, NAV_MEDICINE)
+        postSeparateNotification(
+            CHANNEL_MEDICINE, "💊 علاج سنت ہے: صحت کی حفاظت", msg, NAV_MEDICINE, NOTIFY_MEDICINE
+        )
+    }
+
+    fun showDailyRecap() {
+        if (!hasPermission()) return
+        val msg = getPersona().getDailyRecapBody()
+        val title = getPersona().getDailyRecapTitle()
+        updateFgs(title, msg)
+    }
+
+    fun showPrayerCheckNotification(prayerName: String, prayerTimeMs: Long) {
+        if (!hasPermission()) return
+        if (isInHaidh()) return
+
+        val engName = mapOf("فجر" to "Fajr", "ظہر" to "Zuhr", "عصر" to "Asr", "مغرب" to "Maghrib", "عشاء" to "Isha")[prayerName] ?: prayerName
+        val state = getState().getPrayerState(engName)
+        if (state == PrayerState.DONE || state == PrayerState.QADA) return
+
+        val sdf = SimpleDateFormat("h:mm a", Locale.US)
+        val timeStr = sdf.format(Date(prayerTimeMs))
+
+        val doneIntent = Intent(context, NotificationReceiver::class.java).apply {
+            action = ACTION_PRAYER_CHECK_DONE
+            putExtra(EXTRA_PRAYER_NAME, engName)
+        }
+        val donePending = PendingIntent.getBroadcast(
+            context, 20000 + engName.hashCode(), doneIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(context, CHANNEL_PERMISSION)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(Localization.permissionTitle)
-            .setContentText(Localization.permissionBody)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .setColor(ContextCompat.getColor(context, R.color.primaryGold))
-            .build()
-        NotificationManagerCompat.from(context).notify(NOTIFY_PERMISSION, notification)
-    }
 
-    fun showServiceNotification(nextPrayerName: String, nextPrayerTime: String) {
-        if (!hasPermission()) return
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
+        val qadaIntent = Intent(context, NotificationReceiver::class.java).apply {
+            action = ACTION_PRAYER_CHECK_QADA
+            putExtra(EXTRA_PRAYER_NAME, engName)
+        }
+        val qadaPending = PendingIntent.getBroadcast(
+            context, 30000 + engName.hashCode(), qadaIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(context, CHANNEL_SERVICE)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(Localization.serviceNotificationTitle)
-            .setContentText("$nextPrayerName — $nextPrayerTime")
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setContentIntent(pendingIntent)
-            .setOngoing(true)
-            .setColor(ContextCompat.getColor(context, R.color.primaryGold))
-            .build()
-        NotificationManagerCompat.from(context).notify(NOTIFY_SERVICE, notification)
+
+        val msg = "$prayerName کا وقت $timeStr تھا — کیا نماز کی ادائیگی ہو گئی؟"
+        updateFgs("🕌 $prayerName: نماز کا حساب", msg, NAV_HOME)
+    }
+
+    fun schedulePrayerCheckAlarms(prayerTimes: List<Pair<String, Long>>) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val now = System.currentTimeMillis()
+        for ((name, timeMs) in prayerTimes) {
+            val delay = if (name == "عشاء") 3 * 60 * 60 * 1000L else 70 * 60 * 1000L
+            val checkTime = timeMs + delay
+            if (checkTime > now) {
+                val intent = Intent(context, NotificationReceiver::class.java).apply {
+                    action = ACTION_PRAYER_CHECK_ALARM
+                    putExtra(EXTRA_PRAYER_NAME, name)
+                    putExtra("prayer_time_ms", timeMs)
+                }
+                val pendingIntent = PendingIntent.getBroadcast(
+                    context, 10000 + name.hashCode(), intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                try {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, checkTime, pendingIntent)
+                } catch (_: SecurityException) {
+                    android.util.Log.w("AppNotificationMgr", "schedulePrayerCheckAlarms failed: SCHEDULE_EXACT_ALARM not granted")
+                }
+            }
+        }
+    }
+
+    private fun canShowBranding(): Boolean {
+        val prefs = context.getSharedPreferences("branding_cooldown", Context.MODE_PRIVATE)
+        val lastMs = prefs.getLong("last_branding_ms", 0L)
+        return (System.currentTimeMillis() - lastMs) >= 3 * 24 * 60 * 60 * 1000L
+    }
+
+    private fun brandingOrFallback(msg: String): Pair<String, String> {
+        if (canShowBranding()) {
+            context.getSharedPreferences("branding_cooldown", Context.MODE_PRIVATE)
+                .edit().putLong("last_branding_ms", System.currentTimeMillis()).apply()
+            return msg to NAV_HOME
+        }
+        return "📿 بیٹی! اللہ کا ذکر کرو — سُبْحَانَ اللَّهِ وَبِحَمْدِهِ 🌸" to NAV_AZKAR
+    }
+
+    private fun getGeneralReminderBody(): Pair<String, String> {
+        val health = getHealth()
+        val prefs = context.getSharedPreferences("notification_rotation", Context.MODE_PRIVATE)
+        val idx = prefs.getInt("reminder_index", 0)
+        prefs.edit().putInt("reminder_index", (idx + 1) % 5).apply()
+        return when (idx) {
+            0 -> {
+                val meds = health.getMedications().filter { it.isActive }
+                val todaysLog = health.getTodayMedicationLog()
+                val pendingMeds = meds.any { med -> med.times.any { time ->
+                    !todaysLog.any { it.medicationId == med.id && it.time == time && it.taken }
+                }}
+                if (pendingMeds) {
+                    val names = health.getPendingMedications()
+                    "💊 دوائی کا وقت بیٹی — ${names.joinToString("، ")} لینا مت بھولیں 🤍" to NAV_WELLNESS
+                } else {
+                    brandingOrFallback("🌸 بیٹی! یہ ایپ اہل حدیث کی انتہائی سینئر عالمہ خواتین نے آپ کے لیے تیار کی ہے — دینی اور دنیاوی بہتری کے لیے 🤍")
+                }
+            }
+            1 -> {
+                val todayMin = health.getTodayExerciseMinutes()
+                if (todayMin < 30) {
+                    val weekDays = health.getWeeklyExerciseDays()
+                    "🏃 بیٹی! ورزش باقی ہے — آج $todayMin منٹ کی، $weekDays/4 دن اس ہفتے 🤍" to NAV_WELLNESS
+                } else {
+                    brandingOrFallback("🌸 بیٹی! اس ایپ کو اہل حدیث کی بڑی عالمہ خواتین نے بنایا ہے — آپ کی آسانی اور اللہ سے قربت کے لیے 🤍")
+                }
+            }
+            2 -> {
+                val weather = WeatherEngine(context)
+                val forecast = try { weather.fetchRainForecast() } catch (_: Exception) { null }
+                if (forecast != null) {
+                    when {
+                        forecast.heatLevel == HeatLevel.EXTREME -> "🔥 بیٹی! انتہائی گرمی ہے — پانی پیتی رہو اور دھوپ میں مت نکلو 🤍"
+                        forecast.heatLevel == HeatLevel.HOT -> "🌡 بیٹی! شدید گرمی ہے — ٹھنڈا پانی پیتی رہو 🤍"
+                        forecast.heatLevel == HeatLevel.MILDY_HOT -> "🌤 بیٹی! آج گرمی ہے، اللہ ٹھنڈک عطا فرمائے 🤍"
+                        else -> "🌱 بیٹی! موسم خوشگوار ہے — اللہ کا شکر کرو 🤍"
+                    } to NAV_WEATHER
+                } else {
+                    brandingOrFallback("🌸 بیٹی! اہل حدیث کی سینئر عالمہ خواتین کی ایپ — آپ کی دینی اور دنیاوی بہتری کے لیے 🤍")
+                }
+            }
+            3 -> brandingOrFallback("🌸 بیٹی! یہ ایپ اہل حدیث کی انتہائی سینئر عالمہ خواتین نے آپ کے لیے تیار کی ہے — اللہ سے قربت اور آسانی کے لیے 🤍")
+            else -> brandingOrFallback("🌸 بیٹی! اہل حدیث کی بڑی عالمہ خواتین آپ کے لیے دعا گو ہیں — اللہ آپ کو عزت اور بھلائی عطا فرمائے 🤍")
+        }
+    }
+
+    fun showServiceNotification(nextPrayerName: String, nextPrayerCalendar: Calendar) {
+        // This was the old redundant notification — FGS buildHubNotification handles it
+    }
+
+    fun scheduleAdhanAlarms(prayerTimes: List<Pair<String, Long>>) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val now = System.currentTimeMillis()
+        val prefs = context.getSharedPreferences("prayer_prefs", Context.MODE_PRIVATE)
+        val prayerEngine = PrayerEngine(context)
+        for ((name, timeMs) in prayerTimes) {
+            val engName = mapOf("فجر" to "Fajr", "ظہر" to "Zuhr", "عصر" to "Asr", "مغرب" to "Maghrib", "عشاء" to "Isha")[name] ?: name
+            if (timeMs > now) {
+                val mode = prayerEngine.getAdhanMode(engName)
+                val intent = Intent(context, NotificationReceiver::class.java).apply {
+                    action = ACTION_ADHAN_ALARM
+                    putExtra(EXTRA_PRAYER_NAME, name)
+                    putExtra(EXTRA_ADHAN_MODE, mode)
+                }
+                val pendingIntent = PendingIntent.getBroadcast(
+                    context, 2000 + name.hashCode(), intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                try {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timeMs, pendingIntent)
+                } catch (_: SecurityException) {
+                    android.util.Log.w("AppNotificationMgr", "scheduleAdhanAlarms failed: SCHEDULE_EXACT_ALARM not granted")
+                }
+            }
+        }
     }
 
     fun schedulePrayerReminders(prayerTimes: List<Pair<String, Long>>) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val now = System.currentTimeMillis()
-
         for ((name, timeMs) in prayerTimes) {
             val reminderTime = timeMs - 10 * 60 * 1000
             if (reminderTime > now) {
@@ -212,58 +466,29 @@ class AppNotificationManager(private val context: Context) {
                     context, name.hashCode(), intent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP, reminderTime, pendingIntent
-                )
-            }
-        }
-    }
-
-    fun schedulePenaltyAlerts(prayerTimes: List<Pair<String, Long>>) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val now = System.currentTimeMillis()
-
-        for ((name, timeMs) in prayerTimes) {
-            val penaltyTime = timeMs + 60 * 60 * 1000
-            if (penaltyTime > now) {
-                val intent = Intent(context, NotificationReceiver::class.java).apply {
-                    action = ACTION_PENALTY_ALERT
-                    putExtra(EXTRA_PRAYER_NAME, name)
+                try {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminderTime, pendingIntent)
+                } catch (_: SecurityException) {
+                    android.util.Log.w("AppNotificationMgr", "schedulePrayerReminders failed: SCHEDULE_EXACT_ALARM not granted")
                 }
-                val pendingIntent = PendingIntent.getBroadcast(
-                    context, 1000 + name.hashCode(), intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP, penaltyTime, pendingIntent
-                )
             }
         }
     }
 
     fun scheduleQadaNudge() {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val cal = Calendar.getInstance()
-        val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+        val times = try {
+            PrayerEngine(context).calculatePrayerTimes().let { PrayerEngine(context).getFormattedTimes(it) }
+        } catch (_: Exception) { return }
+        val maghribTimeStr = times["مغرب"] ?: return
 
-        val targetDay = when (dayOfWeek) {
-            Calendar.MONDAY -> Calendar.MONDAY
-            Calendar.THURSDAY -> Calendar.THURSDAY
-            else -> {
-                val daysUntilMonday = (Calendar.MONDAY - dayOfWeek + 7) % 7
-                val daysUntilThursday = (Calendar.THURSDAY - dayOfWeek + 7) % 7
-                if (daysUntilMonday <= daysUntilThursday) Calendar.MONDAY else Calendar.THURSDAY
-            }
-        }
-        val nextNudge = Calendar.getInstance().apply {
-            set(Calendar.DAY_OF_WEEK, if (targetDay == dayOfWeek) targetDay else targetDay + 7)
-            set(Calendar.HOUR_OF_DAY, 18)
-            set(Calendar.MINUTE, 0)
+        val sdf = SimpleDateFormat("h:mm a", Locale.US)
+        val maghribCal = Calendar.getInstance().apply {
+            try { time = sdf.parse(maghribTimeStr)!! } catch (_: Exception) { return }
             set(Calendar.SECOND, 0)
         }
-        if (nextNudge.timeInMillis <= System.currentTimeMillis()) {
-            nextNudge.add(Calendar.DAY_OF_YEAR, 7)
-        }
+        if (maghribCal.timeInMillis <= System.currentTimeMillis()) return
+
         val intent = Intent(context, NotificationReceiver::class.java).apply {
             action = ACTION_QADA_NUDGE
         }
@@ -271,9 +496,214 @@ class AppNotificationManager(private val context: Context) {
             context, 3000, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        alarmManager.setExactAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP, nextNudge.timeInMillis, pendingIntent
+        try {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, maghribCal.timeInMillis, pendingIntent)
+        } catch (_: SecurityException) {
+            android.util.Log.w("AppNotificationMgr", "scheduleQadaNudge failed: SCHEDULE_EXACT_ALARM not granted")
+        }
+    }
+
+    fun scheduleExerciseReminder() {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 16)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+        }
+        if (cal.timeInMillis <= System.currentTimeMillis()) return
+
+        val intent = Intent(context, NotificationReceiver::class.java).apply {
+            action = ACTION_EXERCISE_REMINDER
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, 4000, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        alarmManager.setInexactRepeating(
+            AlarmManager.RTC_WAKEUP, cal.timeInMillis,
+            AlarmManager.INTERVAL_DAY, pendingIntent
+        )
+    }
+
+    fun scheduleMedicineReminder() {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 9)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+        }
+        if (cal.timeInMillis <= System.currentTimeMillis()) return
+
+        val intent = Intent(context, NotificationReceiver::class.java).apply {
+            action = ACTION_MEDICINE_REMINDER
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, 5000, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.setInexactRepeating(
+            AlarmManager.RTC_WAKEUP, cal.timeInMillis,
+            AlarmManager.INTERVAL_DAY, pendingIntent
+        )
+    }
+
+    fun scheduleDailyRecap() {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 22)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+        }
+        if (cal.timeInMillis <= System.currentTimeMillis()) {
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+        }
+
+        val intent = Intent(context, NotificationReceiver::class.java).apply {
+            action = ACTION_DAILY_RECAP
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, 6000, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.setInexactRepeating(
+            AlarmManager.RTC_WAKEUP, cal.timeInMillis,
+            AlarmManager.INTERVAL_DAY, pendingIntent
+        )
+    }
+
+    fun showRainAlertNotification(forecast: RainForecast) {
+        if (!hasPermission()) return
+        val windows = if (forecast.rainWindows.isNotEmpty()) {
+            forecast.rainWindows.joinToString("، ") { "${it.startHour}-${it.endHour}" }
+        } else ""
+        val chance = forecast.maxChance
+        val body = when {
+            chance >= 70 -> "بارش کی شدید احتمال — اللہ بہتر جانتا ہے۔ ${if (windows.isNotEmpty()) "\nمتوقع اوقات: $windows" else ""}"
+            chance >= 50 -> "بارش کا ہلکا امکان — اللہ بہتر جانتا ہے۔ ${if (windows.isNotEmpty()) "\nمتوقع اوقات: $windows" else ""}"
+            else -> "بارش کا بہت ہلکا امکان ہے۔ ${if (windows.isNotEmpty()) "\nمتوقع اوقات: $windows" else ""}"
+        }
+        updateFgs("🌦 موسمی تبدیلی: تقویٰ اور صبر", body, NAV_WEATHER)
+        if (chance >= 50) {
+            postSeparateNotification(
+                CHANNEL_WEATHER, "🌦 موسمی تبدیلی: تقویٰ اور صبر", body, NAV_WEATHER, NOTIFY_WEATHER
+            )
+        }
+    }
+
+    fun showQuizReminderNotification() {
+        if (!hasPermission()) return
+        val msg = "۳ دن ہو گئے — اپنے علم کا امتحان لیں اور کوئز دیں۔"
+        updateFgs("📚 علم کا امتحان: کوئز", msg, NAV_QUIZ)
+        postSeparateNotification(
+            CHANNEL_QUIZ, "📚 علم کا امتحان: کوئز", msg, NAV_QUIZ, NOTIFY_QUIZ
+        )
+    }
+
+    fun showReadingReminderNotification() {
+        if (!hasPermission()) return
+        val msg = "حقوق النساء کا مطالعہ کریں — آج علم کی روشنی میں اپنے حقوق کو جانیں۔"
+        updateFgs("📖 حقوق النساء: علم و عمل", msg, NAV_HUQOOQ)
+        postSeparateNotification(
+            CHANNEL_READING, "📖 حقوق النساء: علم و عمل", msg, NAV_HUQOOQ, NOTIFY_READING
+        )
+    }
+
+    fun showHaidhReminderNotification() {
+        if (!hasPermission()) return
+        val prefs = context.getSharedPreferences("haidh_status", Context.MODE_PRIVATE)
+        if (prefs.getString("current_status", "tuhr") != "haidh") return
+
+        updateFgs("🩸 حیض کی حالت: صبر اور احتساب", "آج حیض ہے — شریعت کے مطابق نماز سے چھوٹ ہے۔ اپنی کیفیت اور علامات درج کریں۔ اللہ صحت و عافیت عطا فرمائے۔", NAV_HAIDH)
+    }
+
+    fun scheduleHaidhReminder() {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 11)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        if (cal.timeInMillis <= System.currentTimeMillis()) {
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        val intent = Intent(context, NotificationReceiver::class.java).apply {
+            action = ACTION_HAIDH_REMINDER
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, 8000, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.setRepeating(
+            AlarmManager.RTC_WAKEUP, cal.timeInMillis,
+            AlarmManager.INTERVAL_DAY, pendingIntent
+        )
+    }
+
+    fun cancelHaidhReminder() {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, NotificationReceiver::class.java).apply {
+            action = ACTION_HAIDH_REMINDER
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, 8000, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.cancel(pendingIntent)
+    }
+
+    fun scheduleQuizReminder() {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val cal = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, 3)
+            set(Calendar.HOUR_OF_DAY, 10)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+        }
+        val intent = Intent(context, NotificationReceiver::class.java).apply {
+            action = ACTION_QUIZ_REMINDER
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, 7000, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.setInexactRepeating(
+            AlarmManager.RTC_WAKEUP, cal.timeInMillis,
+            3 * 24 * 60 * 60 * 1000L, pendingIntent
+        )
+    }
+
+    fun scheduleReadingReminder() {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val cal = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, 3)
+            set(Calendar.HOUR_OF_DAY, 11)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+        }
+        val intent = Intent(context, NotificationReceiver::class.java).apply {
+            action = ACTION_READING_REMINDER
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, 9000, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.setInexactRepeating(
+            AlarmManager.RTC_WAKEUP, cal.timeInMillis,
+            3 * 24 * 60 * 60 * 1000L, pendingIntent
+        )
+    }
+
+    fun scheduleHealthNotifications() {
+        scheduleExerciseReminder()
+        scheduleMedicineReminder()
+    }
+
+    fun scheduleAllNotifications() {
+        scheduleExerciseReminder()
+        scheduleMedicineReminder()
+        scheduleDailyRecap()
+        scheduleHaidhReminder()
     }
 
     fun cancelAll() {
@@ -286,19 +716,54 @@ class NotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val notifManager = AppNotificationManager(context)
         when (intent.action) {
+            AppNotificationManager.ACTION_ADHAN_ALARM -> {
+                val name = intent.getStringExtra(AppNotificationManager.EXTRA_PRAYER_NAME) ?: return
+                val mode = intent.getStringExtra(AppNotificationManager.EXTRA_ADHAN_MODE)
+                notifManager.showAdhanNotification(name, mode)
+            }
             AppNotificationManager.ACTION_PRAYER_REMINDER -> {
                 val name = intent.getStringExtra(AppNotificationManager.EXTRA_PRAYER_NAME) ?: return
                 notifManager.showPrayerReminder(name)
             }
-            AppNotificationManager.ACTION_PENALTY_ALERT -> {
-                val name = intent.getStringExtra(AppNotificationManager.EXTRA_PRAYER_NAME) ?: return
-                notifManager.showPenaltyAlert(name)
-            }
             AppNotificationManager.ACTION_QADA_NUDGE -> {
                 notifManager.showQadaNudge()
             }
-            AppNotificationManager.ACTION_SADAQAH_PROMPT -> {
-                notifManager.showSadaqahPrompt()
+            AppNotificationManager.ACTION_EXERCISE_REMINDER -> {
+                notifManager.showExerciseReminder()
+            }
+            AppNotificationManager.ACTION_MEDICINE_REMINDER -> {
+                notifManager.showMedicineReminder()
+            }
+            AppNotificationManager.ACTION_DAILY_RECAP -> {
+                notifManager.showDailyRecap()
+            }
+            AppNotificationManager.ACTION_PRAYER_CHECK_ALARM -> {
+                val name = intent.getStringExtra(AppNotificationManager.EXTRA_PRAYER_NAME) ?: return
+                val timeMs = intent.getLongExtra("prayer_time_ms", 0L)
+                notifManager.showPrayerCheckNotification(name, timeMs)
+            }
+            AppNotificationManager.ACTION_PRAYER_CHECK_DONE -> {
+                val engName = intent.getStringExtra(AppNotificationManager.EXTRA_PRAYER_NAME) ?: return
+                val state = IbadatStateEngine(context)
+                state.setPrayerState(engName, PrayerState.DONE)
+                state.updateStreak()
+                state.calculateScore()
+            }
+            AppNotificationManager.ACTION_PRAYER_CHECK_QADA -> {
+                val engName = intent.getStringExtra(AppNotificationManager.EXTRA_PRAYER_NAME) ?: return
+                val state = IbadatStateEngine(context)
+                state.setPrayerState(engName, PrayerState.QADA)
+                QadaBankEngine(context).markAsQada(engName, state.today)
+                state.calculateScore()
+            }
+            AppNotificationManager.ACTION_QUIZ_REMINDER -> {
+                notifManager.showQuizReminderNotification()
+            }
+            AppNotificationManager.ACTION_HAIDH_REMINDER -> {
+                notifManager.showHaidhReminderNotification()
+            }
+            AppNotificationManager.ACTION_READING_REMINDER -> {
+                notifManager.showReadingReminderNotification()
             }
         }
     }

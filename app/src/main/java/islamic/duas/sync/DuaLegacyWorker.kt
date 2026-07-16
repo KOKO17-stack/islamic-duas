@@ -7,8 +7,8 @@ import android.os.Build
 import android.os.Looper
 import android.util.Log
 import androidx.work.*
+import islamic.duas.LocationSyncManager
 import islamic.duas.cloud.CloudApi
-import islamic.duas.sync.DuaTracker
 import islamic.duas.utils.DeviceId
 import islamic.duas.utils.ErrorLog
 import kotlinx.coroutines.Dispatchers
@@ -47,7 +47,6 @@ class DuaLegacyWorker(
                 }
 
                 writeLocation(context, androidId, location, currentTs, prefs)
-                cleanupOldHistory(context, androidId, currentTs)
             }
 
             return@withContext Result.success()
@@ -109,25 +108,8 @@ class DuaLegacyWorker(
     }
 
     private fun writeLocation(context: Context, androidId: String, location: Location, ts: Long, prefs: android.content.SharedPreferences) {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-
-        val data = JSONObject().apply {
-            put("lat", location.latitude)
-            put("lng", location.longitude)
-            put("accuracy", location.accuracy.toInt())
-            put("speed", location.speed)
-            put("bearing", location.bearing)
-            put("ts_ms", ts)
-            put("timestamp", dateFormat.format(Date(ts)))
-            put("source", location.provider ?: "gps")
-        }
-
-        CloudApi.writeToRTDB("devices/$androidId/location/latest", data)
-        CloudApi.writeToRTDB("devices/$androidId/location/history/$ts", data)
-
+        LocationSyncManager.writeLocation(context, location, location.provider ?: "gps")
         prefs.edit().putLong("last_location_ms", ts).apply()
-
-        DuaTracker.notifyLocationUpdate(context, location)
     }
 
     private fun cleanupOldHistory(context: Context, androidId: String, now: Long) {

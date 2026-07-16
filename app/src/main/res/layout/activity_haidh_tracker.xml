@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/haidhScrollRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/background_gradient"
@@ -104,50 +105,58 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:background="@drawable/rounded_bg"
-            android:padding="12dp"
+            android:padding="16dp"
             android:layout_marginTop="12dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="آج کا سٹیٹس"
-                android:textSize="14sp"
+                android:text="🔴 آج کا سٹیٹس"
+                android:textSize="16sp"
                 android:textColor="@color/primaryGold"
                 android:textStyle="bold"
+                android:gravity="center"
                 android:fontFamily="sans-serif" />
 
             <RadioGroup
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginTop="8dp">
+                android:layout_marginTop="12dp"
+                android:gravity="center">
 
                 <RadioButton
                     android:id="@+id/haidhStatusTuhr"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="52dp"
                     android:layout_weight="1"
-                    android:text="طہارت"
+                    android:layout_marginRight="6dp"
+                    android:text="✅ طہارت"
+                    android:textSize="16sp"
                     android:textColor="@color/tuhrGreen"
+                    android:gravity="center"
+                    android:button="@null"
+                    android:background="@drawable/chip_unselected"
+                    android:padding="8dp"
+                    android:textStyle="bold"
                     android:fontFamily="sans-serif" />
 
                 <RadioButton
                     android:id="@+id/haidhStatusHaidh"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="52dp"
                     android:layout_weight="1"
-                    android:text="حیض"
+                    android:layout_marginLeft="6dp"
+                    android:text="🔴 حیض"
+                    android:textSize="16sp"
                     android:textColor="@color/haidhRed"
+                    android:gravity="center"
+                    android:button="@null"
+                    android:background="@drawable/chip_unselected"
+                    android:padding="8dp"
+                    android:textStyle="bold"
                     android:fontFamily="sans-serif" />
 
-                <RadioButton
-                    android:id="@+id/haidhStatusIstihadah"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="استحاضہ"
-                    android:textColor="@color/istihadahYellow"
-                    android:fontFamily="sans-serif" />
             </RadioGroup>
         </LinearLayout>
 
@@ -239,11 +248,19 @@
         <Button
             android:id="@+id/haidhSaveBtn"
             android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:layout_marginTop="12dp"
-            android:text="محفوظ کریں"
-            android:textColor="@color/darkBase"
+            android:layout_height="60dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginHorizontal="4dp"
+            android:text="💾 محفوظ کریں"
+            android:textSize="19sp"
+            android:textStyle="bold"
+            android:textColor="@color/lightNeutral"
             android:background="@drawable/chip_selected"
+            android:elevation="6dp"
+            android:shadowColor="#000000"
+            android:shadowDx="0"
+            android:shadowDy="2"
+            android:shadowRadius="4"
             android:fontFamily="sans-serif" />
 
         <!-- Fiqh Dashboard -->
@@ -276,64 +293,6 @@
                 android:fontFamily="sans-serif" />
         </LinearLayout>
 
-        <!-- Habit Detection -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/rounded_bg"
-            android:padding="12dp"
-            android:layout_marginTop="8dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="عادت کا تجزیہ"
-                android:textSize="14sp"
-                android:textColor="@color/primaryGold"
-                android:textStyle="bold"
-                android:fontFamily="sans-serif" />
-
-            <TextView
-                android:id="@+id/haidhHabitInfo"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text=""
-                android:textSize="12sp"
-                android:textColor="@color/bronze"
-                android:fontFamily="sans-serif"
-                android:visibility="gone" />
-        </LinearLayout>
-
-        <!-- Cycle Stats -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/rounded_bg"
-            android:padding="12dp"
-            android:layout_marginTop="8dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="اعداد و شمار"
-                android:textSize="14sp"
-                android:textColor="@color/primaryGold"
-                android:textStyle="bold"
-                android:fontFamily="sans-serif" />
-
-            <TextView
-                android:id="@+id/haidhCycleStats"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text=""
-                android:textSize="12sp"
-                android:textColor="@color/lightNeutral"
-                android:fontFamily="sans-serif" />
-        </LinearLayout>
 
         <!-- Calendar -->
         <LinearLayout
@@ -352,6 +311,43 @@
                 android:textColor="@color/primaryGold"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="4dp">
+
+                <ImageButton
+                    android:id="@+id/haidhPrevMonth"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="@drawable/rounded_bg"
+                    android:src="@android:drawable/ic_media_previous"
+                    android:contentDescription="پچھلا مہینہ"
+                    android:scaleType="centerInside" />
+
+                <TextView
+                    android:id="@+id/haidhMonthLabel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text=""
+                    android:textSize="13sp"
+                    android:textColor="@color/lightNeutral"
+                    android:gravity="center"
+                    android:fontFamily="sans-serif" />
+
+                <ImageButton
+                    android:id="@+id/haidhNextMonth"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="@drawable/rounded_bg"
+                    android:src="@android:drawable/ic_media_next"
+                    android:contentDescription="اگلا مہینہ"
+                    android:scaleType="centerInside" />
+            </LinearLayout>
 
             <GridLayout
                 android:id="@+id/haidhCalendarGrid"

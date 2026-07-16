@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B0F2A"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="24dp">
+
+        <!-- Header -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="24dp">
+
+            <TextView
+                android:id="@+id/weatherDetailBack"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="← واپس"
+                android:textSize="14sp"
+                android:textColor="#D4AF37"
+                android:padding="8dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🌤 موسم کی تفصیل"
+                android:textSize="18sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <View android:layout_width="48dp" android:layout_height="1dp" />
+        </LinearLayout>
+
+        <View android:layout_width="48dp" android:layout_height="2dp" android:layout_marginTop="8dp" android:background="#D4AF37" android:layout_gravity="center" />
+
+        <!-- Summary Card -->
+        <LinearLayout
+            android:id="@+id/weatherSummaryCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_background"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:id="@+id/weatherSummaryRain"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="14sp"
+                android:textColor="#E8E6E1"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/weatherSummaryTemp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="12sp"
+                android:textColor="#C9A961"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/weatherSummaryHeat"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text=""
+                android:textSize="12sp"
+                android:textColor="#E8E6E1"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <!-- Hourly forecast -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="⏰ اگلے ۲۴ گھنٹے"
+                android:textSize="13sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:id="@+id/weatherHourlyContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

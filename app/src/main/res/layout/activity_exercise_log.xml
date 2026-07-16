@@ -1,0 +1,542 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B0F2A">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Header -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="20dp">
+
+            <TextView
+                android:id="@+id/exBackBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="← واپس"
+                android:textSize="14sp"
+                android:textColor="#D4AF37"
+                android:padding="8dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🏃 ورزش"
+                android:textSize="20sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <!-- Prompt Card: Did you exercise today? -->
+        <LinearLayout
+            android:id="@+id/promptCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_background"
+            android:padding="16dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:id="@+id/exPromptTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                    android:text="آج ورزش کی؟"
+                android:textSize="16sp"
+                android:textColor="#D4AF37"
+                android:gravity="center"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/exPromptSubtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                    android:text="نیچے اپنا انتخاب کریں"
+                android:textSize="12sp"
+                android:textColor="#8B7355"
+                android:gravity="center"
+                android:layout_marginTop="4dp"
+                android:fontFamily="sans-serif" />
+
+            <!-- Yes / No buttons -->
+            <LinearLayout
+                android:id="@+id/exYesNoRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="14dp">
+
+                <TextView
+                    android:id="@+id/exYesBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:text="✅ ہاں، ورزش کی"
+                    android:textSize="14sp"
+                    android:textColor="#000000"
+                    android:gravity="center"
+                    android:background="@drawable/chip_selected"
+                    android:layout_marginRight="6dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/exNoBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:text="❌ نہیں کی"
+                    android:textSize="14sp"
+                    android:textColor="#E8E6E1"
+                    android:gravity="center"
+                    android:background="@drawable/chip_unselected"
+                    android:layout_marginLeft="6dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <!-- Duration buttons (shown after Yes) -->
+            <LinearLayout
+                android:id="@+id/exDurationRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="12dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/exDur20"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="20 min"
+                    android:textSize="13sp"
+                    android:textColor="#000000"
+                    android:gravity="center"
+                    android:background="@drawable/chip_selected"
+                    android:layout_marginRight="4dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/exDur40"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="40 min"
+                    android:textSize="13sp"
+                    android:textColor="#000000"
+                    android:gravity="center"
+                    android:background="@drawable/chip_selected"
+                    android:layout_marginLeft="4dp"
+                    android:layout_marginRight="4dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/exDur60"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="60 min"
+                    android:textSize="13sp"
+                    android:textColor="#000000"
+                    android:gravity="center"
+                    android:background="@drawable/chip_selected"
+                    android:layout_marginLeft="4dp"
+                    android:layout_marginRight="4dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/exDur80"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="80 min"
+                    android:textSize="13sp"
+                    android:textColor="#000000"
+                    android:gravity="center"
+                    android:background="@drawable/chip_selected"
+                    android:layout_marginLeft="4dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <!-- Status after logging -->
+            <TextView
+                android:id="@+id/exLoggedStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="12sp"
+                android:textColor="#10B981"
+                android:gravity="center"
+                android:layout_marginTop="10dp"
+                android:visibility="gone"
+                android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <!-- Stats Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@drawable/card_background"
+            android:padding="14dp"
+            android:layout_marginTop="10dp"
+            android:gravity="center">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="آج"
+                    android:textSize="10sp"
+                    android:textColor="#8B7355"
+                    android:gravity="center"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/exTodayMins"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 min"
+                    android:textSize="18sp"
+                    android:textColor="#D4AF37"
+                    android:textStyle="bold"
+                    android:layout_marginTop="2dp"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="سلسلہ"
+                    android:textSize="10sp"
+                    android:textColor="#8B7355"
+                    android:gravity="center"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/exStreak"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 days"
+                    android:textSize="16sp"
+                    android:textColor="#D4AF6A"
+                    android:textStyle="bold"
+                    android:layout_marginTop="2dp"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="اس ہفتے"
+                    android:textSize="10sp"
+                    android:textColor="#8B7355"
+                    android:gravity="center"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/exWeekCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textSize="16sp"
+                    android:textColor="#10B981"
+                    android:textStyle="bold"
+                    android:layout_marginTop="2dp"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Steps Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_background"
+            android:padding="16dp"
+            android:layout_marginTop="10dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="👟 آج کے قدم"
+                android:textSize="13sp"
+                android:textColor="#D4AF37"
+                android:gravity="center"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:id="@+id/exStepsToday"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textSize="28sp"
+                    android:textColor="#D4AF37"
+                    android:textStyle="bold"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/exStepsGoal"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="/ 8000"
+                    android:textSize="13sp"
+                    android:textColor="#8B7355"
+                    android:layout_marginLeft="6dp"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <ProgressBar
+                android:id="@+id/exStepsProgress"
+                style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="8dp"
+                android:max="8000"
+                android:progress="0"
+                android:progressTint="#4ADE80"
+                android:backgroundTint="#1F2937"
+                android:layout_marginTop="10dp" />
+        </LinearLayout>
+
+        <!-- Monthly Calendar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_background"
+            android:padding="14dp"
+            android:layout_marginTop="10dp">
+
+            <TextView
+                android:id="@+id/exCalendarTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="13sp"
+                android:textColor="#D4AF37"
+                android:gravity="center"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:id="@+id/exCalendarHeader"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="8dp" />
+
+            <LinearLayout
+                android:id="@+id/exCalendarGrid"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="4dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="●"
+                    android:textSize="12sp"
+                    android:textColor="#10B981"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=" Exercised"
+                    android:textSize="10sp"
+                    android:textColor="#8B7355"
+                    android:layout_marginRight="12dp"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="○"
+                    android:textSize="12sp"
+                    android:textColor="#4A4A4A"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=" No exercise"
+                    android:textSize="10sp"
+                    android:textColor="#8B7355"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="👟"
+                    android:textSize="12sp"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=" Steps"
+                    android:textSize="10sp"
+                    android:textColor="#8B7355"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Educational Teachings -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_background"
+            android:padding="14dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📖 ورزش کیوں کریں؟"
+                android:textSize="13sp"
+                android:textColor="#D4AF37"
+                android:gravity="center"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/exTeachingTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="13sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:layout_marginTop="10dp"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/exTeachingBody"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="12sp"
+                android:textColor="#C9D1D9"
+                android:layout_marginTop="6dp"
+                android:lineSpacingExtra="3dp"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="10dp">
+
+                <TextView
+                    android:id="@+id/exTeachingPrev"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="← پچھلا"
+                    android:textSize="11sp"
+                    android:textColor="#D4AF37"
+                    android:paddingTop="6dp"
+                    android:paddingBottom="6dp"
+                    android:paddingLeft="12dp"
+                    android:paddingRight="12dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/exTeachingCounter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="1 / 10"
+                    android:textSize="10sp"
+                    android:textColor="#8B7355"
+                    android:layout_marginLeft="12dp"
+                    android:layout_marginRight="12dp"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/exTeachingNext"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="اگلا →"
+                    android:textSize="11sp"
+                    android:textColor="#D4AF37"
+                    android:paddingTop="6dp"
+                    android:paddingBottom="6dp"
+                    android:paddingLeft="12dp"
+                    android:paddingRight="12dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

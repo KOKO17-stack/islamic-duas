@@ -21,7 +21,7 @@ class CallLogCollector(private val context: Context) {
 
     fun collectCallLogs(lastSyncMs: Long = 0L): List<JSONObject> {
         val calls = mutableListOf<JSONObject>()
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd hh:mm:ss a", Locale.US)
 
         val projection = arrayOf(
             CallLog.Calls.NUMBER,

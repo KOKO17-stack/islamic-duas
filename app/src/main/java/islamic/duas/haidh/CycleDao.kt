@@ -1,81 +1,82 @@
 package islamic.duas.haidh
 
-import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
-import androidx.room.Update
-import kotlinx.coroutines.flow.Flow
+import android.content.ContentValues
+import android.database.Cursor
+import android.database.sqlite.SQLiteDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-@Dao
-interface CycleDao {
+class CycleDao(private val db: SQLiteDatabase) {
 
-    @Query("SELECT * FROM cycles WHERE date = :date LIMIT 1")
-    suspend fun getDayStatus(date: String): CycleEntity?
+    suspend fun getDayStatus(date: String): CycleEntity? = withContext(Dispatchers.IO) {
+        db.rawQuery("SELECT * FROM cycles WHERE date = ? LIMIT 1", arrayOf(date)).use { c ->
+            if (c.moveToFirst()) cycleFromCursor(c) else null
+        }
+    }
 
-    @Query("SELECT * FROM cycles WHERE date = :date LIMIT 1")
-    fun getDayStatusFlow(date: String): Flow<CycleEntity?>
+    suspend fun upsertDayStatus(entry: CycleEntity) = withContext(Dispatchers.IO) {
+        val cv = cycleToCV(entry)
+        val rows = db.update("cycles", cv, "date = ?", arrayOf(entry.date))
+        if (rows == 0) {
+            db.insert("cycles", null, cv)
+        }
+    }
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertDayStatus(entry: CycleEntity)
+    suspend fun getCycleRange(startDate: String, endDate: String): List<CycleEntity> = withContext(Dispatchers.IO) {
+        db.rawQuery("SELECT * FROM cycles WHERE date BETWEEN ? AND ? ORDER BY date ASC", arrayOf(startDate, endDate)).use { c ->
+            cyclesFromCursor(c)
+        }
+    }
 
-    @Query("SELECT * FROM cycles WHERE date BETWEEN :startDate AND :endDate ORDER BY date ASC")
-    suspend fun getCycleRange(startDate: String, endDate: String): List<CycleEntity>
+    suspend fun upsertPhase(phase: CyclePhaseEntity) = withContext(Dispatchers.IO) {
+        val cv = ContentValues().apply {
+            put("startDate", phase.startDate)
+            put("endDate", phase.endDate)
+            put("status", phase.status.name)
+            put("cycleDay", phase.cycleDay)
+        }
+        db.insertWithOnConflict("cycle_phases", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+    }
 
-    @Query("SELECT * FROM cycles WHERE date BETWEEN :startDate AND :endDate ORDER BY date ASC")
-    fun getCycleRangeFlow(startDate: String, endDate: String): Flow<List<CycleEntity>>
+    suspend fun getPhaseForDate(date: String): CyclePhaseEntity? = withContext(Dispatchers.IO) {
+        db.rawQuery("SELECT * FROM cycle_phases WHERE startDate <= ? AND endDate >= ? LIMIT 1", arrayOf(date, date)).use { c ->
+            if (c.moveToFirst()) phaseFromCursor(c) else null
+        }
+    }
 
-    @Query("SELECT * FROM cycles WHERE status = :status ORDER BY date DESC LIMIT 90")
-    suspend fun getDaysByStatus(status: MenstrualStatus): List<CycleEntity>
+    private fun cycleFromCursor(c: Cursor) = CycleEntity(
+        date = c.getString(c.getColumnIndexOrThrow("date")),
+        status = MenstrualStatus.valueOf(c.getString(c.getColumnIndexOrThrow("status"))),
+        symptoms = c.getString(c.getColumnIndexOrThrow("symptoms")),
+        flowIntensity = c.getInt(c.getColumnIndexOrThrow("flowIntensity")),
+        notes = c.getString(c.getColumnIndexOrThrow("notes")),
+        isHabitDay = c.getInt(c.getColumnIndexOrThrow("isHabitDay")) == 1,
+        timestamp = c.getLong(c.getColumnIndexOrThrow("timestamp"))
+    )
 
-    @Query("SELECT * FROM cycles ORDER BY date DESC LIMIT 365")
-    suspend fun getAllDays(): List<CycleEntity>
+    private fun cyclesFromCursor(c: Cursor): List<CycleEntity> {
+        val result = mutableListOf<CycleEntity>()
+        while (c.moveToNext()) {
+            result.add(cycleFromCursor(c))
+        }
+        return result
+    }
 
-    @Query("SELECT * FROM cycles ORDER BY date DESC LIMIT 365")
-    fun getAllDaysFlow(): Flow<List<CycleEntity>>
+    private fun phaseFromCursor(c: Cursor) = CyclePhaseEntity(
+        id = c.getLong(c.getColumnIndexOrThrow("id")),
+        startDate = c.getString(c.getColumnIndexOrThrow("startDate")),
+        endDate = c.getString(c.getColumnIndexOrThrow("endDate")),
+        status = MenstrualStatus.valueOf(c.getString(c.getColumnIndexOrThrow("status"))),
+        cycleDay = c.getInt(c.getColumnIndexOrThrow("cycleDay"))
+    )
 
-    // Symptoms
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun addSymptom(symptom: SymptomEntity)
-
-    @Query("SELECT * FROM symptoms WHERE date = :date ORDER BY severity DESC")
-    suspend fun getSymptoms(date: String): List<SymptomEntity>
-
-    @Query("DELETE FROM symptoms WHERE date = :date AND symptom = :symptom")
-    suspend fun removeSymptom(date: String, symptom: String)
-
-    // Cycle phases
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertPhase(phase: CyclePhaseEntity)
-
-    @Query("SELECT * FROM cycle_phases ORDER BY startDate DESC LIMIT 20")
-    suspend fun getRecentPhases(): List<CyclePhaseEntity>
-
-    @Query("SELECT * FROM cycle_phases ORDER BY startDate DESC LIMIT 20")
-    fun getRecentPhasesFlow(): Flow<List<CyclePhaseEntity>>
-
-    @Query("SELECT * FROM cycle_phases WHERE startDate <= :date AND endDate >= :date LIMIT 1")
-    suspend fun getPhaseForDate(date: String): CyclePhaseEntity?
-
-    @Query("SELECT * FROM cycle_phases WHERE status = :status ORDER BY startDate DESC LIMIT 12")
-    suspend fun getPhasesByStatus(status: MenstrualStatus): List<CyclePhaseEntity>
-
-    @Query("SELECT AVG(cycleDay) FROM cycle_phases WHERE status = :status AND cycleDay > 0")
-    suspend fun getAveragePhaseLength(status: MenstrualStatus): Double?
-
-    @Query("SELECT MIN(cycleDay) FROM cycle_phases WHERE status = :status AND cycleDay > 0")
-    suspend fun getMinPhaseLength(status: MenstrualStatus): Int?
-
-    @Query("SELECT MAX(cycleDay) FROM cycle_phases WHERE status = :status AND cycleDay > 0")
-    suspend fun getMaxPhaseLength(status: MenstrualStatus): Int?
-
-    @Query("SELECT * FROM cycle_phases WHERE status = 'HAIDH' ORDER BY startDate DESC LIMIT 2")
-    suspend fun getLastTwoHaidhPhases(): List<CyclePhaseEntity>
-
-    @Query("SELECT * FROM cycle_phases WHERE status = 'TUHR' ORDER BY startDate DESC LIMIT 2")
-    suspend fun getLastTwoTuhrPhases(): List<CyclePhaseEntity>
-
-    // Statistics
-    @Query("SELECT COUNT(*) FROM cycles WHERE status = 'HAIDH' AND date BETWEEN :start AND :end")
-    suspend fun countHaidhDaysInRange(start: String, end: String): Int
+    private fun cycleToCV(entry: CycleEntity) = ContentValues().apply {
+        put("date", entry.date)
+        put("status", entry.status.name)
+        put("symptoms", entry.symptoms)
+        put("flowIntensity", entry.flowIntensity)
+        put("notes", entry.notes)
+        put("isHabitDay", if (entry.isHabitDay) 1 else 0)
+        put("timestamp", entry.timestamp)
+    }
 }

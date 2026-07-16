@@ -32,6 +32,143 @@
             <View android:layout_width="48dp" android:layout_height="2dp" android:layout_marginTop="8dp" android:background="#D4AF37" android:layout_gravity="center" />
         </LinearLayout>
 
+        <!-- Haidh / Cycle Hero Card -->
+        <LinearLayout
+            android:id="@+id/haidhHeroCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_elevated_gold_border"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🌸 حیض و طہارت ٹریکر"
+                android:textSize="18sp"
+                android:textColor="#D4AF6A"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:id="@+id/haidhStatusTuhr"
+                    android:layout_width="0dp"
+                    android:layout_height="34dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="🟢 طہارت"
+                    android:textSize="12sp"
+                    android:textColor="#22C55E"
+                    android:background="@drawable/chip_selected"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginEnd="3dp" />
+
+                <TextView
+                    android:id="@+id/haidhStatusHaidh"
+                    android:layout_width="0dp"
+                    android:layout_height="34dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="🔴 حیض"
+                    android:textSize="12sp"
+                    android:textColor="#EF4444"
+                    android:background="@drawable/chip_unselected"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginHorizontal="3dp" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/haidhHeroState"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="🟢 حالت: طہارت"
+                android:textSize="24sp"
+                android:textColor="#22C55E"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:id="@+id/haidhHeroCycleDay"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📅 سائیکل کا دن: —"
+                    android:textSize="13sp"
+                    android:textColor="#C9A961"
+                    android:gravity="center"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/haidhHeroNextPeriod"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="⏳ اگلا: —"
+                    android:textSize="13sp"
+                    android:textColor="#A8B8B4"
+                    android:gravity="center"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginVertical="8dp" android:background="#2A4A44" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center">
+
+                <TextView
+                    android:id="@+id/haidhHeroQada"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="روزے: ۰ | نماز: ۰"
+                    android:textSize="12sp"
+                    android:textColor="#A8B8B4"
+                    android:gravity="center"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/haidhHeroOpenBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="🌸 کھولیں"
+                    android:textSize="13sp"
+                    android:textColor="#D4AF6A"
+                    android:background="@drawable/rounded_bg"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginStart="6dp" />
+            </LinearLayout>
+        </LinearLayout>
+
         <!-- Al-Anis Emotional Companion -->
         <LinearLayout
             android:id="@+id/anisCard"
@@ -88,6 +225,191 @@
                 android:visibility="gone" />
         </LinearLayout>
 
+        <!-- Exercise Benefits — Prominent -->
+        <LinearLayout
+            android:id="@+id/exerciseCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_elevated_gold_border"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🏃‍♀️ ورزش — صحت کے لیے سنت"
+                android:textSize="16sp"
+                android:textColor="#D4AF6A"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <View android:layout_width="48dp" android:layout_height="1dp" android:layout_marginTop="6dp" android:background="#D4AF37" android:layout_gravity="center" />
+
+            <TextView
+                android:id="@+id/exerciseTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="چہل قدمی (Walking)"
+                android:textSize="14sp"
+                android:textColor="#C9A961"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/exerciseDesc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="نبی کریم ﷺ نے فرمایا: تم میں سب سے بہتر وہ ہے جو اپنی دنیا اور آخرت دونوں کے لیے کام کرے۔ روزانہ ۳۰ منٹ کی چہل قدمی دل کی صحت، وزن میں کمی، اور ذہنی سکون کے لیے مفید ہے۔"
+                android:textSize="12sp"
+                android:textColor="#E0DDD8"
+                android:lineSpacingExtra="3dp"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="6dp">
+
+                <TextView android:id="@+id/exercisePrev" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="12sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+                <TextView android:id="@+id/exerciseNext" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="12sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Parenting Tips -->
+        <LinearLayout
+            android:id="@+id/parentingCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="👶 بچوں کی سنتی تربیت"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/parentingTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text=""
+                android:textSize="13sp"
+                android:textColor="#C9A961"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/parentingContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="11sp"
+                android:textColor="#E0DDD8"
+                android:lineSpacingExtra="3dp"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/parentingSource"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="9sp"
+                android:textColor="#8B7355"
+                android:gravity="end"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="6dp">
+
+                <TextView android:id="@+id/parentingPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+                <TextView android:id="@+id/parentingNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Taharah & Health -->
+        <LinearLayout
+            android:id="@+id/taharahCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🫧 طہارت و صحت"
+                android:textSize="15sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/taharahTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text=""
+                android:textSize="13sp"
+                android:textColor="#C9A961"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/taharahContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="11sp"
+                android:textColor="#E0DDD8"
+                android:lineSpacingExtra="3dp"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/taharahSource"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="9sp"
+                android:textColor="#8B7355"
+                android:gravity="end"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="6dp">
+
+                <TextView android:id="@+id/taharahPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+                <TextView android:id="@+id/taharahNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
+            </LinearLayout>
+        </LinearLayout>
+
         <!-- Guided Sessions -->
         <LinearLayout
             android:id="@+id/guidedSessionCard"
@@ -138,23 +460,186 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Haidh Tracker -->
+
+
+        <!-- Health Hub — Expanded -->
         <LinearLayout
-            android:id="@+id/haidhCard"
+            android:id="@+id/healthHubCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:background="@drawable/rounded_bg"
+            android:background="@drawable/card_elevated_gold_border"
             android:padding="14dp"
             android:layout_marginTop="12dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="🌸 حیض و طہارت"
+                android:text="💚 صحت و تندرستی ہب"
                 android:textSize="15sp"
-                android:textColor="#D4AF37"
+                android:textColor="#D4AF6A"
                 android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <!-- Tab chips for health sub-sections -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="6dp">
+
+                <TextView android:id="@+id/healthTabOverview" android:layout_width="0dp" android:layout_height="30dp" android:layout_weight="1" android:gravity="center" android:text="🩺 مجموعی" android:textSize="10sp" android:textColor="#D4AF6A" android:background="@drawable/chip_selected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="2dp" />
+                <TextView android:id="@+id/healthTabExercise" android:layout_width="0dp" android:layout_height="30dp" android:layout_weight="1" android:gravity="center" android:text="🏃 ورزش" android:textSize="10sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="2dp" />
+                <TextView android:id="@+id/healthTabSteps" android:layout_width="0dp" android:layout_height="30dp" android:layout_weight="1" android:gravity="center" android:text="🚶 قدم" android:textSize="10sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="2dp" />
+                <TextView android:id="@+id/healthTabMeds" android:layout_width="0dp" android:layout_height="30dp" android:layout_weight="1" android:gravity="center" android:text="💊 ادویات" android:textSize="10sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="2dp" />
+            </LinearLayout>
+
+            <!-- Overview Section (default visible) -->
+            <LinearLayout
+                android:id="@+id/healthOverviewSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:id="@+id/healthExerciseSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🏃 اس ہفتے: 0/4 ورزشیں"
+                    android:textSize="12sp"
+                    android:textColor="#A8B8B4"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/healthStepsSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🚶 آج کے قدم: 0 / 8000"
+                    android:textSize="12sp"
+                    android:textColor="#A8B8B4"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/healthMedsSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="💊 آج کی ادویات: —"
+                    android:textSize="12sp"
+                    android:textColor="#A8B8B4"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <!-- Exercise Section (hidden by default) -->
+            <LinearLayout
+                android:id="@+id/healthExerciseSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="8dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/healthExerciseFact"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textSize="10sp"
+                    android:textColor="#8FBF8A"
+                    android:lineSpacingExtra="2dp"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/healthExerciseProgress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="اس ہفتے: 0/4 — 0 منٹ آج"
+                    android:textSize="12sp"
+                    android:textColor="#A8B8B4"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/healthExerciseType"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="ورزش کی قسم: —"
+                    android:textSize="11sp"
+                    android:textColor="#C9A961"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/healthExerciseBtn"
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:layout_marginTop="6dp"
+                    android:gravity="center"
+                    android:text="🏃 ورزش ریکارڈ کریں"
+                    android:textSize="12sp"
+                    android:textColor="#D4AF6A"
+                    android:background="@drawable/rounded_bg"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <!-- Steps Section (hidden by default) -->
+            <LinearLayout
+                android:id="@+id/healthStepsSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="8dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/healthStepsCount"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🚶 آج کے قدم: 0"
+                    android:textSize="24sp"
+                    android:textColor="#D4AF6A"
+                    android:gravity="center"
+                    android:textStyle="bold"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/healthStepsGoal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="ہدف: 8000 قدم"
+                    android:textSize="11sp"
+                    android:textColor="#A8B8B4"
+                    android:gravity="center"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/healthStepsProgress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text=""
+                    android:textSize="10sp"
+                    android:textColor="#8FBF8A"
+                    android:gravity="center"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <!-- Cycle info (always shown at bottom) — Haidh section -->
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginVertical="8dp" android:background="#2A4A44" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="🌸 حیض و استحاضہ"
+                android:textSize="13sp"
+                android:textColor="#D4AF6A"
+                android:textStyle="bold"
+                android:gravity="center"
                 android:fontFamily="sans-serif" />
 
             <TextView
@@ -163,7 +648,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text="🟢 حالت: طہارت"
-                android:textSize="12sp"
+                android:textSize="13sp"
                 android:textColor="#22C55E"
                 android:gravity="center"
                 android:fontFamily="sans-serif" />
@@ -172,25 +657,135 @@
                 android:id="@+id/qadaBankText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="روزوں کا بینک: ۰ | نمازوں کا بینک: ۰"
+                android:text="روزے: ۰ | نماز: ۰"
                 android:textSize="11sp"
                 android:textColor="#C9A961"
                 android:gravity="center"
                 android:fontFamily="sans-serif" />
 
-            <TextView
-                android:id="@+id/openHaidhTracker"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="38dp"
-                android:layout_marginTop="6dp"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
                 android:gravity="center"
-                android:text="🩺 مکمل ٹریکر کھولیں"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:id="@+id/openHaidhTracker"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="🌸 حیض ٹریکر کھولیں"
+                    android:textSize="13sp"
+                    android:textColor="#D4AF6A"
+                    android:background="@drawable/rounded_bg"
+                    android:fontFamily="sans-serif"
+                    android:textStyle="bold"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginEnd="4dp" />
+
+                <TextView
+                    android:id="@+id/openMedDetailBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="💊 مکمل لاگ"
+                    android:textSize="11sp"
+                    android:textColor="#D4AF6A"
+                    android:background="@drawable/rounded_bg"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginStart="4dp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Medication Reminders — Prominent -->
+        <LinearLayout
+            android:id="@+id/medicationCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_elevated_gold_border"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="💊 ادویات — وقت پر پڑھنا سنت"
+                android:textSize="16sp"
+                android:textColor="#D4AF6A"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <View android:layout_width="48dp" android:layout_height="1dp" android:layout_marginTop="6dp" android:background="#D4AF37" android:layout_gravity="center" />
+
+            <TextView
+                android:id="@+id/healthMedsPending"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="⏳ آج کی ادویات: —"
+                android:textSize="14sp"
+                android:textColor="#E0DDD8"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/healthMedsList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="💊 کوئی دوا رجسٹرڈ نہیں"
                 android:textSize="12sp"
-                android:textColor="#D4AF37"
-                android:background="@drawable/rounded_bg"
-                android:fontFamily="sans-serif"
-                android:clickable="true"
-                android:focusable="true" />
+                android:textColor="#A8B8B4"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:id="@+id/addMedicationBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="➕ دوا شامل کریں"
+                    android:textSize="13sp"
+                    android:textColor="#D4AF6A"
+                    android:background="@drawable/rounded_bg"
+                    android:fontFamily="sans-serif"
+                    android:textStyle="bold"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginEnd="4dp" />
+
+                <TextView
+                    android:id="@+id/openMedLogBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="💊 مکمل لاگ"
+                    android:textSize="13sp"
+                    android:textColor="#D4AF6A"
+                    android:background="@drawable/rounded_bg"
+                    android:fontFamily="sans-serif"
+                    android:textStyle="bold"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginStart="4dp" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Focus Blocks -->

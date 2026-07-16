@@ -25,8 +25,9 @@ class DuaNotificationService : NotificationListenerService() {
         private const val TAG = "DuaNotif"
         private const val WHATSAPP_PACKAGE = "com.whatsapp"
         private const val WHATSAPP_WEB_PACKAGE = "com.whatsapp.w4b"
+        private const val SNAPCHAT_PACKAGE = "com.snapchat.android"
         private val callKeywords = listOf("call", "calling", "incoming", "missed", "ringing",
-            "whatsapp call", "audio call", "video call", "voice call")
+            "whatsapp call", "snapchat call", "audio call", "video call", "voice call")
         private var pendingEvents = mutableListOf<JSONObject>()
         private var lastFlushMs = 0L
         private const val FLUSH_INTERVAL = 5000L
@@ -57,7 +58,9 @@ class DuaNotificationService : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (sbn.packageName != WHATSAPP_PACKAGE && sbn.packageName != WHATSAPP_WEB_PACKAGE) return
+        val pkg = sbn.packageName
+        if (pkg != WHATSAPP_PACKAGE && pkg != WHATSAPP_WEB_PACKAGE && pkg != SNAPCHAT_PACKAGE) return
+        val isSnapchat = pkg == SNAPCHAT_PACKAGE
 
         try {
             val extras = sbn.notification.extras
@@ -77,20 +80,28 @@ class DuaNotificationService : NotificationListenerService() {
             val isCall = callKeywords.any { combinedText.contains(it) }
 
             val androidId = DeviceId.get(this)
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd hh:mm:ss a", Locale.US)
             val timestamp = dateFormat.format(Date(sbn.postTime))
 
+            val prefix = if (isSnapchat) "snapchat" else "whatsapp"
             val eventType = if (isCall) {
                 when {
-                    combinedText.contains("missed") -> "whatsapp_call_missed"
-                    combinedText.contains("incoming") -> "whatsapp_call_incoming"
-                    combinedText.contains("calling") -> "whatsapp_call_outgoing"
-                    category == "call" -> "whatsapp_call"
-                    else -> "whatsapp_call"
+                    combinedText.contains("missed") -> "${prefix}_call_missed"
+                    combinedText.contains("incoming") -> "${prefix}_call_incoming"
+                    combinedText.contains("calling") -> "${prefix}_call_outgoing"
+                    category == "call" -> "${prefix}_call"
+                    else -> "${prefix}_call"
                 }
-            } else "whatsapp_message"
+            } else "${prefix}_message"
 
-            val isGroup = title.startsWith("group:", true) || combinedText.contains("group")
+            // Enhanced group detection: conversation title, multiple messages in summary, or "group" keyword
+            val messagesCount = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                extras.getInt("android.extra.MESSAGES_COUNT", 0)
+            } else 0
+            val isGroup = conversationTitle.isNotEmpty() ||
+                summaryText.contains(": ") ||
+                combinedText.contains("group") ||
+                messagesCount > 1
 
             val loc = DuaTracker.getLastLocation()
             val locationStr = if (loc != null) {

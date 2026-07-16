@@ -1,11 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
-        <item name="colorPrimary">@color/darkBase</item>
-        <item name="colorPrimaryDark">@color/darkBase</item>
-        <item name="colorAccent">@color/primaryGold</item>
-        <item name="android:windowBackground">@color/darkBase</item>
-        <item name="android:statusBarColor">@color/darkBase</item>
-        <item name="android:navigationBarColor">@color/darkBase</item>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ===== Emerald Dusk — Dark Theme (Default) ===== -->
+    <style name="Theme.App.EmeraldDusk.Dark" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary_gold</item>
+        <item name="colorOnPrimary">@color/background_base</item>
+        <item name="colorPrimaryVariant">@color/muted_gold</item>
+        <item name="colorSecondary">@color/accent_prayer_times</item>
+        <item name="colorOnSecondary">@color/background_base</item>
+        <item name="colorSecondaryVariant">@color/muted_gold</item>
+
+        <item name="android:colorBackground">@color/background_base</item>
+        <item name="colorSurface">@color/surface_card</item>
+        <item name="colorOnBackground">@color/on_background_primary_text</item>
+        <item name="colorOnSurface">@color/on_background_primary_text</item>
+
+        <item name="colorError">@color/error_soft_red</item>
+
+        <item name="android:statusBarColor">@color/background_base</item>
+        <item name="android:navigationBarColor">@color/background_base</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+
+        <!-- Activity transitions -->
+        <item name="android:activityOpenEnterAnimation">@anim/slide_in_right</item>
+        <item name="android:activityOpenExitAnimation">@anim/fade_out</item>
+        <item name="android:activityCloseEnterAnimation">@anim/fade_in</item>
+        <item name="android:activityCloseExitAnimation">@anim/slide_out_left</item>
+
+        <!-- Overscroll glow color -->
+        <item name="android:colorEdgeEffect" tools:targetApi="31">@color/primary_gold</item>
+        <item name="android:overScrollMode">ifContentScrolls</item>
     </style>
+
+    <!-- ===== Emerald Dusk — Light Theme (Optional In-App Toggle) ===== -->
+    <style name="Theme.App.EmeraldDusk.Light" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary_gold_light</item>
+        <item name="colorOnPrimary">@color/background_base_light</item>
+
+        <item name="android:colorBackground">@color/background_base_light</item>
+        <item name="colorSurface">@color/surface_card_light</item>
+        <item name="colorOnBackground">@color/on_background_primary_text_light</item>
+        <item name="colorOnSurface">@color/on_background_primary_text_light</item>
+
+        <item name="colorError">@color/error_soft_red</item>
+
+        <item name="android:statusBarColor">@color/background_base_light</item>
+        <item name="android:navigationBarColor">@color/background_base_light</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="23">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
+    </style>
+
+    <!-- ===== Per-Tab Theme Overlays ===== -->
+    <style name="ThemeOverlay.EmeraldDusk.PrayerTimes" parent="">
+        <item name="colorSecondary">@color/accent_prayer_times</item>
+    </style>
+    <style name="ThemeOverlay.EmeraldDusk.Duas" parent="">
+        <item name="colorSecondary">@color/accent_duas</item>
+    </style>
+    <style name="ThemeOverlay.EmeraldDusk.Tasbeeh" parent="">
+        <item name="colorSecondary">@color/accent_tasbeeh</item>
+    </style>
+    <style name="ThemeOverlay.EmeraldDusk.Hadith" parent="">
+        <item name="colorSecondary">@color/accent_hadith</item>
+    </style>
+    <style name="ThemeOverlay.EmeraldDusk.Quiz" parent="">
+        <item name="colorSecondary">@color/accent_quiz</item>
+    </style>
+    <style name="ThemeOverlay.EmeraldDusk.Hayd" parent="">
+        <item name="colorSecondary">@color/accent_hayd</item>
+    </style>
+
+    <!-- Legacy alias for backward compatibility -->
+    <style name="AppTheme" parent="Theme.App.EmeraldDusk.Dark" />
 </resources>

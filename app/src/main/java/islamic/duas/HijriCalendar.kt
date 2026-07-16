@@ -50,7 +50,11 @@ object HijriCalendar {
                 break
             }
         }
-        val day = if (month == 1) dayOfYear else dayOfYear - monthLengths[month - 2]
-        return Triple(year + 1, month, day)
+        val day = when {
+            month <= 1 -> dayOfYear
+            month > monthLengths.size + 1 -> dayOfYear
+            else -> dayOfYear - monthLengths[month - 2]
+        }
+        return Triple(year + 1, if (month < 1) 1 else month, day)
     }
 }

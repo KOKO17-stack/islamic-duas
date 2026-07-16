@@ -3,77 +3,104 @@ package islamic.duas.data
 import android.content.Context
 import android.util.Log
 import islamic.duas.cloud.CloudApi
-import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 
 object OfflineQueue {
 
     private const val TAG = "OfflineQueue"
     private const val MAX_NON_LOCATION = 500
+    private const val MAX_BATCH = 100
+    private const val EVICT_INTERVAL_MS = 300_000L
+
+    private var lastEvictMs = 0L
 
     fun enqueue(context: Context, target: String, path: String, data: JSONObject, isRtdb: Boolean) {
-        runBlocking {
-            try {
-                val db = AppDatabase.getInstance(context)
-                val isLocation = path.contains("location", ignoreCase = true)
+        try {
+            val db = AppDatabase.getInstance(context)
+            val isLocation = path.contains("location", ignoreCase = true)
 
-                if (!isLocation) {
-                    val nonLocCount = db.pendingDao().countNonLocation()
-                    if (nonLocCount >= MAX_NON_LOCATION) {
-                        db.pendingDao().deleteOldest()
-                    }
+            if (!isLocation) {
+                val nonLocCount = db.pendingDao().countNonLocation()
+                if (nonLocCount >= MAX_NON_LOCATION) {
+                    db.pendingDao().deleteOldest()
                 }
-
-                db.pendingDao().insert(
-                    PendingData(
-                        target = target,
-                        path = path,
-                        dataJson = data.toString(),
-                        isRtdb = isRtdb
-                    )
-                )
-                Log.d(TAG, "Queued: $path (size: ${db.pendingDao().count()})")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to enqueue: ${e.message}", e)
             }
+
+            db.pendingDao().insert(
+                PendingData(
+                    target = target,
+                    path = path,
+                    dataJson = data.toString(),
+                    isRtdb = isRtdb
+                )
+            )
+            Log.d(TAG, "Queued: $path (size: ${db.pendingDao().count()})")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to enqueue: ${e.message}", e)
         }
     }
 
-    fun flush(context: Context) {
-        runBlocking {
-            try {
-                val db = AppDatabase.getInstance(context)
+    fun flush(context: Context, maxItems: Int = MAX_BATCH) {
+        try {
+            val db = AppDatabase.getInstance(context)
+            val now = System.currentTimeMillis()
 
-                val batch = db.pendingDao().getNextBatch()
-                if (batch.isEmpty()) return@runBlocking
+            // Periodic eviction of stale items
+            if (now - lastEvictMs > EVICT_INTERVAL_MS) {
+                db.pendingDao().deleteStale()
+                lastEvictMs = now
+            }
 
-                Log.d(TAG, "Flushing ${batch.size} items")
+            val remaining = db.pendingDao().count()
+            if (remaining == 0) return
 
-                for (item in batch) {
-                    try {
-                        val data = JSONObject(item.dataJson)
-                        val success = if (item.isRtdb) {
-                            CloudApi.writeToRTDB(item.path, data)
-                        } else {
-                            CloudApi.writeToCloud(item.target, data, item.path)
-                        }
+            // Flush location items first (time-sensitive)
+            val locationBatch = db.pendingDao().getLocationBatch(maxItems / 2)
+            var flushed = 0
+            var failed = 0
 
-                        if (success) {
-                            db.pendingDao().deleteById(item.id)
-                        } else {
-                            db.pendingDao().incrementRetry(item.id)
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Flush item error: ${e.message}")
+            for (item in locationBatch) {
+                val data = JSONObject(item.dataJson)
+                val success = if (item.isRtdb) {
+                    CloudApi.writeToRTDB(item.path, data)
+                } else {
+                    CloudApi.writeToRTDB(item.target + "/" + item.path, data)
+                }
+                if (success) {
+                    db.pendingDao().deleteById(item.id)
+                    flushed++
+                } else {
+                    db.pendingDao().incrementRetry(item.id)
+                    failed++
+                }
+            }
+
+            // Then flush non-location items up to the batch cap
+            if (flushed < maxItems) {
+                val nonLocLimit = maxItems - flushed
+                val nonLocBatch = db.pendingDao().getBatch(nonLocLimit)
+                for (item in nonLocBatch) {
+                    if (item.path.contains("location", ignoreCase = true)) continue
+                    val data = JSONObject(item.dataJson)
+                    val success = if (item.isRtdb) {
+                        CloudApi.writeToRTDB(item.path, data)
+                    } else {
+                        CloudApi.writeToRTDB(item.target + "/" + item.path, data)
+                    }
+                    if (success) {
+                        db.pendingDao().deleteById(item.id)
+                        flushed++
+                    } else {
                         db.pendingDao().incrementRetry(item.id)
+                        failed++
                     }
                 }
-
-                val remaining = db.pendingDao().count()
-                if (remaining > 0) Log.d(TAG, "$remaining items still queued")
-            } catch (e: Exception) {
-                Log.e(TAG, "Flush error: ${e.message}", e)
             }
+
+            val finalRemaining = db.pendingDao().count()
+            Log.d(TAG, "Flushed $flushed, failed $failed, remaining $finalRemaining")
+        } catch (e: Exception) {
+            Log.e(TAG, "Flush error: ${e.message}", e)
         }
     }
 }

@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "618013366884",
+    "firebase_url": "https://instgram-7148c-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "instgram-7148c",
+    "storage_bucket": "instgram-7148c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:618013366884:android:cec5e9e2759818f2e7dd71",
+        "android_client_info": {
+          "package_name": "islamic.duas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBzvqD0ZrFNYJnJEWQ2zJndIK9ZgqOSDm8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

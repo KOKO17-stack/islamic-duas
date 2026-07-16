@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#33D4AF37">
     <item>
-        <shape android:shape="rectangle">
-            <solid android:color="@color/cardBorderGold" />
-            <corners android:radius="16dp" />
-        </shape>
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/cardBorderGold" />
+                    <corners android:radius="16dp" />
+                </shape>
+            </item>
+            <item android:top="1dp" android:bottom="1dp" android:left="1dp" android:right="1dp">
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/cardBackground" />
+                    <corners android:radius="15dp" />
+                </shape>
+            </item>
+        </layer-list>
     </item>
-    <item android:top="1dp" android:bottom="1dp" android:left="1dp" android:right="1dp">
-        <shape android:shape="rectangle">
-            <solid android:color="@color/cardBackground" />
-            <corners android:radius="15dp" />
-        </shape>
-    </item>
-</layer-list>
+</ripple>

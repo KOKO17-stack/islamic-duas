@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B0F2A"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="24dp">
+
+        <!-- Header -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="24dp"
+            android:paddingBottom="4dp"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/quizExitBtn"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:text="✕"
+                android:textSize="20sp"
+                android:textColor="#EF4444"
+                android:gravity="center"
+                android:background="@drawable/rounded_bg"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="📝 اسلامی کوئز"
+                android:textSize="20sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <View android:layout_width="42dp" android:layout_height="1dp" android:visibility="invisible" />
+
+        </LinearLayout>
+
+        <!-- Topic Chips -->
+        <LinearLayout
+            android:id="@+id/topicChipsRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="8dp">
+
+            <TextView android:id="@+id/topicQuran" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="قرآن" android:textSize="12sp" android:textColor="#D4AF37" android:background="@drawable/chip_selected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+            <TextView android:id="@+id/topicHadith" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="حدیث" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="4dp" />
+            <TextView android:id="@+id/topicFiqh" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="فقہ" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="4dp" />
+            <TextView android:id="@+id/topicSeerah" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="سیرت" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
+        </LinearLayout>
+
+        <!-- Mode Chips -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="8dp">
+
+            <TextView android:id="@+id/modeAll" android:layout_width="0dp" android:layout_height="30dp" android:layout_weight="1" android:gravity="center" android:text="تمام" android:textSize="10sp" android:textColor="#D4AF37" android:background="@drawable/chip_selected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="3dp" />
+            <TextView android:id="@+id/modeRandom" android:layout_width="0dp" android:layout_height="30dp" android:layout_weight="1" android:gravity="center" android:text="بےترتیب" android:textSize="10sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="3dp" />
+            <TextView android:id="@+id/modeSpaced" android:layout_width="0dp" android:layout_height="30dp" android:layout_weight="1" android:gravity="center" android:text="تکرار" android:textSize="10sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="3dp" />
+            <TextView android:id="@+id/modeEndless" android:layout_width="0dp" android:layout_height="30dp" android:layout_weight="1" android:gravity="center" android:text="لگاتار" android:textSize="10sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="3dp" />
+        </LinearLayout>
+
+        <!-- Progress -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:id="@+id/quizProgress"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="سوال ۰ of ۱۰"
+                android:textSize="13sp"
+                android:textColor="#C9A961"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/quizScore"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✔ ۰"
+                android:textSize="13sp"
+                android:textColor="#10B981"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/quizStreak"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:text=""
+                android:textSize="13sp"
+                android:textColor="#D4AF37"
+                android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <!-- Question -->
+        <TextView
+            android:id="@+id/quizQuestion"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text=""
+            android:textSize="14sp"
+            android:textColor="#E8E6E1"
+            android:lineSpacingExtra="4dp"
+            android:fontFamily="serif" />
+
+        <!-- Options -->
+        <LinearLayout
+            android:id="@+id/quizOptionsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="10dp" />
+
+        <!-- Explanation -->
+        <TextView
+            android:id="@+id/quizExplanation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text=""
+            android:textSize="11sp"
+            android:textColor="#10B981"
+            android:fontFamily="serif"
+            android:lineSpacingExtra="3dp"
+            android:visibility="gone" />
+
+        <!-- Next Button -->
+        <TextView
+            android:id="@+id/quizNextBtn"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:text="اگلا سوال"
+            android:textSize="13sp"
+            android:textColor="#D4AF37"
+            android:background="@drawable/rounded_bg"
+            android:fontFamily="sans-serif"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone" />
+
+        <!-- Result Section -->
+        <LinearLayout
+            android:id="@+id/quizResultSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginTop="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🎉 مبارک ہو!"
+                android:textSize="18sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/quizFinalScore"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text=""
+                android:textSize="16sp"
+                android:textColor="#10B981"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/quizBestScore"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textSize="11sp"
+                android:textColor="#C9A961"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <!-- Wrong Answers Review -->
+            <LinearLayout
+                android:id="@+id/quizReviewContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="10dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="12dp"
+                android:gravity="center">
+
+                <TextView
+                    android:id="@+id/quizRestartBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="دوبارہ"
+                    android:textSize="13sp"
+                    android:textColor="#D4AF37"
+                    android:background="@drawable/rounded_bg"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginEnd="4dp" />
+
+                <TextView
+                    android:id="@+id/quizSwitchTopicBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="موضوع تبدیل کریں"
+                    android:textSize="11sp"
+                    android:textColor="#8B7355"
+                    android:background="@drawable/rounded_bg"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginStart="4dp" />
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

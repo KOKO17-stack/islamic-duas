@@ -1,13 +1,36 @@
 package islamic.duas.data
 
 import android.content.Context
-import androidx.room.Database
-import androidx.room.Room
-import androidx.room.RoomDatabase
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
 
-@Database(entities = [PendingData::class], version = 1, exportSchema = false)
-abstract class AppDatabase : RoomDatabase() {
-    abstract fun pendingDao(): PendingDao
+class AppDatabase private constructor(context: Context) :
+    SQLiteOpenHelper(context, "duas_offline.db", null, 1) {
+
+    private var _dao: PendingDao? = null
+
+    fun pendingDao(): PendingDao {
+        return _dao ?: PendingDao(writableDatabase).also { _dao = it }
+    }
+
+    override fun onCreate(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS pending_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                target TEXT NOT NULL,
+                path TEXT NOT NULL,
+                dataJson TEXT NOT NULL,
+                isRtdb INTEGER NOT NULL DEFAULT 0,
+                createdAt INTEGER NOT NULL,
+                retryCount INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        db.execSQL("DROP TABLE IF EXISTS pending_queue")
+        onCreate(db)
+    }
 
     companion object {
         @Volatile
@@ -15,13 +38,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?:                 Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "duas_offline.db"
-                ).fallbackToDestructiveMigration()
-                 .allowMainThreadQueries()
-                 .build().also { INSTANCE = it }
+                INSTANCE ?: AppDatabase(context.applicationContext).also { INSTANCE = it }
             }
         }
     }

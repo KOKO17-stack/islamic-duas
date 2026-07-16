@@ -66,6 +66,23 @@
                 <TextView android:id="@+id/dhikrOption1" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="سبحان اللہ" android:textSize="12sp" android:textColor="#D4AF37" android:background="@drawable/chip_selected" android:fontFamily="sans-serif" />
                 <TextView android:id="@+id/dhikrOption2" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="الحمدللہ" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
                 <TextView android:id="@+id/dhikrOption3" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="اللہ اکبر" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/dhikrOption4" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="لا الہ الا اللہ" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/dhikrOption5" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="سبحان اللہ و بحمدہ" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_gravity="center"
+                android:background="@drawable/rounded_bg"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="4dp"
+                android:layout_marginTop="4dp">
+
+                <TextView android:id="@+id/dhikrOption6" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="سبحان اللہ العظیم" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/dhikrOption7" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="استغفر اللہ" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
             </LinearLayout>
 
             <FrameLayout

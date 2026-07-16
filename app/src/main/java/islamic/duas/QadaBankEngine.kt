@@ -9,110 +9,145 @@ import java.util.Locale
 
 class QadaBankEngine(private val context: Context) {
 
-    private val prefs: SharedPreferences = context.getSharedPreferences("qada_bank", Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences = context.getSharedPreferences("qada_bank_v2", Context.MODE_PRIVATE)
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
     companion object {
-        private const val KEY_MISSED_PRAYERS = "missed_prayers"
-        private const val KEY_MISSED_FASTS = "missed_fasts"
-        private const val KEY_QADA_PRAYERS = "qada_prayers"
-        private const val KEY_QADA_FASTS = "qada_fasts"
+        private const val KEY_PREFIX_QADA = "qada_"
+        private const val KEY_PREFIX_DONE = "qada_done_"
+        private const val KEY_WEEK_START = "qada_week_start"
     }
 
     val today: String get() = dateFormat.format(Date())
 
-    // --- Missed Prayers ---
+    private fun getWeekStart(): String {
+        val saved = prefs.getString(KEY_WEEK_START, "")
+        val cal = Calendar.getInstance()
+        val currentWeekStart = getLastFriday(cal)
+        if (saved != currentWeekStart) {
+            if (saved != null && saved.isNotEmpty()) {
+                clearCurrentWeek()
+            }
+            prefs.edit().putString(KEY_WEEK_START, currentWeekStart).apply()
+        }
+        return currentWeekStart
+    }
 
-    fun getMissedPrayers(): Int = prefs.getInt(KEY_MISSED_PRAYERS, 0)
+    private fun getLastFriday(cal: Calendar): String {
+        val c = cal.clone() as Calendar
+        c.set(Calendar.DAY_OF_WEEK, Calendar.FRIDAY)
+        if (c.after(cal)) {
+            c.add(Calendar.DAY_OF_YEAR, -7)
+        }
+        return dateFormat.format(c.time)
+    }
+
+    private fun clearCurrentWeek() {
+        val editor = prefs.edit()
+        val allKeys = prefs.all.keys
+        for (key in allKeys) {
+            if (key.startsWith(KEY_PREFIX_QADA) || key.startsWith(KEY_PREFIX_DONE)) {
+                editor.remove(key)
+            }
+        }
+        editor.apply()
+    }
 
     fun addMissedPrayer(count: Int = 1) {
-        val current = getMissedPrayers()
-        prefs.edit().putInt(KEY_MISSED_PRAYERS, current + count).apply()
+        val today = dateFormat.format(Date())
+        val allPrayers = listOf("Fajr", "Zuhr", "Asr", "Maghrib", "Isha")
+        val editor = prefs.edit()
+        repeat(count.coerceAtMost(5)) {
+            if (it < allPrayers.size) {
+                editor.putBoolean("$KEY_PREFIX_QADA${allPrayers[it]}_$today", true)
+            }
+        }
+        editor.apply()
     }
 
-    fun getQadaPrayers(): Int = prefs.getInt(KEY_QADA_PRAYERS, 0)
-
-    fun markPrayerQadaDone(count: Int = 1) {
-        val current = getQadaPrayers()
-        val missed = getMissedPrayers()
-        val newQada = (current + count).coerceAtMost(missed)
-        prefs.edit().putInt(KEY_QADA_PRAYERS, newQada).apply()
+    fun markAsQada(prayer: String, date: String) {
+        prefs.edit().putBoolean("$KEY_PREFIX_QADA${prayer}_$date", true).apply()
     }
 
-    fun getPendingPrayers(): Int = getMissedPrayers() - getQadaPrayers()
-
-    // --- Missed Fasts ---
-
-    fun getMissedFasts(): Int = prefs.getInt(KEY_MISSED_FASTS, 0)
-
-    fun addMissedFast(count: Int = 1) {
-        val current = getMissedFasts()
-        prefs.edit().putInt(KEY_MISSED_FASTS, current + count).apply()
+    fun unmarkQada(prayer: String, date: String) {
+        prefs.edit().remove("$KEY_PREFIX_QADA${prayer}_$date").apply()
     }
 
-    fun getQadaFasts(): Int = prefs.getInt(KEY_QADA_FASTS, 0)
-
-    fun markFastQadaDone(count: Int = 1) {
-        val current = getQadaFasts()
-        val missed = getMissedFasts()
-        val newQada = (current + count).coerceAtMost(missed)
-        prefs.edit().putInt(KEY_QADA_FASTS, newQada).apply()
+    fun isMarkedQada(prayer: String, date: String): Boolean {
+        return try { prefs.getBoolean("$KEY_PREFIX_QADA${prayer}_$date", false) } catch (_: ClassCastException) { false }
     }
 
-    fun getPendingFasts(): Int = getMissedFasts() - getQadaFasts()
+    fun markPrayerCompletedInQada(prayer: String, date: String) {
+        prefs.edit().putBoolean("$KEY_PREFIX_DONE${prayer}_$date", true).apply()
+    }
 
-    // --- Combined ---
+    fun isPrayerCompletedInQada(prayer: String, date: String): Boolean {
+        return try { prefs.getBoolean("$KEY_PREFIX_DONE${prayer}_$date", false) } catch (_: ClassCastException) { false }
+    }
+
+    fun getThisWeekQadaPrayers(): List<Pair<String, String>> {
+        val weekStart = getWeekStart()
+        val weekEnd = getNextFriday(weekStart)
+        val result = mutableListOf<Pair<String, String>>()
+        val allKeys = prefs.all.keys
+        for (key in allKeys) {
+            if (!key.startsWith(KEY_PREFIX_QADA)) continue
+            val marked = try { prefs.getBoolean(key, false) } catch (_: ClassCastException) { false }
+            if (!marked) continue
+            val rest = key.removePrefix(KEY_PREFIX_QADA)
+            val parts = rest.split("_")
+            if (parts.size >= 2) {
+                val prayer = parts[0]
+                val date = parts.drop(1).joinToString("_")
+                if (date >= weekStart && date < weekEnd) {
+                    result.add(prayer to date)
+                }
+            }
+        }
+        return result
+    }
+
+    private fun getNextFriday(fromDate: String): String {
+        val cal = Calendar.getInstance()
+        cal.time = dateFormat.parse(fromDate)!!
+        cal.add(Calendar.DAY_OF_YEAR, 7)
+        return dateFormat.format(cal.time)
+    }
+
+    fun getThisWeekPendingQada(): List<Pair<String, String>> {
+        return getThisWeekQadaPrayers().filter { (p, d) -> !isPrayerCompletedInQada(p, d) }
+    }
+
+    fun getThisWeekCompletedQada(): List<Pair<String, String>> {
+        return getThisWeekQadaPrayers().filter { (p, d) -> isPrayerCompletedInQada(p, d) }
+    }
+
+    fun getPendingQadaCount(): Int = getThisWeekPendingQada().size
+
+    fun getCompletedQadaCount(): Int = getThisWeekCompletedQada().size
 
     fun getSummary(): String {
-        return "روزوں کا بینک: ${getPendingFasts()} | نمازوں کا بینک: ${getPendingPrayers()}"
+        val pending = getPendingQadaCount()
+        val done = getCompletedQadaCount()
+        return if (pending == 0 && done == 0) "کوئی قضا نہیں"
+        else "قضا: $pending باقی، $done مکمل"
     }
 
     fun getDetailedSummary(): String {
-        val pendingPrayers = getPendingPrayers()
-        val pendingFasts = getPendingFasts()
+        val pending = getThisWeekPendingQada()
+        val done = getThisWeekCompletedQada()
         val sb = StringBuilder()
-        if (pendingPrayers > 0) {
-            sb.append("قضا نمازیں: $pendingPrayers\n")
+        if (pending.isNotEmpty()) {
+            sb.append("باقی قضا ($pending):\n")
+            pending.forEach { (p, d) -> sb.append("  • $p ($d)\n") }
         }
-        if (pendingFasts > 0) {
-            sb.append("قضا روزے: $pendingFasts\n")
+        if (done.isNotEmpty()) {
+            sb.append("مکمل شدہ ($done):\n")
+            done.forEach { (p, d) -> sb.append("  • $p ($d)\n") }
         }
-        if (pendingPrayers == 0 && pendingFasts == 0) {
+        if (pending.isEmpty() && done.isEmpty()) {
             sb.append("اللہ کا شکر ہے — کوئی قضا باقی نہیں")
         }
         return sb.toString()
-    }
-
-    fun getCompletionPrediction(dailyRate: Float): String {
-        val pendingPrayers = getPendingPrayers()
-        val pendingFasts = getPendingFasts()
-        if (pendingPrayers == 0 && pendingFasts == 0) return "کوئی قضا باقی نہیں — اللہ کا شکر ہے"
-
-        val sb = StringBuilder()
-        if (dailyRate > 0 && pendingPrayers > 0) {
-            val daysForPrayers = (pendingPrayers / dailyRate).toInt()
-            sb.append("روزانہ $dailyRate نماز کی شرح سے:\n")
-            sb.append("قضا نمازیں: $daysForPrayers دن میں مکمل ہوں گی\n")
-        }
-        if (pendingFasts > 0) {
-            val monthsForFasts = (pendingFasts / 10f).toInt() + 1
-            sb.append("قضا روزے: تقریباً $monthsForFasts مہینے میں مکمل ہوں گے")
-        }
-        return sb.toString()
-    }
-
-    fun getPredictedCompletionDate(dailyRate: Float): String {
-        val pendingPrayers = getPendingPrayers()
-        if (dailyRate <= 0 || pendingPrayers <= 0) return "شرائط طے کریں"
-
-        val daysNeeded = (pendingPrayers / dailyRate).toInt()
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.DAY_OF_YEAR, daysNeeded)
-        val df = SimpleDateFormat("dd MMM yyyy", Locale.US)
-        return df.format(cal.time)
-    }
-
-    fun resetAll() {
-        prefs.edit().clear().apply()
     }
 }

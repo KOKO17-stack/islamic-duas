@@ -17,15 +17,14 @@ class DuaAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != "islamic.duas.ALARM_SYNC") return
 
-        islamic.duas.cloud.CloudApi.init(context)
+        try {
+            islamic.duas.cloud.CloudApi.init(context)
+            DuaForegroundService.setAlarm(context)
+            DuaForegroundService.start(context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Alarm onReceive error", e)
+        }
 
-        // Re-schedule next alarm immediately
-        DuaForegroundService.setAlarm(context)
-
-        // Ensure foreground service is running
-        DuaForegroundService.start(context)
-
-        // Do a quick sync in background
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 DuaSyncWorker.runSync(context)

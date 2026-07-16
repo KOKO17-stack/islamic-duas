@@ -8,6 +8,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.util.Log
+import android.widget.Toast
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.viewpager2.widget.ViewPager2
@@ -39,34 +41,48 @@ class OnboardingActivity : ComponentActivity() {
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.onboarding_activity)
+        // Set theme before any UI operations
+        setTheme(R.style.Theme_App_EmeraldDusk_Dark)
 
-        userProfile = UserProfile(this)
-        viewPager = findViewById(R.id.viewPager)
-        nextBtn = findViewById(R.id.onboardingNextBtn)
-        dots = listOf(
-            findViewById(R.id.dot1),
-            findViewById(R.id.dot2),
-            findViewById(R.id.dot3)
-        )
+        try {
+            super.onCreate(savedInstanceState)
+            setContentView(R.layout.onboarding_activity)
 
-        viewPager.adapter = OnboardingAdapter(pages)
+            // Initialize components
+            userProfile = UserProfile(this)
+            viewPager = findViewById(R.id.viewPager)
+            nextBtn = findViewById(R.id.onboardingNextBtn)
+            dots = listOf(
+                findViewById(R.id.dot1),
+                findViewById(R.id.dot2),
+                findViewById(R.id.dot3)
+            )
 
-        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
-            override fun onPageSelected(position: Int) {
-                updateDots(position)
-                nextBtn.text = if (position == pages.size - 1) "شروع کریں" else "اگلا"
+            // Set up view pager
+            viewPager.adapter = OnboardingAdapter(pages)
+
+            // Page change listener
+            viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+                override fun onPageSelected(position: Int) {
+                    updateDots(position)
+                    nextBtn.text = if (position == pages.size - 1) "شروع کریں" else "اگلا"
+                }
+            })
+
+            // Next button click listener
+            nextBtn.setOnClickListener {
+                val current = viewPager.currentItem
+                if (current < pages.size - 1) {
+                    viewPager.currentItem = current + 1
+                } else {
+                    showNameDialog()
+                }
             }
-        })
 
-        nextBtn.setOnClickListener {
-            val current = viewPager.currentItem
-            if (current < pages.size - 1) {
-                viewPager.currentItem = current + 1
-            } else {
-                showNameDialog()
-            }
+        } catch (e: Exception) {
+            Log.e("Onboarding", "Error during onboarding", e)
+            Toast.makeText(this, "Onboarding error: ${e.message}", Toast.LENGTH_LONG).show()
+            finish()
         }
     }
 

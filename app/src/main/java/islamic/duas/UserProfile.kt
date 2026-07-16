@@ -103,8 +103,7 @@ class UserProfile(private val context: Context) {
             putInt(KEY_PERSONA_TIME, persona.difficultyTime.ordinal)
             putInt(KEY_PERSONA_ARABIC, persona.arabicLevel.ordinal)
             putInt(KEY_PERSONA_GOAL, persona.goal.ordinal)
-            apply()
-        }
+        }.apply()
     }
 
     fun clear() {

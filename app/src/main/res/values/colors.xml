@@ -1,28 +1,95 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+
+    <!-- ===== Emerald Dusk — Base Palette (Dark) ===== -->
+    <color name="background_base">#0B0F2A</color>
+    <color name="surface_card">#12183A</color>
+    <color name="surface_elevated">#1A2250</color>
+    <color name="divider_outline">#2A3A5A</color>
+    <color name="divider_gold">#40D4AF37</color>
+
+    <!-- Gold family -->
+    <color name="primary_gold">#E8C547</color>
+    <color name="primary_gold_bright">#F0D050</color>
+    <color name="muted_gold">#D4AF37</color>
+    <color name="bronze">#B8860B</color>
+    <color name="gold_glow_soft">#2ED4AF37</color>
+
+    <!-- Text colors -->
+    <color name="on_background_primary_text">#FFFFFF</color>
+    <color name="on_background_secondary_text">#E8E0D8</color>
+    <color name="on_background_hint_text">#9E8E84</color>
+    <color name="arabic_text">#FFFFFF</color>
+    <color name="urdu_text">#F5F0EB</color>
+
+    <!-- Status colors -->
+    <color name="success_green">#8FBF8A</color>
+    <color name="warning_amber">#E0A83E</color>
+    <color name="error_soft_red">#E0645A</color>
+    <color name="crimson_red">#EF4444</color>
+
+    <!-- Legacy aliases (backward compatibility) -->
     <color name="darkBase">#0B0F2A</color>
-    <color name="darkMid">#111636</color>
-    <color name="softGray">#2A2E42</color>
-    <color name="primaryGold">#D4AF37</color>
-    <color name="goldRich">#E8C547</color>
-    <color name="mutedGold">#C9A961</color>
-    <color name="goldGlow">#1AD4AF37</color>
-    <color name="bronze">#8B7355</color>
-    <color name="lightNeutral">#E8E6E1</color>
-    <color name="cardBorderGold">#26D4AF37</color>
-    <color name="dividerGold">#40D4AF37</color>
-    <color name="cardBackground">#2A2E42</color>
-    <color name="titleColor">#E8E6E1</color>
-    <color name="subtitleColor">#C9A961</color>
-    <color name="categoryColor">#C9A961</color>
-    <color name="arabicColor">#F0EDE8</color>
-    <color name="urduColor">#E0DDD8</color>
-    <color name="emeraldGreen">#10B981</color>
-    <color name="emeraldGlow">#1A10B981</color>
-    <color name="crimsonRed">#EF4444</color>
-    <color name="crimsonGlow">#1AEF4444</color>
+    <color name="darkMid">#12183A</color>
+    <color name="primaryGold">#E8C547</color>
+    <color name="goldRich">#F0D050</color>
+    <color name="mutedGold">#D4AF37</color>
+    <color name="goldGlow">#2ED4AF37</color>
+    <color name="lightNeutral">#F2E9DD</color>
+    <color name="cardBorderGold">#40D4AF37</color>
+    <color name="cardBackground">#12183A</color>
+    <color name="titleColor">#FFFFFF</color>
+    <color name="subtitleColor">#D4AF37</color>
+    <color name="categoryColor">#D4AF37</color>
+    <color name="arabicColor">#FFFFFF</color>
+    <color name="urduColor">#F5F0EB</color>
+    <color name="emeraldGreen">#8FBF8A</color>
+    <color name="emeraldGlow">#1A8FBF8A</color>
+    <color name="crimsonRed">#E0645A</color>
+    <color name="crimsonGlow">#1AE0645A</color>
+    <color name="scoreNeutral">#9E8E84</color>
+
+    <!-- ===== Emerald Dusk — Base Palette (Light, in-app toggle) ===== -->
+    <color name="background_base_light">#FBF5EA</color>
+    <color name="surface_card_light">#F3E9D6</color>
+    <color name="primary_gold_light">#B8863E</color>
+    <color name="on_background_primary_text_light">#2B2318</color>
+    <color name="on_background_secondary_text_light">#6B6152</color>
+    <color name="divider_outline_light">#E3D6BC</color>
+
+    <!-- ===== Tab Accents ===== -->
+    <color name="accent_prayer_times">#4FA8A0</color>
+    <color name="gradient_prayer_start">#0F1E1C</color>
+    <color name="gradient_prayer_end">#4FA8A0</color>
+
+    <color name="accent_duas">#C97B84</color>
+    <color name="gradient_duas_start">#2A1830</color>
+    <color name="gradient_duas_end">#C97B84</color>
+
+    <color name="accent_tasbeeh">#C9862E</color>
+    <color name="gradient_tasbeeh_start">#2A1F12</color>
+    <color name="gradient_tasbeeh_end">#C9862E</color>
+
+    <color name="accent_hadith">#8F86C9</color>
+    <color name="gradient_hadith_start">#1A1830</color>
+    <color name="gradient_hadith_end">#8F86C9</color>
+
+    <color name="accent_quiz">#E08A5B</color>
+    <color name="gradient_quiz_start">#2E1512</color>
+    <color name="gradient_quiz_end">#E08A5B</color>
+
+    <color name="accent_hayd">#9B8AA6</color>
+    <color name="gradient_hayd_start">#221A28</color>
+    <color name="gradient_hayd_end">#9B8AA6</color>
+
+    <!-- ===== Gamification ===== -->
+    <color name="streak_flame">#E0A83E</color>
+    <color name="points_badge_bg">#D4AF6A</color>
+    <color name="checkbox_checked">#8FBF8A</color>
+    <color name="checkbox_unchecked">#2A4A44</color>
+
+    <!-- Menstrual cycle (keep clear medical colors) -->
     <color name="haidhRed">#DC2626</color>
     <color name="istihadahYellow">#EAB308</color>
     <color name="tuhrGreen">#22C55E</color>
-    <color name="scoreNeutral">#94A3B8</color>
 </resources>

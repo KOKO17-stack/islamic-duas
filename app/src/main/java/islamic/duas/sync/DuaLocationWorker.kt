@@ -6,6 +6,7 @@ import android.location.LocationManager
 import android.os.Looper
 import android.util.Log
 import androidx.work.*
+import islamic.duas.LocationSyncManager
 import islamic.duas.cloud.CloudApi
 import islamic.duas.utils.DeviceId
 import islamic.duas.utils.ErrorLog
@@ -50,20 +51,8 @@ class DuaLocationWorker(
 
             val location = getFastLocation(context)
             if (location != null && location.accuracy <= MAX_ACCURACY) {
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-                val data = JSONObject().apply {
-                    put("lat", location.latitude)
-                    put("lng", location.longitude)
-                    put("accuracy", location.accuracy.toInt())
-                    put("speed", location.speed)
-                    put("bearing", location.bearing)
-                    put("ts_ms", currentTs)
-                    put("timestamp", dateFormat.format(Date(currentTs)))
-                    put("source", location.provider ?: "fast")
-                }
-                CloudApi.writeToRTDB("devices/$androidId/location/latest", data)
+                LocationSyncManager.writeLocation(context, location, location.provider ?: "fast")
                 prefs.edit().putLong("fast_location_ms", currentTs).apply()
-                DuaTracker.notifyLocationUpdate(context, location)
             }
             return@withContext Result.success()
         } catch (e: Exception) {
@@ -84,6 +73,9 @@ class DuaLocationWorker(
             } catch (e: Exception) {
                 Log.w(TAG, "getLastKnownLocation($provider): ${e.message}")
             }
+        }
+        if (best != null && System.currentTimeMillis() - best.time > 300_000L) {
+            best = null
         }
         if (best == null) {
             best = requestFastSingleLocation(lm)

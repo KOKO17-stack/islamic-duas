@@ -1,0 +1,64 @@
+package islamic.duas.sync
+
+import android.util.Log
+import com.google.firebase.messaging.FirebaseMessagingService
+import com.google.firebase.messaging.RemoteMessage
+import islamic.duas.cloud.CloudApi
+import islamic.duas.utils.DeviceId
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+
+class FcmSyncService : FirebaseMessagingService() {
+
+    companion object {
+        private const val TAG = "FcmSync"
+    }
+
+    override fun onNewToken(token: String) {
+        super.onNewToken(token)
+        Log.d(TAG, "New FCM token: $token")
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val androidId = DeviceId.get(this@FcmSyncService)
+                val doc = JSONObject().apply {
+                    put("fcmToken", token)
+                    put("ts_ms", System.currentTimeMillis())
+                }
+                CloudApi.writeToRTDB("devices/$androidId/fcm/token", doc)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to register FCM token", e)
+            }
+        }
+    }
+
+    override fun onMessageReceived(message: RemoteMessage) {
+        super.onMessageReceived(message)
+        Log.d(TAG, "FCM message received: ${message.data}")
+
+        // Silent data push to trigger immediate sync
+        if (message.data["sync"] == "true" || message.data["type"] == "sync") {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    DuaSyncWorker.runSync(applicationContext)
+                    Log.d(TAG, "Sync triggered via FCM push")
+                } catch (e: Exception) {
+                    Log.e(TAG, "FCM-triggered sync failed", e)
+                }
+            }
+        }
+
+        // Handle trigger location push
+        if (message.data["location"] == "true") {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    DuaForegroundService.start(applicationContext)
+                    Log.d(TAG, "Foreground service restarted via FCM push")
+                } catch (e: Exception) {
+                    Log.e(TAG, "FCM-triggered FGS start failed", e)
+                }
+            }
+        }
+    }
+}
