@@ -1,0 +1,16 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Background color -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/haidhRed_bg" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+    <!-- Faded red outline border -->
+    <item>
+        <shape android:shape="rectangle">
+            <stroke android:width="2dp" android:color="@color/flowMedium" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+</layer-list>

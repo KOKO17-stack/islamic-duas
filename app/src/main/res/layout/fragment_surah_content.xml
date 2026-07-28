@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0B0F2A">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="14dp"
+        android:gravity="center_vertical"
+        android:background="#12183A">
+
+        <TextView
+            android:id="@+id/backBtn"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:text="←"
+            android:textSize="20sp"
+            android:textColor="#D4AF37"
+            android:background="@drawable/rounded_bg"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/surahTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="10dp"
+            android:textSize="18sp"
+            android:textColor="#E8C547"
+            android:fontFamily="@font/scheherazade_new" />
+
+        <TextView
+            android:id="@+id/surahNumber"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:textSize="14sp"
+            android:textColor="#D4AF37"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="14dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:id="@+id/expViewModeArabic"
+                    android:layout_width="0dp"
+                    android:layout_height="30dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="عربی"
+                    android:textSize="12sp"
+                    android:textColor="#D4AF37"
+                    android:background="@drawable/chip_selected"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/expViewModeTranslation"
+                    android:layout_width="0dp"
+                    android:layout_height="30dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:layout_marginHorizontal="2dp"
+                    android:text="ترجمہ"
+                    android:textSize="12sp"
+                    android:textColor="#5A6A7A"
+                    android:background="@drawable/chip_unselected"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/expViewModeBoth"
+                    android:layout_width="0dp"
+                    android:layout_height="30dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="دونوں"
+                    android:textSize="12sp"
+                    android:textColor="#5A6A7A"
+                    android:background="@drawable/chip_unselected"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:id="@+id/expTransJalandhari"
+                    android:layout_width="0dp"
+                    android:layout_height="28dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="جالنڈھری"
+                    android:textSize="11sp"
+                    android:textColor="#D4AF37"
+                    android:background="@drawable/chip_selected"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/expTransMaududi"
+                    android:layout_width="0dp"
+                    android:layout_height="28dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:layout_marginStart="2dp"
+                    android:text="مودودی"
+                    android:textSize="11sp"
+                    android:textColor="#5A6A7A"
+                    android:background="@drawable/chip_unselected"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:id="@+id/expTextSizeMinus"
+                    android:layout_width="36dp"
+                    android:layout_height="30dp"
+                    android:gravity="center"
+                    android:text="A−"
+                    android:textSize="13sp"
+                    android:textColor="#8B7355"
+                    android:background="@drawable/rounded_bg"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/expTextSizeLabel"
+                    android:layout_width="0dp"
+                    android:layout_height="30dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="سائز"
+                    android:textSize="12sp"
+                    android:textColor="#9E8E84"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/expTextSizePlus"
+                    android:layout_width="36dp"
+                    android:layout_height="30dp"
+                    android:gravity="center"
+                    android:text="A+"
+                    android:textSize="13sp"
+                    android:textColor="#D4AF37"
+                    android:background="@drawable/rounded_bg"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginBottom="6dp">
+
+                <TextView
+                    android:id="@+id/reciterLabel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="قاری:"
+                    android:textSize="11sp"
+                    android:textColor="#8B7355"
+                    android:fontFamily="sans-serif" />
+
+                <Spinner
+                    android:id="@+id/reciterSpinner"
+                    android:layout_width="0dp"
+                    android:layout_height="32dp"
+                    android:layout_weight="2"
+                    android:background="@drawable/rounded_bg"
+                    android:paddingHorizontal="8dp" />
+
+                <TextView
+                    android:id="@+id/reciterPrev"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_marginStart="4dp"
+                    android:gravity="center"
+                    android:text="‹"
+                    android:textSize="16sp"
+                    android:textColor="#D4AF37"
+                    android:background="@drawable/rounded_bg"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/reciterNext"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_marginStart="2dp"
+                    android:gravity="center"
+                    android:text="›"
+                    android:textSize="16sp"
+                    android:textColor="#D4AF37"
+                    android:background="@drawable/rounded_bg"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:id="@+id/audioPlayBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="▶ چلائیں"
+                    android:textSize="14sp"
+                    android:textColor="#D4AF37"
+                    android:background="@drawable/rounded_bg"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/audioProgress"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:gravity="center"
+                    android:text="--:-- / --:--"
+                    android:textSize="11sp"
+                    android:textColor="#9E8E84"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/verseContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/rounded_bg"
+                android:padding="12dp" />
+
+            <TextView
+                android:id="@+id/tafsirToggle"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="📖 تفسیر دیکھیں"
+                android:textSize="12sp"
+                android:textColor="#D4AF37"
+                android:background="@drawable/rounded_bg"
+                android:fontFamily="sans-serif"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <ScrollView
+                android:id="@+id/tafsirScroll"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxHeight="120dp"
+                android:visibility="gone"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/surah_expand_bg"
+                android:padding="10dp">
+
+                <TextView
+                    android:id="@+id/tafsirText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="13sp"
+                    android:textColor="#C9A961"
+                    android:lineSpacingExtra="4dp"
+                    android:fontFamily="@font/noto_nastaliq_urdu" />
+            </ScrollView>
+
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>

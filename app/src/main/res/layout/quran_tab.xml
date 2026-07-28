@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0B0F2A">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="قرآن مجید"
+            android:textSize="20sp"
+            android:textColor="#D4AF37"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:fontFamily="sans-serif" />
+
+        <View
+            android:layout_width="48dp"
+            android:layout_height="2dp"
+            android:layout_marginTop="8dp"
+            android:layout_gravity="center"
+            android:background="#D4AF37" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="6dp"
+        android:gravity="center">
+
+        <EditText
+            android:id="@+id/quranSearchInput"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@drawable/rounded_bg"
+            android:paddingHorizontal="14dp"
+            android:gravity="center_vertical"
+            android:hint="🔍 سورہ تلاش کریں"
+            android:textSize="14sp"
+            android:textColor="#EDE8E0"
+            android:textColorHint="#9E8E84"
+            android:fontFamily="sans-serif"
+            android:inputType="text"
+            android:maxLines="1" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="6dp"
+        android:gravity="center">
+
+        <TextView
+            android:id="@+id/mushafTab"
+            android:layout_width="0dp"
+            android:layout_height="30dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="📖 ترتیب مصحف"
+            android:textSize="12sp"
+            android:textColor="#D4AF37"
+            android:background="@drawable/chip_selected"
+            android:fontFamily="sans-serif"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/revelationTab"
+            android:layout_width="0dp"
+            android:layout_height="30dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:layout_marginStart="4dp"
+            android:text="🕯️ ترتیب نزول"
+            android:textSize="12sp"
+            android:textColor="#5A6A7A"
+            android:background="@drawable/chip_unselected"
+            android:fontFamily="sans-serif"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="6dp"
+        android:gravity="center">
+
+        <TextView
+            android:id="@+id/juzPrev"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:gravity="center"
+            android:text="‹"
+            android:textSize="18sp"
+            android:textColor="#D4AF37"
+            android:background="@drawable/rounded_bg"
+            android:fontFamily="sans-serif"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/juzLabel"
+            android:layout_width="0dp"
+            android:layout_height="28dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="الجزء 1"
+            android:textSize="13sp"
+            android:textColor="#8B7355"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/juzNext"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:gravity="center"
+            android:text="›"
+            android:textSize="18sp"
+            android:textColor="#D4AF37"
+            android:background="@drawable/rounded_bg"
+            android:fontFamily="sans-serif"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/quranRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingHorizontal="8dp"
+        android:paddingBottom="8dp" />
+
+    <TextView
+        android:id="@+id/quranEmptyView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="کوئی سورہ نہیں ملا"
+        android:textSize="16sp"
+        android:textColor="#5A6A7A"
+        android:visibility="gone"
+        android:fontFamily="sans-serif" />
+
+</LinearLayout>

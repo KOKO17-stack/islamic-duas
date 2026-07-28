@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/surahCard"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="8dp"
+    android:layout_marginVertical="5dp"
+    app:cardElevation="4dp"
+    app:cardCornerRadius="8dp"
+    app:cardUseCompatPadding="true"
+    android:foreground="?attr/selectableItemBackground"
+    app:cardBackgroundColor="#12183A"
+    android:theme="@style/Theme.App.EmeraldDusk.Dark">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="14dp"
+        android:gravity="center_vertical"
+        android:background="@drawable/card_elevated_gold_border">
+
+        <TextView
+            android:id="@+id/surahNumberBadge"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:textSize="14sp"
+            android:textColor="#D4AF37"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginStart="8dp">
+
+            <TextView
+                android:id="@+id/surahArabicName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="20sp"
+                android:textColor="#E8C547"
+                android:fontFamily="@font/scheherazade_new" />
+
+            <TextView
+                android:id="@+id/surahUrduName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#EDE8E0"
+                android:fontFamily="sans-serif"
+                android:layout_marginTop="2dp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/surahRevelationBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="20dp"
+                    android:paddingHorizontal="8dp"
+                    android:gravity="center"
+                    android:textSize="10sp"
+                    android:textColor="#8B7355"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/surahAyahCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:textSize="11sp"
+                    android:textColor="#8B7355"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/surahPlayBtn"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:text="⬇"
+            android:textSize="18sp"
+            android:textColor="#D4AF37"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/rounded_bg" />
+
+        <TextView
+            android:id="@+id/surahBookmarkBtn"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="4dp"
+            android:gravity="center"
+            android:text="☆"
+            android:textSize="20sp"
+            android:textColor="#8B7355"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/rounded_bg" />
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>
