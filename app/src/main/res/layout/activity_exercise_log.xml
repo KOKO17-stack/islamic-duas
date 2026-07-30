@@ -23,7 +23,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="← واپس"
-                android:textSize="14sp"
+                android:textSize="16sp"
                 android:textColor="#D4AF37"
                 android:padding="8dp"
                 android:clickable="true"
@@ -34,7 +34,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="🏃 ورزش"
-                android:textSize="20sp"
+                android:textSize="22sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:gravity="center"
@@ -56,7 +56,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                     android:text="آج ورزش کی؟"
-                android:textSize="16sp"
+                android:textSize="18sp"
                 android:textColor="#D4AF37"
                 android:gravity="center"
                 android:textStyle="bold"
@@ -67,7 +67,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                     android:text="نیچے اپنا انتخاب کریں"
-                android:textSize="12sp"
+                android:textSize="14sp"
                 android:textColor="#8B7355"
                 android:gravity="center"
                 android:layout_marginTop="4dp"
@@ -88,7 +88,7 @@
                     android:layout_height="48dp"
                     android:layout_weight="1"
                     android:text="✅ ہاں، ورزش کی"
-                    android:textSize="14sp"
+                    android:textSize="16sp"
                     android:textColor="#000000"
                     android:gravity="center"
                     android:background="@drawable/chip_selected"
@@ -103,8 +103,8 @@
                     android:layout_height="48dp"
                     android:layout_weight="1"
                     android:text="❌ نہیں کی"
-                    android:textSize="14sp"
-                    android:textColor="#E8E6E1"
+                    android:textSize="16sp"
+                    android:textColor="#F0EDE8"
                     android:gravity="center"
                     android:background="@drawable/chip_unselected"
                     android:layout_marginLeft="6dp"
@@ -129,7 +129,7 @@
                     android:layout_height="44dp"
                     android:layout_weight="1"
                     android:text="20 min"
-                    android:textSize="13sp"
+                    android:textSize="15sp"
                     android:textColor="#000000"
                     android:gravity="center"
                     android:background="@drawable/chip_selected"
@@ -144,7 +144,7 @@
                     android:layout_height="44dp"
                     android:layout_weight="1"
                     android:text="40 min"
-                    android:textSize="13sp"
+                    android:textSize="15sp"
                     android:textColor="#000000"
                     android:gravity="center"
                     android:background="@drawable/chip_selected"
@@ -160,7 +160,7 @@
                     android:layout_height="44dp"
                     android:layout_weight="1"
                     android:text="60 min"
-                    android:textSize="13sp"
+                    android:textSize="15sp"
                     android:textColor="#000000"
                     android:gravity="center"
                     android:background="@drawable/chip_selected"
@@ -176,7 +176,7 @@
                     android:layout_height="44dp"
                     android:layout_weight="1"
                     android:text="80 min"
-                    android:textSize="13sp"
+                    android:textSize="15sp"
                     android:textColor="#000000"
                     android:gravity="center"
                     android:background="@drawable/chip_selected"
@@ -192,7 +192,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=""
-                android:textSize="12sp"
+                android:textSize="14sp"
                 android:textColor="#10B981"
                 android:gravity="center"
                 android:layout_marginTop="10dp"
@@ -221,7 +221,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="آج"
-                    android:textSize="10sp"
+                    android:textSize="12sp"
                     android:textColor="#8B7355"
                     android:gravity="center"
                     android:fontFamily="sans-serif" />
@@ -231,7 +231,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="0 min"
-                    android:textSize="18sp"
+                    android:textSize="20sp"
                     android:textColor="#D4AF37"
                     android:textStyle="bold"
                     android:layout_marginTop="2dp"
@@ -249,7 +249,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="سلسلہ"
-                    android:textSize="10sp"
+                    android:textSize="12sp"
                     android:textColor="#8B7355"
                     android:gravity="center"
                     android:fontFamily="sans-serif" />
@@ -259,7 +259,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="0 days"
-                    android:textSize="16sp"
+                    android:textSize="18sp"
                     android:textColor="#D4AF6A"
                     android:textStyle="bold"
                     android:layout_marginTop="2dp"
@@ -277,7 +277,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="اس ہفتے"
-                    android:textSize="10sp"
+                    android:textSize="12sp"
                     android:textColor="#8B7355"
                     android:gravity="center"
                     android:fontFamily="sans-serif" />
@@ -287,7 +287,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="0"
-                    android:textSize="16sp"
+                    android:textSize="18sp"
                     android:textColor="#10B981"
                     android:textStyle="bold"
                     android:layout_marginTop="2dp"
@@ -308,7 +308,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="👟 آج کے قدم"
-                android:textSize="13sp"
+                android:textSize="15sp"
                 android:textColor="#D4AF37"
                 android:gravity="center"
                 android:textStyle="bold"
@@ -326,7 +326,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="0"
-                    android:textSize="28sp"
+                    android:textSize="30sp"
                     android:textColor="#D4AF37"
                     android:textStyle="bold"
                     android:fontFamily="sans-serif" />
@@ -336,7 +336,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="/ 8000"
-                    android:textSize="13sp"
+                    android:textSize="15sp"
                     android:textColor="#8B7355"
                     android:layout_marginLeft="6dp"
                     android:fontFamily="sans-serif" />
@@ -354,97 +354,205 @@
                 android:layout_marginTop="10dp" />
         </LinearLayout>
 
-        <!-- Monthly Calendar -->
+<!-- 30-Day Timeline -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:background="@drawable/card_background"
+            android:background="@drawable/rounded_bg"
             android:padding="14dp"
             android:layout_marginTop="10dp">
 
             <TextView
-                android:id="@+id/exCalendarTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text=""
-                android:textSize="13sp"
+                android:text="📅 پچھلے 30 دن"
+                android:textSize="14sp"
                 android:textColor="#D4AF37"
-                android:gravity="center"
                 android:textStyle="bold"
+                android:gravity="center"
                 android:fontFamily="sans-serif" />
 
             <LinearLayout
-                android:id="@+id/exCalendarHeader"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:layout_marginTop="8dp" />
-
-            <LinearLayout
-                android:id="@+id/exCalendarGrid"
+                android:id="@+id/exerciseTimelineContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginTop="4dp" />
+                android:background="#0A0E1F"
+                android:padding="4dp"
+                android:layout_marginTop="6dp" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:layout_marginTop="8dp">
+             <!-- 30-Day Summary -->
+             <LinearLayout
+                 android:id="@+id/ex30DaySummary"
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+                 android:orientation="horizontal"
+                 android:gravity="center"
+                 android:layout_marginTop="10dp">
+
+                 <LinearLayout
+                     android:layout_width="0dp"
+                     android:layout_height="wrap_content"
+                     android:layout_weight="1"
+                     android:orientation="vertical"
+                     android:gravity="center">
+
+                     <TextView
+                         android:id="@+id/ex30TotalMins"
+                         android:layout_width="wrap_content"
+                         android:layout_height="wrap_content"
+                         android:text="0"
+                         android:textSize="18sp"
+                         android:textColor="#D4AF37"
+                         android:textStyle="bold"
+                         android:fontFamily="sans-serif" />
+
+                     <TextView
+                         android:layout_width="wrap_content"
+                         android:layout_height="wrap_content"
+                         android:text="کل منٹ"
+                         android:textSize="11sp"
+                         android:textColor="#8B7355"
+                         android:fontFamily="sans-serif" />
+                 </LinearLayout>
+
+                 <LinearLayout
+                     android:layout_width="0dp"
+                     android:layout_height="wrap_content"
+                     android:layout_weight="1"
+                     android:orientation="vertical"
+                     android:gravity="center">
+
+                     <TextView
+                         android:id="@+id/ex30Days"
+                         android:layout_width="wrap_content"
+                         android:layout_height="wrap_content"
+                         android:text="0"
+                         android:textSize="18sp"
+                         android:textColor="#10B981"
+                         android:textStyle="bold"
+                         android:fontFamily="sans-serif" />
+
+                     <TextView
+                         android:layout_width="wrap_content"
+                         android:layout_height="wrap_content"
+                         android:text="دن ورزش"
+                         android:textSize="11sp"
+                         android:textColor="#8B7355"
+                         android:fontFamily="sans-serif" />
+                 </LinearLayout>
+
+                 <LinearLayout
+                     android:layout_width="0dp"
+                     android:layout_height="wrap_content"
+                     android:layout_weight="1"
+                     android:orientation="vertical"
+                     android:gravity="center">
+
+                     <TextView
+                         android:id="@+id/ex30Streak"
+                         android:layout_width="wrap_content"
+                         android:layout_height="wrap_content"
+                         android:text="0"
+                         android:textSize="18sp"
+                         android:textColor="#E0A83E"
+                         android:textStyle="bold"
+                         android:fontFamily="sans-serif" />
+
+                     <TextView
+                         android:layout_width="wrap_content"
+                         android:layout_height="wrap_content"
+                         android:text="بہترین سلسلہ"
+                         android:textSize="11sp"
+                         android:textColor="#8B7355"
+                         android:fontFamily="sans-serif" />
+                 </LinearLayout>
+             </LinearLayout>
+
+             <!-- Legend -->
+             <LinearLayout
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+                 android:orientation="horizontal"
+                 android:gravity="center"
+                 android:layout_marginTop="10dp">
+
+                <View
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="#D4AF37"
+                    android:layout_marginEnd="3dp" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="●"
-                    android:textSize="12sp"
-                    android:textColor="#10B981"
-                    android:fontFamily="sans-serif" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=" Exercised"
+                    android:text="60+"
                     android:textSize="10sp"
                     android:textColor="#8B7355"
-                    android:layout_marginRight="12dp"
+                    android:layout_marginEnd="8dp"
                     android:fontFamily="sans-serif" />
+
+                <View
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="#40916C"
+                    android:layout_marginEnd="3dp" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="○"
-                    android:textSize="12sp"
-                    android:textColor="#4A4A4A"
+                    android:text="40-59"
+                    android:textSize="10sp"
+                    android:textColor="#8B7355"
+                    android:layout_marginEnd="8dp"
                     android:fontFamily="sans-serif" />
+
+                <View
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="#2D6A4F"
+                    android:layout_marginEnd="3dp" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text=" No exercise"
+                    android:text="20-39"
+                    android:textSize="10sp"
+                    android:textColor="#8B7355"
+                    android:layout_marginEnd="8dp"
+                    android:fontFamily="sans-serif" />
+
+                <View
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="#0D7377"
+                    android:layout_marginEnd="3dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="1-19"
+                    android:textSize="10sp"
+                    android:textColor="#8B7355"
+                    android:layout_marginEnd="8dp"
+                    android:fontFamily="sans-serif" />
+
+                <View
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="#1A1F3A"
+                    android:layout_marginEnd="3dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
                     android:textSize="10sp"
                     android:textColor="#8B7355"
                     android:fontFamily="sans-serif" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="👟"
-                    android:textSize="12sp"
-                    android:fontFamily="sans-serif" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=" Steps"
-                    android:textSize="10sp"
-                    android:textColor="#8B7355"
-                    android:fontFamily="sans-serif" />
-            </LinearLayout>
-        </LinearLayout>
+             </LinearLayout>
+         </LinearLayout>
 
         <!-- Educational Teachings -->
         <LinearLayout
@@ -460,7 +568,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="📖 ورزش کیوں کریں؟"
-                android:textSize="13sp"
+                android:textSize="15sp"
                 android:textColor="#D4AF37"
                 android:gravity="center"
                 android:textStyle="bold"
@@ -471,7 +579,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=""
-                android:textSize="13sp"
+                android:textSize="15sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:layout_marginTop="10dp"
@@ -482,7 +590,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=""
-                android:textSize="12sp"
+                android:textSize="14sp"
                 android:textColor="#C9D1D9"
                 android:layout_marginTop="6dp"
                 android:lineSpacingExtra="3dp"
@@ -500,7 +608,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="← پچھلا"
-                    android:textSize="11sp"
+                    android:textSize="13sp"
                     android:textColor="#D4AF37"
                     android:paddingTop="6dp"
                     android:paddingBottom="6dp"
@@ -515,7 +623,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="1 / 10"
-                    android:textSize="10sp"
+                    android:textSize="12sp"
                     android:textColor="#8B7355"
                     android:layout_marginLeft="12dp"
                     android:layout_marginRight="12dp"
@@ -526,7 +634,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="اگلا →"
-                    android:textSize="11sp"
+                    android:textSize="13sp"
                     android:textColor="#D4AF37"
                     android:paddingTop="6dp"
                     android:paddingBottom="6dp"

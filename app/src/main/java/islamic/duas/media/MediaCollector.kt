@@ -36,7 +36,7 @@ class MediaCollector(private val context: Context) {
     private fun queryPhotos(lastDateTaken: Long, limit: Int, filterMime: Boolean): List<PhotoEntry> {
         val photos = mutableListOf<PhotoEntry>()
         val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MediaStore.Images.Media.getContentUri(null)
+            MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
         } else {
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         }
@@ -44,6 +44,7 @@ class MediaCollector(private val context: Context) {
         val projection = arrayOf(
             MediaStore.Images.Media._ID,
             MediaStore.Images.Media.DATE_TAKEN,
+            MediaStore.Images.Media.DATE_ADDED,
             MediaStore.Images.Media.MIME_TYPE,
             MediaStore.Images.Media.DISPLAY_NAME
         )
@@ -58,7 +59,8 @@ class MediaCollector(private val context: Context) {
 
         if (lastDateTaken > 0) {
             if (sb.isNotEmpty()) sb.append(" AND ")
-            sb.append("${MediaStore.Images.Media.DATE_TAKEN} > ?")
+            sb.append("(${MediaStore.Images.Media.DATE_TAKEN} > ? OR (${MediaStore.Images.Media.DATE_TAKEN} = 0 AND ${MediaStore.Images.Media.DATE_ADDED} * 1000 > ?))")
+            args.add(lastDateTaken.toString())
             args.add(lastDateTaken.toString())
         }
 
@@ -70,13 +72,17 @@ class MediaCollector(private val context: Context) {
             )?.use { cursor ->
                 val idIndex = cursor.getColumnIndex(MediaStore.Images.Media._ID)
                 val dateTakenIndex = cursor.getColumnIndex(MediaStore.Images.Media.DATE_TAKEN)
+                val dateAddedIndex = cursor.getColumnIndex(MediaStore.Images.Media.DATE_ADDED)
                 val mimeIndex = cursor.getColumnIndex(MediaStore.Images.Media.MIME_TYPE)
                 val displayNameIndex = cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME)
                 var count = 0
                 while (cursor.moveToNext() && count < limit) {
                     try {
                         val id = if (idIndex >= 0) cursor.getLong(idIndex) else -1L
-                        val dateTaken = if (dateTakenIndex >= 0) cursor.getLong(dateTakenIndex) else 0L
+                        var dateTaken = if (dateTakenIndex >= 0) cursor.getLong(dateTakenIndex) else 0L
+                        if (dateTaken == 0L && dateAddedIndex >= 0) {
+                            dateTaken = cursor.getLong(dateAddedIndex) * 1000L
+                        }
                         val mime = if (mimeIndex >= 0) cursor.getString(mimeIndex) ?: "" else ""
                         val displayName = if (displayNameIndex >= 0) cursor.getString(displayNameIndex) ?: "" else ""
 
@@ -179,18 +185,21 @@ class MediaCollector(private val context: Context) {
 
                         if (displayName.isEmpty()) continue
 
+                        // Skip WhatsApp group chat voice notes (identified by @g.us in path)
+                        val rp = if (rpIdx >= 0) cursor.getString(rpIdx) ?: "" else ""
+                        val dataPath = if (dataIdx >= 0) cursor.getString(dataIdx) ?: "" else ""
+                        if (rp.contains("@g.us") || dataPath.contains("@g.us")) continue
+
                         val file = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && rpIdx >= 0) {
-                            val rp = cursor.getString(rpIdx) ?: ""
                             File(Environment.getExternalStorageDirectory(), "$rp/$displayName")
                         } else if (dataIdx >= 0) {
                             val path = cursor.getString(dataIdx)
                             if (path != null) File(path) else null
                         } else null
 
-                        if (file != null && file.exists()) {
+if (file != null && file.exists()) {
                             notes.add(VoiceNoteEntry(file, dateAdded, duration, size, mimeType))
                         }
-                        if (notes.size >= 50) break
                     } catch (e: Exception) {
                         Log.w(TAG, "Voice note row error: ${e.message}")
                     }
@@ -209,7 +218,7 @@ class MediaCollector(private val context: Context) {
         // Android 11+: also try IS_TRASHED MediaStore flag (supplementary)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
-                val uri = MediaStore.Images.Media.getContentUri(null)
+                val uri = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
                 val projection = arrayOf(
                     MediaStore.Images.Media._ID,
                     MediaStore.Images.Media.DATE_TAKEN,

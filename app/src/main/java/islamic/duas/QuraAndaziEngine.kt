@@ -15,173 +15,61 @@ class QuraAndaziEngine(private val context: Context) {
 
     companion object {
         private const val THRESHOLD_PERCENT = 80
+        private const val KEY_DAILY_POINTS = "daily_points_"
     }
 
-    data class Quarter(val year: Int, val quarter: Int) {
-            fun label(): String = "Q$quarter $year"
-        fun startDate(): String {
-            val cal = Calendar.getInstance()
-            cal.set(Calendar.YEAR, year)
-            cal.set(Calendar.MONTH, (quarter - 1) * 3)
-            cal.set(Calendar.DAY_OF_MONTH, 1)
-            val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-            return fmt.format(cal.time)
-        }
-        fun endDate(): String {
-            val cal = Calendar.getInstance()
-            cal.set(Calendar.YEAR, year)
-            cal.set(Calendar.MONTH, (quarter - 1) * 3 + 2)
-            cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH))
-            val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-            return fmt.format(cal.time)
-        }
+    private fun isHaidhToday(): Boolean {
+        val haidhPrefs = context.getSharedPreferences("haidh_status", Context.MODE_PRIVATE)
+        return haidhPrefs.getString("current_status", "tuhr") == "haidh"
     }
 
-    fun getCurrentQuarter(): Quarter {
-        val cal = Calendar.getInstance()
-        val year = cal.get(Calendar.YEAR)
-        val month = cal.get(Calendar.MONTH)
-        val quarter = (month / 3) + 1
-        return Quarter(year, quarter)
-    }
-
-    fun getQuarterDays(quarter: Quarter): Int {
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.YEAR, quarter.year)
-        cal.set(Calendar.MONTH, (quarter.quarter - 1) * 3)
-        val startDay = cal.getActualMinimum(Calendar.DAY_OF_MONTH)
-        cal.set(Calendar.MONTH, (quarter.quarter - 1) * 3 + 2)
-        val endDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-        val startCal = Calendar.getInstance().apply {
-            set(quarter.year, (quarter.quarter - 1) * 3, startDay)
-        }
-        val endCal = Calendar.getInstance().apply {
-            set(quarter.year, (quarter.quarter - 1) * 3 + 2, endDay)
-        }
-        return ((endCal.timeInMillis - startCal.timeInMillis) / (1000 * 60 * 60 * 24) + 1).toInt()
-    }
-
-    private fun getMaxDailyPoints(): Int {
+    fun getMaxDailyPoints(): Int {
         val state = IbadatStateEngine(context)
-        var max = 0
-        for (prayer in IbadatStateEngine.FARD_PRAYERS) {
-            max += 20
-        }
-        max += 10 // Tahajjud
-        max += 5  // Subah Azkar
-        max += 5  // Sham Azkar
-        max += 20 // Perfect day bonus
-        max += 5  // Exercise
-        max += 10 // Quran Tilawat
-        return max // NO medicine points
+        return state.getMaxDailyPoints()
     }
 
-    fun getQuarterAchievable(): Int {
-        val quarter = getCurrentQuarter()
-        val startDate = quarter.startDate()
-        val endDate = quarter.endDate()
-        val startCal = Calendar.getInstance().apply { time = dateFormat.parse(startDate)!! }
-        val endCal = Calendar.getInstance().apply { time = dateFormat.parse(endDate)!! }
-        val todayCal = Calendar.getInstance()
-        val daysElapsed = ((todayCal.timeInMillis - startCal.timeInMillis) / (1000 * 60 * 60 * 24) + 1).toInt().coerceAtLeast(1)
-        return daysElapsed * getMaxDailyPoints()
+    fun recordDailyPoints(points: Int) {
+        val today = dateFormat.format(Date())
+        prefs.edit().putInt("${KEY_DAILY_POINTS}$today", points).apply()
     }
 
-    fun getQuarterAchieved(): Int {
-        val quarter = getCurrentQuarter()
-        val state = IbadatStateEngine(context)
-        val health = HealthEngine(context)
-        val startDate = quarter.startDate()
-        val endDate = quarter.endDate()
-        val startCal = Calendar.getInstance().apply { time = dateFormat.parse(startDate)!! }
-        val endCal = Calendar.getInstance().apply { time = dateFormat.parse(endDate)!! }
-        val todayCal = Calendar.getInstance()
-        val daysElapsed = ((todayCal.timeInMillis - startCal.timeInMillis) / (1000 * 60 * 60 * 24) + 1).toInt().coerceAtLeast(1)
-        var earned = 0
-        val cal = Calendar.getInstance().apply { time = startCal.time }
-        repeat(daysElapsed) {
-            val date = dateFormat.format(cal.time)
-            for (prayer in IbadatStateEngine.FARD_PRAYERS) {
-                if (state.getPrayerState(prayer) == PrayerState.DONE) earned += 20
-            }
-            if (state.isTahajjudDone()) earned += 10
-            if (state.isSubahAzkarDone()) earned += 5
-            if (state.isShamAzkarDone()) earned += 5
-            if (IbadatStateEngine.FARD_PRAYERS.all { state.getPrayerState(it) == PrayerState.DONE }) earned += 20
-            val exerciseDate = dateFormat.format(cal.time)
-            if (health.getTodayExerciseMinutes() >= 30) earned += 5
-            if (state.isQuranTilawatDone()) earned += 10
-            cal.add(Calendar.DAY_OF_YEAR, 1)
-        }
-        return earned
+    fun getDailyPoints(date: String): Int {
+        return prefs.getInt("${KEY_DAILY_POINTS}$date", 0)
     }
 
-    fun getQuarterProgress(): Pair<Float, String> {
-        val quarter = getCurrentQuarter()
-        val state = IbadatStateEngine(context)
-        val health = HealthEngine(context)
+    fun getDailyAchievable(): Int = getMaxDailyPoints()
 
-        val startDate = quarter.startDate()
-        val endDate = quarter.endDate()
-        val todayStr = dateFormat.format(Date())
+    fun getDailyAchieved(): Int = if (isHaidhToday()) getMaxDailyPoints() else getDailyPoints(dateFormat.format(Date()))
 
-        // Count days elapsed in quarter
-        val startCal = Calendar.getInstance().apply { time = dateFormat.parse(startDate)!! }
-        val endCal = Calendar.getInstance().apply { time = dateFormat.parse(endDate)!! }
-        val todayCal = Calendar.getInstance()
-        val daysElapsed = ((todayCal.timeInMillis - startCal.timeInMillis) / (1000 * 60 * 60 * 24) + 1).toInt().coerceAtLeast(1)
-        val totalDays = ((endCal.timeInMillis - startCal.timeInMillis) / (1000 * 60 * 60 * 24) + 1).toInt()
-
-        // Max possible ibadat + exercise points so far
-        val maxSoFar = daysElapsed * getMaxDailyPoints()
-
-        // Actual earned (ibadat + exercise only, NO medicine)
-        var earned = 0
-        val cal = Calendar.getInstance().apply { time = startCal.time }
-        repeat(daysElapsed) {
-            val date = dateFormat.format(cal.time)
-            // Count fard done
-            for (prayer in IbadatStateEngine.FARD_PRAYERS) {
-                if (state.getPrayerState(prayer) == PrayerState.DONE) earned += 20
-            }
-            // Tahajjud
-            if (state.isTahajjudDone()) earned += 10
-            // Azkar
-            if (state.isSubahAzkarDone()) earned += 5
-            if (state.isShamAzkarDone()) earned += 5
-            // Perfect day bonus
-            if (IbadatStateEngine.FARD_PRAYERS.all { state.getPrayerState(it) == PrayerState.DONE }) earned += 20
-            // Exercise
-            val exerciseDate = dateFormat.format(cal.time)
-            if (health.getTodayExerciseMinutes() >= 30) earned += 5
-            // Quran Tilawat
-            if (state.isQuranTilawatDone()) earned += 10
-            cal.add(Calendar.DAY_OF_YEAR, 1)
+    fun getDailyProgress(): Pair<Float, String> {
+        if (isHaidhToday()) {
+            return 100f to "🌸 بیٹی، حیض کے دن اللہ نے راحت بخشی — حصہ خود بخود لکھ لیا گیا ہے"
         }
-
-        val percent = if (maxSoFar > 0) (earned.toFloat() / maxSoFar * 100).coerceAtMost(100f) else 0f
-        val status = if (percent >= THRESHOLD_PERCENT) "✅ ماشاءاللہ! آپ قرعہ اندازی میں شامل ہیں!"
-        else "⚠️ مزید ${"%.0f".format(THRESHOLD_PERCENT - percent)}% پوائنٹس درکار — محنت کرو بیٹا!"
-
+        val max = getDailyAchievable()
+        val earned = getDailyAchieved()
+        val percent = if (max > 0) (earned.toFloat() / max * 100).coerceAtMost(100f) else 0f
+        val status = if (percent >= THRESHOLD_PERCENT) "✅ ماشاءاللہ! ہدف پورا ہوا — اللہ خوش رکھے" else "🤲 مزید ${"%.0f".format(THRESHOLD_PERCENT - percent)}% پوائنٹس چاہیے — نماز، اذکار، ورزش یا دوائی مکمل کریں"
         return percent to status
     }
 
-    fun isQualified(): Boolean {
-        val (percent, _) = getQuarterProgress()
-        return percent >= THRESHOLD_PERCENT
-    }
+    fun isQualified(): Boolean = if (isHaidhToday()) true else getDailyProgress().first >= THRESHOLD_PERCENT
 
     fun getStatusText(): String {
-        val quarter = getCurrentQuarter()
-        val (percent, status) = getQuarterProgress()
+        val (percent, status) = getDailyProgress()
+        val todayStr = java.text.SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()).format(Date())
         return buildString {
-            appendLine("🕋 قرعہ اندازی — عمرہ کا موقع")
-            appendLine("$quarter")
-            appendLine("پیشرفت: ${"%.0f".format(percent)}%") 
-            appendLine()
-            appendLine(status)
-            appendLine()
-            appendLine("⚠️ میڈیسن کے پوائنٹس شمار نہیں ہوتے")
+            appendLine("🏆 انعام: عمرہ")
+            appendLine("📅 $todayStr")
+            if (isHaidhToday()) {
+                appendLine("🌸 بیٹی، حیض اللہ کی طرف سے راحت کا ذریعہ ہے — حصہ محبت سے لکھ لیا گیا ہے")
+                appendLine()
+            } else {
+                appendLine("قاعدہ: اگلے 3 مہینے روزانہ 80% پوائنٹس لیں، عمرہ کی قرعہ اندازی میں شریک ہوں")
+                appendLine("💖 پیشرفت: ${"%.0f".format(percent)}% — ہر قدم اللہ کو پسند ہے")
+                appendLine()
+                appendLine(status)
+                appendLine()
+            }
         }
     }
 }

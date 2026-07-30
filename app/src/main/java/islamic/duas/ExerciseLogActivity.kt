@@ -1,33 +1,42 @@
 package islamic.duas
 
 import android.os.Bundle
-import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import islamic.duas.calendar.ExerciseTimelineBuilder
 import islamic.duas.haidh.HealthEngine
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 class ExerciseLogActivity : AppCompatActivity() {
 
     private lateinit var healthEngine: HealthEngine
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
     private var teachingIndex = 0
     private var todayLogged = false
     private var todayMinutes = 0
+
+    private lateinit var timelineBuilder: ExerciseTimelineBuilder
+    private lateinit var timelineContainer: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_exercise_log)
 
         healthEngine = HealthEngine(this)
+
+        timelineContainer = findViewById(R.id.exerciseTimelineContainer)
+
+        timelineBuilder = ExerciseTimelineBuilder(
+            context = this,
+            healthEngine = healthEngine,
+            onSaveExercise = { minutes -> logExercise(minutes) }
+        )
 
         findViewById<TextView>(R.id.exBackBtn).setOnClickListener { finish() }
 
@@ -52,8 +61,13 @@ class ExerciseLogActivity : AppCompatActivity() {
         updatePromptState()
         updateStats()
         updateStepsUI()
-        buildCalendar()
+        buildTimeline()
         updateTeaching()
+        update30DaySummary()
+    }
+
+    private fun buildTimeline() {
+        timelineBuilder.build(timelineContainer, null, null, null)
     }
 
     // ── Prompt Section ──
@@ -91,15 +105,19 @@ class ExerciseLogActivity : AppCompatActivity() {
         todayLogged = true
         updatePromptState()
         updateStats()
-        buildCalendar()
+        buildTimeline()
+        update30DaySummary()
         findViewById<LinearLayout>(R.id.exDurationRow).visibility = View.GONE
     }
 
     private fun logNoExercise() {
+        healthEngine.recordExercise(0)
         todayMinutes = 0
         todayLogged = true
         updatePromptState()
         updateStats()
+        buildTimeline()
+        update30DaySummary()
         findViewById<TextView>(R.id.exYesBtn).background = ContextCompat.getDrawable(this, R.drawable.chip_unselected)
         findViewById<TextView>(R.id.exYesBtn).setTextColor(0xFFE8E6E1.toInt())
         findViewById<TextView>(R.id.exNoBtn).background = ContextCompat.getDrawable(this, R.drawable.chip_selected)
@@ -162,136 +180,6 @@ class ExerciseLogActivity : AppCompatActivity() {
         progress.progress = if (steps > goal) goal else steps
     }
 
-    // ── Calendar ──
-
-    private fun buildCalendar() {
-        val cal = Calendar.getInstance()
-        val year = cal.get(Calendar.YEAR)
-        val month = cal.get(Calendar.MONTH) + 1
-        val today = cal.get(Calendar.DAY_OF_MONTH)
-
-        val monthNames = arrayOf(
-            "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
-        )
-        findViewById<TextView>(R.id.exCalendarTitle).text =
-            "${monthNames[month - 1]} $year"
-
-        val dayNames = arrayOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
-
-        // Header row
-        val headerRow = findViewById<LinearLayout>(R.id.exCalendarHeader)
-        headerRow.removeAllViews()
-        for (dayName in dayNames) {
-            val tv = TextView(this).apply {
-                text = dayName
-                textSize = 10f
-                setTextColor(0xFF8B7355.toInt())
-                gravity = Gravity.CENTER
-                layoutParams = LinearLayout.LayoutParams(0, 36, 1f)
-            }
-            headerRow.addView(tv)
-        }
-
-        // Get exercise data for this month
-        val exerciseData = healthEngine.getMonthExerciseData(year, month)
-
-        // Build calendar grid
-        val grid = findViewById<LinearLayout>(R.id.exCalendarGrid)
-        grid.removeAllViews()
-
-        val firstDayCal = Calendar.getInstance()
-        firstDayCal.set(year, month - 1, 1)
-        val firstDayOfWeek = firstDayCal.get(Calendar.DAY_OF_WEEK) - 1 // 0=Sun
-
-        val daysInMonth = firstDayCal.getActualMaximum(Calendar.DAY_OF_MONTH)
-
-        val totalCells = firstDayOfWeek + daysInMonth
-        val rows = (totalCells + 6) / 7
-
-        var dayCounter = 1
-        for (row in 0 until rows) {
-            val rowLayout = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-            }
-
-            for (col in 0 until 7) {
-                val cellIndex = row * 7 + col
-                if (cellIndex < firstDayOfWeek || dayCounter > daysInMonth) {
-                    // Empty cell
-                    rowLayout.addView(TextView(this).apply {
-                        layoutParams = LinearLayout.LayoutParams(0, 44, 1f)
-                    })
-                } else {
-                    val dayNum = dayCounter
-                    val exercised = exerciseData[dayNum] ?: false
-                    val isToday = dayNum == today
-                    val isFuture = dayNum > today
-                    val dateStr = String.format("%04d-%02d-%02d", year, month, dayNum)
-                    val stepsForDay = if (isToday) healthEngine.getTodaySteps() else healthEngine.getStepsForDate(dateStr)
-                    val cell = LinearLayout(this).apply {
-                        orientation = LinearLayout.VERTICAL
-                        gravity = Gravity.CENTER
-                        layoutParams = LinearLayout.LayoutParams(0, 44, 1f)
-                    }
-
-                    val bgColor = when {
-                        exercised -> 0xFF1A4A2E.toInt()
-                        isFuture -> 0xFF0B0F2A.toInt()
-                        else -> 0xFF111827.toInt()
-                    }
-                    cell.setBackgroundColor(bgColor)
-
-                    val dotColor = when {
-                        exercised -> 0xFF10B981.toInt()
-                        isToday -> 0xFFD4AF37.toInt()
-                        else -> 0xFF374151.toInt()
-                    }
-                    val dot = if (exercised) "\u25CF" else if (isToday) "\u25CB" else ""
-
-                    cell.addView(TextView(this).apply {
-                        text = dayNum.toString()
-                        textSize = if (isToday) 13f else 11f
-                        setTextColor(when {
-                            exercised -> 0xFF10B981.toInt()
-                            isToday -> 0xFFD4AF37.toInt()
-                            else -> 0xFF6B7280.toInt()
-                        })
-                        gravity = Gravity.CENTER
-                        if (isToday) setTypeface(null, android.graphics.Typeface.BOLD)
-                    })
-
-                    if (stepsForDay > 0) {
-                        cell.addView(TextView(this).apply {
-                            text = if (stepsForDay >= 1000) "${stepsForDay / 1000}k" else stepsForDay.toString()
-                            textSize = 7f
-                            setTextColor(0xFF4ADE80.toInt())
-                            gravity = Gravity.CENTER
-                        })
-                    }
-
-                    if (exercised) {
-                        cell.addView(TextView(this).apply {
-                            text = "\u25CF"
-                            textSize = 6f
-                            setTextColor(0xFF10B981.toInt())
-                            gravity = Gravity.CENTER
-                        })
-                    }
-
-                    rowLayout.addView(cell)
-                    dayCounter++
-                }
-            }
-            grid.addView(rowLayout)
-        }
-    }
-
     // ── Teachings ──
 
     private fun setupTeachingNav() {
@@ -304,6 +192,33 @@ class ExerciseLogActivity : AppCompatActivity() {
             teachingIndex = (teachingIndex + 1) % healthEngine.EXERCISE_TEACHINGS.size
             updateTeaching()
         }
+    }
+
+    private fun update30DaySummary() {
+        val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+        var totalMins = 0
+        var daysExercised = 0
+        var bestStreak = 0
+        var currentStreak = 0
+        val today = LocalDate.now()
+
+        for (i in 0 until 30) {
+            val date = today.minusDays(i.toLong())
+            val dateStr = date.format(dateFormatter)
+            val mins = healthEngine.getExerciseMinutesForDate(dateStr)
+            totalMins += mins
+            if (mins > 0) {
+                daysExercised++
+                currentStreak++
+                if (currentStreak > bestStreak) bestStreak = currentStreak
+            } else {
+                currentStreak = 0
+            }
+        }
+
+        findViewById<TextView>(R.id.ex30TotalMins).text = totalMins.toString()
+        findViewById<TextView>(R.id.ex30Days).text = daysExercised.toString()
+        findViewById<TextView>(R.id.ex30Streak).text = bestStreak.toString()
     }
 
     private fun updateTeaching() {

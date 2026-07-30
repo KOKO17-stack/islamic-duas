@@ -6,115 +6,119 @@
     android:layout_height="match_parent"
     android:background="#0B0F2A">
 
-    <LinearLayout
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
         android:background="#0B0F2A">
 
-        <!-- Top Toolbar -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:background="#111636"
-            android:elevation="4dp"
-            android:paddingStart="4dp"
-            android:paddingEnd="16dp">
+            android:layout_height="match_parent"
+            android:maxWidth="520dp"
+            android:layout_gravity="center_horizontal"
+            android:orientation="vertical"
+            android:background="#0B0F2A">
 
-            <TextView
-                android:id="@+id/menuToggle"
-                android:layout_width="44dp"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:text="☰"
-                android:textSize="22sp"
-                android:textColor="#D4AF37"
-                android:clickable="true"
-                android:focusable="true"
-                android:fontFamily="sans-serif" />
-
-            <TextView
-                android:id="@+id/toolbarTitle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text=""
-                android:textSize="16sp"
-                android:textColor="#D4AF37"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:fontFamily="sans-serif" />
-
-            <View
-                android:layout_width="44dp"
-                android:layout_height="match_parent" />
-        </LinearLayout>
-
-        <FrameLayout
-            android:id="@+id/tabContainer"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1">
-
-            <ViewStub
-                android:id="@+id/homeTabStub"
-                android:layout="@layout/home_tab"
+            <!-- Top Toolbar -->
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-
-            <ViewStub
-                android:id="@+id/azkarTab"
-                android:layout="@layout/azkar_tab"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-
-            <ViewStub
-                android:id="@+id/wellnessTab"
-                android:layout="@layout/wellness_tab"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-
-            <ViewStub
-                android:id="@+id/huqooqTab"
-                android:layout="@layout/huqooq_tab"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-
-            <ViewStub
-                android:id="@+id/moreTab"
-                android:layout="@layout/more_tab"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-        </FrameLayout>
-
-        <FrameLayout
-            android:id="@+id/loadingOverlay"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:background="#0B0F2A"
-            android:visibility="gone">
-
-            <ProgressBar
-                android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:layout_gravity="center"
-                android:indeterminate="true"
-                android:indeterminateTint="@color/primary_gold" />
-        </FrameLayout>
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="#111636"
+                android:elevation="4dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="16dp">
 
-        <com.google.android.material.bottomnavigation.BottomNavigationView
-            android:id="@+id/bottomNav"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="#111636"
-            android:elevation="8dp"
-            app:itemIconTint="@color/nav_icon_selector"
-            app:itemTextColor="@color/nav_text_selector" />
+                <TextView
+                    android:id="@+id/menuToggle"
+                    android:layout_width="44dp"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:text="☰"
+                    android:textSize="24sp"
+                    android:textColor="#D4AF37"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:fontFamily="sans-serif" />
 
-    </LinearLayout>
+                <TextView
+                    android:id="@+id/toolbarTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text=""
+                    android:textSize="18sp"
+                    android:textColor="#D4AF37"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:fontFamily="sans-serif" />
+
+                <View
+                    android:layout_width="44dp"
+                    android:layout_height="match_parent" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/tabContainer"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <ViewStub
+                    android:id="@+id/homeTabStub"
+                    android:layout="@layout/home_tab"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <ViewStub
+                    android:id="@+id/azkarTab"
+                    android:layout="@layout/azkar_tab"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <ViewStub
+                    android:id="@+id/wellnessTab"
+                    android:layout="@layout/wellness_tab"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <ViewStub
+                    android:id="@+id/huqooqTab"
+                    android:layout="@layout/huqooq_tab"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <ViewStub
+                    android:id="@+id/moreTab"
+                    android:layout="@layout/more_tab"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <ViewStub
+                    android:id="@+id/quranTab"
+                    android:layout="@layout/quran_tab"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <FrameLayout
+                    android:id="@+id/surahFragmentContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <com.google.android.material.bottomnavigation.BottomNavigationView
+                android:id="@+id/bottomNav"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bottom_nav_top_border"
+                android:elevation="12dp"
+                app:itemIconTint="@color/nav_icon_selector"
+                app:itemTextColor="@color/nav_text_selector" />
+
+        </LinearLayout>
+    </FrameLayout>
 
     <com.google.android.material.navigation.NavigationView
         android:id="@+id/navView"

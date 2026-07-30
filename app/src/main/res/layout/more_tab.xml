@@ -23,7 +23,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="مزید"
-                android:textSize="18sp"
+                android:textSize="20sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:gravity="center"
@@ -46,7 +46,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="📚 تقابلی فقہ"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -57,7 +57,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
                 android:text=""
-                android:textSize="13sp"
+                android:textSize="15sp"
                 android:textColor="#C9A961"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -67,9 +67,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=""
-                android:textSize="11sp"
-                android:textColor="#E0DDD8"
-                android:fontFamily="serif" />
+                android:textSize="13sp"
+                android:textColor="@color/urdu_text"
+                android:fontFamily="@font/noto_nastaliq_urdu" />
 
             <TextView
                 android:id="@+id/fiqhEvidence"
@@ -77,17 +77,18 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text=""
-                android:textSize="14sp"
-                android:textColor="#F0EDE8"
+                android:textSize="16sp"
+                android:textColor="@color/arabic_text"
                 android:gravity="end"
-                android:fontFamily="serif" />
+                android:lineSpacingExtra="10dp"
+                android:fontFamily="@font/scheherazade_new" />
 
             <TextView
                 android:id="@+id/fiqhSource"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=""
-                android:textSize="9sp"
+                android:textSize="11sp"
                 android:textColor="#8B7355"
                 android:gravity="end"
                 android:fontFamily="sans-serif" />
@@ -99,7 +100,7 @@
                 android:layout_marginTop="6dp"
                 android:gravity="center"
                 android:text="اگلا موضوع"
-                android:textSize="12sp"
+                android:textSize="14sp"
                 android:textColor="#D4AF37"
                 android:background="@drawable/rounded_bg"
                 android:fontFamily="sans-serif"
@@ -121,7 +122,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="❓ فقہی سوال"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -132,8 +133,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
                 android:text=""
-                android:textSize="12sp"
-                android:textColor="#E8E6E1"
+                android:textSize="14sp"
+                android:textColor="#F0EDE8"
                 android:fontFamily="sans-serif" />
 
             <LinearLayout
@@ -149,9 +150,9 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
                 android:text=""
-                android:textSize="11sp"
+                android:textSize="13sp"
                 android:textColor="#10B981"
-                android:fontFamily="serif"
+                android:fontFamily="@font/noto_nastaliq_urdu"
                 android:visibility="gone" />
 
             <TextView
@@ -161,7 +162,7 @@
                 android:layout_marginTop="6dp"
                 android:gravity="center"
                 android:text="اگلا سوال"
-                android:textSize="12sp"
+                android:textSize="14sp"
                 android:textColor="#D4AF37"
                 android:background="@drawable/rounded_bg"
                 android:fontFamily="sans-serif"
@@ -183,7 +184,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="🏆 چیلنجز"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -194,7 +195,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text=""
-                android:textSize="13sp"
+                android:textSize="15sp"
                 android:textColor="#C9A961"
                 android:fontFamily="sans-serif" />
 
@@ -203,8 +204,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=""
-                android:textSize="11sp"
-                android:textColor="#E0DDD8"
+                android:textSize="13sp"
+                android:textColor="@color/urdu_text"
                 android:fontFamily="sans-serif" />
 
             <TextView
@@ -214,7 +215,7 @@
                 android:layout_marginTop="6dp"
                 android:gravity="center"
                 android:text="اگلا چیلنج"
-                android:textSize="12sp"
+                android:textSize="14sp"
                 android:textColor="#D4AF37"
                 android:background="@drawable/rounded_bg"
                 android:fontFamily="sans-serif"
@@ -236,7 +237,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="📖 دینی تعلیم"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -247,7 +248,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
                 android:text=""
-                android:textSize="13sp"
+                android:textSize="15sp"
                 android:textColor="#C9A961"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -257,10 +258,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=""
-                android:textSize="11sp"
-                android:textColor="#E0DDD8"
-                android:lineSpacingExtra="3dp"
-                android:fontFamily="serif" />
+                android:textSize="13sp"
+                android:textColor="@color/urdu_text"
+                android:lineSpacingExtra="6dp"
+                android:fontFamily="@font/noto_nastaliq_urdu" />
 
             <TextView
                 android:id="@+id/lessonNext"
@@ -269,7 +270,7 @@
                 android:layout_marginTop="6dp"
                 android:gravity="center"
                 android:text="اگلا سبق"
-                android:textSize="12sp"
+                android:textSize="14sp"
                 android:textColor="#D4AF37"
                 android:background="@drawable/rounded_bg"
                 android:fontFamily="sans-serif"
@@ -291,7 +292,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="🕋 سیرت النبی ﷺ"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -302,7 +303,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
                 android:text=""
-                android:textSize="13sp"
+                android:textSize="15sp"
                 android:textColor="#C9A961"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -313,10 +314,10 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text=""
-                android:textSize="11sp"
-                android:textColor="#E0DDD8"
-                android:lineSpacingExtra="3dp"
-                android:fontFamily="serif" />
+                android:textSize="13sp"
+                android:textColor="@color/urdu_text"
+                android:lineSpacingExtra="6dp"
+                android:fontFamily="@font/noto_nastaliq_urdu" />
 
             <TextView
                 android:id="@+id/seerahSource"
@@ -324,7 +325,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text=""
-                android:textSize="9sp"
+                android:textSize="11sp"
                 android:textColor="#8B7355"
                 android:gravity="end"
                 android:fontFamily="sans-serif" />
@@ -336,8 +337,8 @@
                 android:gravity="center"
                 android:layout_marginTop="6dp">
 
-                <TextView android:id="@+id/seerahPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
-                <TextView android:id="@+id/seerahNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
+                <TextView android:id="@+id/seerahPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+                <TextView android:id="@+id/seerahNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -355,7 +356,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="✨ فضائل اعمال"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -366,7 +367,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
                 android:text=""
-                android:textSize="13sp"
+                android:textSize="15sp"
                 android:textColor="#C9A961"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -377,10 +378,10 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text=""
-                android:textSize="11sp"
-                android:textColor="#E0DDD8"
-                android:lineSpacingExtra="3dp"
-                android:fontFamily="serif" />
+                android:textSize="13sp"
+                android:textColor="@color/urdu_text"
+                android:lineSpacingExtra="6dp"
+                android:fontFamily="@font/noto_nastaliq_urdu" />
 
             <TextView
                 android:id="@+id/fadailSource"
@@ -388,7 +389,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text=""
-                android:textSize="9sp"
+                android:textSize="11sp"
                 android:textColor="#8B7355"
                 android:gravity="end"
                 android:fontFamily="sans-serif" />
@@ -400,8 +401,8 @@
                 android:gravity="center"
                 android:layout_marginTop="6dp">
 
-                <TextView android:id="@+id/fadailPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
-                <TextView android:id="@+id/fadailNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
+                <TextView android:id="@+id/fadailPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+                <TextView android:id="@+id/fadailNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -419,7 +420,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="📢 دعوتی نکات"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -430,7 +431,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
                 android:text=""
-                android:textSize="13sp"
+                android:textSize="15sp"
                 android:textColor="#C9A961"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -441,10 +442,10 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text=""
-                android:textSize="11sp"
-                android:textColor="#E0DDD8"
-                android:lineSpacingExtra="3dp"
-                android:fontFamily="serif" />
+                android:textSize="13sp"
+                android:textColor="@color/urdu_text"
+                android:lineSpacingExtra="6dp"
+                android:fontFamily="@font/noto_nastaliq_urdu" />
 
             <TextView
                 android:id="@+id/dawahSource"
@@ -452,7 +453,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text=""
-                android:textSize="9sp"
+                android:textSize="11sp"
                 android:textColor="#8B7355"
                 android:gravity="end"
                 android:fontFamily="sans-serif" />
@@ -464,8 +465,8 @@
                 android:gravity="center"
                 android:layout_marginTop="6dp">
 
-                <TextView android:id="@+id/dawahPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
-                <TextView android:id="@+id/dawahNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
+                <TextView android:id="@+id/dawahPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+                <TextView android:id="@+id/dawahNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -483,7 +484,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="💰 گھریلو معیشت"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -494,7 +495,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
                 android:text=""
-                android:textSize="13sp"
+                android:textSize="15sp"
                 android:textColor="#C9A961"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -505,10 +506,10 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text=""
-                android:textSize="11sp"
-                android:textColor="#E0DDD8"
-                android:lineSpacingExtra="3dp"
-                android:fontFamily="serif" />
+                android:textSize="13sp"
+                android:textColor="@color/urdu_text"
+                android:lineSpacingExtra="6dp"
+                android:fontFamily="@font/noto_nastaliq_urdu" />
 
             <TextView
                 android:id="@+id/economySource"
@@ -516,7 +517,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text=""
-                android:textSize="9sp"
+                android:textSize="11sp"
                 android:textColor="#8B7355"
                 android:gravity="end"
                 android:fontFamily="sans-serif" />
@@ -528,8 +529,8 @@
                 android:gravity="center"
                 android:layout_marginTop="6dp">
 
-                <TextView android:id="@+id/economyPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
-                <TextView android:id="@+id/economyNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
+                <TextView android:id="@+id/economyPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+                <TextView android:id="@+id/economyNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -547,7 +548,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="📝 اسلامی کوئز — اپنے علم کی جانچ کریں"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -556,8 +557,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="قرآن، حدیث، فقہ اور سیرت پر مبنی ۴۰+ سوالات — اپنی معلومات بڑھائیں"
-                android:textSize="11sp"
+                android:text="قرآن، حدیث، فقہ، سیرت، خواتین کے حقوق، صحابہ اور تاریخ اسلام پر مبنی 500+ سوالات — اپنی معلومات بڑھائیں"
+                android:textSize="13sp"
                 android:textColor="#C9A961"
                 android:fontFamily="sans-serif" />
 
@@ -568,7 +569,7 @@
                 android:layout_marginTop="8dp"
                 android:gravity="center"
                 android:text="کوئز شروع کریں"
-                android:textSize="13sp"
+                android:textSize="15sp"
                 android:textColor="#D4AF37"
                 android:background="@drawable/rounded_bg"
                 android:fontFamily="sans-serif"
@@ -591,7 +592,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="📊 ہفتہ وار اعدادوشمار"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -602,8 +603,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text=""
-                android:textSize="11sp"
-                android:textColor="#E0DDD8"
+                android:textSize="13sp"
+                android:textColor="@color/urdu_text"
                 android:fontFamily="sans-serif" />
 
             <TextView
@@ -611,7 +612,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=""
-                android:textSize="11sp"
+                android:textSize="13sp"
                 android:textColor="#C9A961"
                 android:fontFamily="sans-serif" />
         </LinearLayout>
@@ -630,7 +631,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="💎 جواہر ڈیش بورڈ"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF6A"
                 android:textStyle="bold"
                 android:gravity="center"
@@ -648,7 +649,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text=""
-                    android:textSize="13sp"
+                    android:textSize="15sp"
                     android:textColor="#D4AF6A"
                     android:gravity="center"
                     android:fontFamily="sans-serif" />
@@ -661,7 +662,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text=""
-                android:textSize="11sp"
+                android:textSize="13sp"
                 android:textColor="#C9A961"
                 android:gravity="center"
                 android:fontFamily="sans-serif" />
@@ -671,7 +672,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=""
-                android:textSize="10sp"
+                android:textSize="12sp"
                 android:textColor="#E0645A"
                 android:gravity="center"
                 android:fontFamily="sans-serif" />
@@ -691,7 +692,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="أهل الحديث ریسرچ سینٹر — السعودية و باكستان"
-                android:textSize="10sp"
+                android:textSize="12sp"
                 android:textColor="#8B7355"
                 android:gravity="center"
                 android:fontFamily="sans-serif" />
@@ -699,7 +700,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="تمام مواد صحیح اور مستند ذرائع سے ماخوذ ہے"
-                android:textSize="9sp"
+                android:textSize="11sp"
                 android:textColor="#94A3B8"
                 android:gravity="center"
                 android:fontFamily="sans-serif" />

@@ -172,6 +172,19 @@ class HealthEngine(private val context: Context) {
         return result
     }
 
+    fun getMonthExerciseMinutes(year: Int, month: Int): Map<Int, Int> {
+        val cal = Calendar.getInstance()
+        cal.set(year, month - 1, 1)
+        val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        val result = mutableMapOf<Int, Int>()
+        for (day in 1..daysInMonth) {
+            cal.set(Calendar.DAY_OF_MONTH, day)
+            val dateStr = dateFormat.format(cal.time)
+            result[day] = prefs.getInt("$KEY_EXERCISE_COUNT$dateStr", 0)
+        }
+        return result
+    }
+
     val EXERCISE_TEACHINGS = listOf(
         Pair("🌙 رسول اللہ ﷺ کی تعلیم",
              "نبی کریم ﷺ نے فرمایا: 'مومن قوی اور مضبوط اللہ کے نزدیک کمزور مومن سے بہتر ہے' (مسلم)۔ ورزش سے جسم مضبوط ہوتا ہے جو عبادت میں مدد دیتا ہے۔"),

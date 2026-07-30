@@ -101,7 +101,7 @@ class OnboardingActivity : ComponentActivity() {
             hint = "اپنا نام درج کریں (اختیاری)"
             setTextColor(0xFFE8E6E1.toInt())
             setHintTextColor(0xFF8B7355.toInt())
-            textSize = 16f
+            textSize = 18f
         }
         AlertDialog.Builder(this)
             .setTitle("خوش آمدید")

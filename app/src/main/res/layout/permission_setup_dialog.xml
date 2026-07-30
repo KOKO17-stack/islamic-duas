@@ -10,8 +10,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="اجازتیں ترتیب دیں"
-        android:textSize="20sp"
-        android:textColor="#E8E6E1"
+        android:textSize="22sp"
+        android:textColor="#F0EDE8"
         android:textStyle="bold"
         android:gravity="center"
         android:fontFamily="sans-serif" />
@@ -21,7 +21,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:text="بهتر کارکردگی کے لیے درکار اجازتیں"
-        android:textSize="12sp"
+        android:textSize="14sp"
         android:textColor="#C9A961"
         android:gravity="center"
         android:fontFamily="sans-serif" />
@@ -55,7 +55,7 @@
         android:layout_height="48dp"
         android:layout_marginTop="12dp"
         android:text="بند کریں"
-        android:textSize="14sp"
+        android:textSize="16sp"
         android:backgroundTint="#16302C"
         android:textColor="#A8B8B4"
         android:textAllCaps="false" />

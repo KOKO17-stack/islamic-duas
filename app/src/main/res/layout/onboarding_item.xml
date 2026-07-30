@@ -11,7 +11,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text=""
-        android:textSize="22sp"
+        android:textSize="24sp"
         android:textColor="#D4AF37"
         android:textStyle="bold"
         android:gravity="center"
@@ -23,8 +23,8 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:text=""
-        android:textSize="15sp"
-        android:textColor="#E8E6E1"
+        android:textSize="17sp"
+        android:textColor="#F0EDE8"
         android:gravity="center"
         android:fontFamily="sans-serif" />
 
@@ -40,9 +40,9 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:text=""
-        android:textSize="13sp"
-        android:textColor="#C9A961"
+        android:textSize="15sp"
+        android:textColor="@color/urdu_text"
         android:gravity="center"
-        android:lineSpacingExtra="6dp"
-        android:fontFamily="serif" />
+            android:lineSpacingExtra="8dp"
+            android:fontFamily="@font/noto_nastaliq_urdu" />
 </LinearLayout>

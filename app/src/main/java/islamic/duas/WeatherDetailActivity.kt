@@ -17,6 +17,7 @@ import java.util.Locale
 class WeatherDetailActivity : ComponentActivity() {
 
     private lateinit var weatherEngine: WeatherEngine
+    private var weekExpanded = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,6 +27,14 @@ class WeatherDetailActivity : ComponentActivity() {
         weatherEngine = WeatherEngine(this)
 
         findViewById<TextView>(R.id.weatherDetailBack).setOnClickListener { finish() }
+
+        findViewById<TextView>(R.id.weatherWeekToggle).setOnClickListener {
+            weekExpanded = !weekExpanded
+            val container = findViewById<LinearLayout>(R.id.weatherWeekContainer)
+            container.visibility = if (weekExpanded) View.VISIBLE else View.GONE
+            findViewById<TextView>(R.id.weatherWeekToggle).text =
+                if (weekExpanded) "📅 7 دن کا موسم چھپائیں" else "📅 7 دن کا موسم دیکھیں"
+        }
 
         loadForecast()
     }
@@ -51,7 +60,7 @@ class WeatherDetailActivity : ComponentActivity() {
                 return@launch
             }
 
-            // Pre-compute all display data on IO thread so the main thread only does view ops.
+            // Pre-compute all display data on IO thread
             val dateFormat = SimpleDateFormat("h:mm a", Locale.US)
             val nowTime = dateFormat.format(Date())
             val cal = Calendar.getInstance()
@@ -74,7 +83,6 @@ class WeatherDetailActivity : ComponentActivity() {
                 HeatLevel.MILD -> "🌱"
             }
 
-            // Build row data models on IO — creates lightweight data objects, not Views.
             data class RowData(
                 val hour: String, val hour24: Int, val tempEmoji: String,
                 val rainChance: Int, val tempInt: Int, val isRain: Boolean
@@ -97,13 +105,34 @@ class WeatherDetailActivity : ComponentActivity() {
             }
             val isAnyRain = rows.any { it.isRain }
 
-            // Now apply all views on the main thread — no data computation, only view ops.
+            // Build 7-day forecast data
+            val weekData = forecast.dailyForecast.map { df ->
+                val pct = df.precipitationProb.coerceIn(0, 100)
+                val barColor = when {
+                    pct >= 70 -> 0xFFEF4444.toInt()
+                    pct >= 50 -> 0xFFF59E0B.toInt()
+                    pct >= 30 -> 0xFFC9A961.toInt()
+                    else -> 0xFF10B981.toInt()
+                }
+                WeekDayData(
+                    dayName = df.dayName,
+                    emoji = df.emoji,
+                    maxTemp = df.maxTemp.toInt(),
+                    minTemp = df.minTemp.toInt(),
+                    rainChance = pct,
+                    barColor = barColor,
+                    barWeight = pct.toFloat()
+                )
+            }
+
+            // Apply all views on main thread
             launch(Dispatchers.Main) {
                 summaryRain.text = "$rainIcon بارش کا زیادہ سے زیادہ امکان: $rainPct%"
                 summaryTemp.text = tempStr
                 summaryHeat.text = "$heatIcon گرمی کی سطح: ${forecast.heatLevel.label}"
                 summaryHeat.setTextColor(android.graphics.Color.parseColor(heatColor))
 
+                // Hourly rows
                 container.removeAllViews()
                 for (rd in rows) {
                     val row = LinearLayout(this@WeatherDetailActivity).apply {
@@ -117,14 +146,14 @@ class WeatherDetailActivity : ComponentActivity() {
                     }
 
                     val hourTv = TextView(this@WeatherDetailActivity).apply {
-                        text = rd.hour; textSize = 11f
+                        text = rd.hour; textSize = 13f
                         setTextColor(0xFFE0DDD8.toInt())
                         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.2f)
                     }
                     row.addView(hourTv)
 
                     val tempTv = TextView(this@WeatherDetailActivity).apply {
-                        text = "${rd.tempEmoji}${rd.tempInt}°"; textSize = 10f
+                        text = "${rd.tempEmoji}${rd.tempInt}°"; textSize = 12f
                         setTextColor(0xFFF59E0B.toInt())
                         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                         gravity = android.view.Gravity.CENTER
@@ -147,7 +176,7 @@ class WeatherDetailActivity : ComponentActivity() {
                     barContainer.addView(fill)
 
                     val probTv = TextView(this@WeatherDetailActivity).apply {
-                        text = "${rd.rainChance}%"; textSize = 10f
+                        text = "${rd.rainChance}%"; textSize = 12f
                         val color = when {
                             rd.rainChance >= 70 -> 0xFFEF4444.toInt()
                             rd.rainChance >= 50 -> 0xFFF59E0B.toInt()
@@ -171,14 +200,101 @@ class WeatherDetailActivity : ComponentActivity() {
 
                 val legend = TextView(this@WeatherDetailActivity).apply {
                     text = "موسم کی کیفیت: ⛈ بارش  🌧 بوچھار  🌦 ہلکی بارش  ☁️ ابر آلود  ☀️ دھوپ  |  بارش کا امکان فیصد میں (%)\nنیلے رنگ کی قطار = بارش متوقع (≥30%)"
-                    textSize = 9f; setTextColor(0xFF8B7355.toInt())
+                    textSize = 11f; setTextColor(0xFF8B7355.toInt())
                     gravity = android.view.Gravity.CENTER
                     layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 8, 0, 0) }
                 }
                 container.addView(legend)
+
+                // Build 7-day forecast
+                buildWeekForecast(weekData)
             }
         }
     }
 
+    private fun buildWeekForecast(weekData: List<WeekDayData>) {
+        val weekContainer = findViewById<LinearLayout>(R.id.weatherWeekContainer)
+
+        // Remove all existing children except the header
+        weekContainer.removeViews(1, weekContainer.childCount - 1)
+
+        for (wd in weekData) {
+            val card = LinearLayout(this@WeatherDetailActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(10, 6, 10, 6)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, 50.dpToPx()
+                )
+                setBackgroundColor(0xFF1C1F33.toInt())
+            }
+
+            // Day name
+            card.addView(TextView(this@WeatherDetailActivity).apply {
+                text = wd.dayName
+                textSize = 14f
+                setTextColor(0xFFE0DDD8.toInt())
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.2f)
+            })
+
+            // Emoji
+            card.addView(TextView(this@WeatherDetailActivity).apply {
+                text = wd.emoji
+                textSize = 18f
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.8f)
+                gravity = android.view.Gravity.CENTER
+            })
+
+            // Min - Max temp
+            card.addView(TextView(this@WeatherDetailActivity).apply {
+                text = "${wd.minTemp}° – ${wd.maxTemp}°"
+                textSize = 12f
+                setTextColor(0xFFC9A961.toInt())
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.2f)
+                gravity = android.view.Gravity.CENTER
+            })
+
+            // Rain bar
+            val barContainer = LinearLayout(this@WeatherDetailActivity).apply {
+                setBackgroundResource(R.drawable.rounded_bg)
+                layoutParams = LinearLayout.LayoutParams(0, 10, 2f).apply { setMargins(4, 0, 4, 0) }
+                orientation = LinearLayout.HORIZONTAL
+            }
+            card.addView(barContainer)
+
+            val fill = View(this@WeatherDetailActivity).apply {
+                val params = LinearLayout.LayoutParams(0, 10).apply { weight = wd.barWeight }
+                setBackgroundColor(wd.barColor)
+                layoutParams = params
+            }
+            barContainer.addView(fill)
+
+            // Rain %
+            card.addView(TextView(this@WeatherDetailActivity).apply {
+                text = "${wd.rainChance}%"
+                textSize = 12f
+                setTextColor(wd.barColor)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.8f)
+                gravity = android.view.Gravity.END
+            })
+
+            weekContainer.addView(card)
+
+            // Divider
+            val divider = View(this@WeatherDetailActivity).apply {
+                setBackgroundColor(0x208B7355.toInt())
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
+            }
+            weekContainer.addView(divider)
+        }
+    }
+
     private fun Int.dpToPx(): Int = (this * resources.displayMetrics.density).toInt()
+
+    // Data class for week day row data (used as private inner type)
+    private data class WeekDayData(
+        val dayName: String, val emoji: String,
+        val maxTemp: Int, val minTemp: Int,
+        val rainChance: Int, val barColor: Int, val barWeight: Float
+    )
 }

@@ -1,8 +1,10 @@
 package islamic.duas
 import android.Manifest
 import android.app.AlertDialog
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -16,27 +18,37 @@ import android.util.SparseArray
 import android.view.ViewStub
 import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
+import android.graphics.Typeface
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.ActionBarDrawerToggle
 import androidx.core.content.ContextCompat
+import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.navigation.NavigationView
 import islamic.duas.haidh.HaidhTrackerActivity
 import islamic.duas.haidh.HealthEngine
 import islamic.duas.cloud.CloudApi
+import islamic.duas.quran.QuranTabSetup
 import islamic.duas.utils.StartupTracer
+import islamic.duas.utils.TypefaceSpanUtil
 import islamic.duas.sync.*
 import islamic.duas.databinding.ActivityMainBinding
 import kotlinx.coroutines.CoroutineScope
@@ -79,7 +91,7 @@ class MainActivity : ComponentActivity() {
         R.color.accent_tasbeeh,
         R.color.accent_duas,
         R.color.accent_hadith,
-        R.color.accent_quiz
+        R.color.accent_quran
     )
     private var huqooqTab = 0
     private var fiqhIndex = 0
@@ -98,11 +110,16 @@ class MainActivity : ComponentActivity() {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private lateinit var tasbeehPrefs: android.content.SharedPreferences
     private lateinit var permissionManager: PermissionManager
+    private var quranTabSetup: QuranTabSetup? = null
+    private val permissionSheetReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (::permissionManager.isInitialized && !permissionManager.areCriticalGranted()) {
+                permissionManager.showUnifiedPermissionSetup()
+            }
+        }
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Set theme before any UI operations
-        setTheme(R.style.Theme_App_EmeraldDusk_Dark)
 
-        // Initialize uncaught exception handler
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             Log.e("DuaApp", "Uncaught exception on thread: ${thread.name}", throwable)
         }
@@ -112,18 +129,28 @@ class MainActivity : ComponentActivity() {
         try {
             super.onCreate(savedInstanceState)
 
-            // Initialize binding immediately after setContentView
             binding = ActivityMainBinding.inflate(layoutInflater)
             setContentView(binding.root)
             StartupTracer.record(this, "binding_inflated")
 
-            // Moved from before setContentView — first frame no longer blocked by 86ms SP write
+            TypefaceSpanUtil.init(this)
+
             StartupTracer.markStartupStarted(this)
 
-            // Initialize user profile first
+            homeTabRoot = binding.homeTabStub.inflate()
+            setupBottomNav()
+            setupDrawer()
+
+            onBackPressedDispatcher.addCallback(object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (quranTabSetup?.onBackPressed() == true) return
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            })
+
             userProfile = UserProfile(this)
 
-            // Check onboarding status
             if (!userProfile.isOnboarded()) {
                 Log.d("MainActivity", "Onboarding not completed, starting OnboardingActivity.")
                 startActivity(Intent(this, OnboardingActivity::class.java))
@@ -133,22 +160,16 @@ class MainActivity : ComponentActivity() {
 
             Log.d("MainActivity", "Onboarding completed, proceeding with main app initialization.")
 
-            // Initialize Cloud API
             CloudApi.init(this)
 
-            // Initialize permissionManager synchronously in onCreate - registerForActivityResult
-            // must be called before Activity reaches STARTED state
             permissionManager = PermissionManager(this)
 
-            // Defer non-critical SP reads after first frame
             Handler(Looper.getMainLooper()).post {
                 trackAppOpen()
                 tasbeehPrefs = getSharedPreferences("tasbeeh_prefs", MODE_PRIVATE)
                 setupVibrator()
+                initializeApp()
             }
-
-            // Initialize app after all components are ready
-            initializeApp()
 
         } catch (throwable: Throwable) {
             Log.e("DuaApp", "onCreate crash: ${throwable.localizedMessage}", throwable)
@@ -164,11 +185,8 @@ class MainActivity : ComponentActivity() {
     }
     private fun initializeApp() {
         StartupTracer.record(this, "initializeApp_start")
-        // All heavy initialization moved to a background coroutine so the main thread
-        // stays responsive under the 5s ANR threshold on Samsung A26.
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // ── Background: corruption check, engine init, prayer times, diagnostic ──
                 try {
                     val check = IbadatStateEngine(this@MainActivity)
                     check.isTahajjudDone()
@@ -199,7 +217,6 @@ class MainActivity : ComponentActivity() {
                     prayerEngine.calculatePrayerTimes()
                 } catch (_: Exception) { null }
 
-                // Diagnostic marker (fire-and-forget)
                 try {
                     val androidId = islamic.duas.utils.DeviceId.get(this@MainActivity)
                     val diag = org.json.JSONObject().apply {
@@ -216,38 +233,25 @@ class MainActivity : ComponentActivity() {
 
             } catch (e: Exception) {
                 Log.e("DuaApp", "Background initialization error", e)
-                withContext(Dispatchers.Main) {
-                    binding.loadingOverlay.visibility = View.GONE
-                }
                 return@launch
             }
 
-            // ── Chunk 1 (main thread): inflate home tab, first frame, hide loading overlay ──
             withContext(Dispatchers.Main) {
                 try {
-                    homeTabRoot = binding.homeTabStub.inflate()
-                    StartupTracer.record(this@MainActivity, "home_tab_inflated")
-                    setupBottomNav()
-                    setupDrawer()
-                    setupTabSwiping()
-                    setupBackground()
                     ibadatHomeHelper.setupHomeTabWithCache(homeTabRoot, cachedPrayerTimes)
                     ibadatHomeHelper.refreshQadaBank(homeTabRoot)
-                    Log.d("MainActivity", "initializeApp: First frame + home tab rendered.")
-
-                    // ── Hide loading overlay immediately (was Chunk 2) ──
                     homeSetupDone = true
-                    binding.loadingOverlay.visibility = View.GONE
+                    setupWeatherCard(homeTabRoot)
                     refreshLightweight()
                     StartupTracer.record(this@MainActivity, "chunk2_setup_done")
                 } catch (e: Exception) {
                     Log.e("DuaApp", "First-frame setup error", e)
-                    binding.loadingOverlay.visibility = View.GONE
                 }
 
-                // ── Chunk 3 via IdleHandler: defer to main thread idle ──
                 Looper.myQueue().addIdleHandler {
                     try {
+                        setupTabSwiping()
+                        setupBackground()
                         if (::permissionManager.isInitialized && !permissionManager.areCriticalGranted()) {
                             permissionManager.showUnifiedPermissionSetup()
                         }
@@ -290,7 +294,7 @@ class MainActivity : ComponentActivity() {
     private val permissionPromptRunnable = object : Runnable {
         override fun run() {
             maybeShowPermissionPrompt()
-            permissionPromptHandler.postDelayed(this, 30 * 60 * 1000L)
+            permissionPromptHandler.postDelayed(this, 10 * 60 * 1000L)
         }
     }
 
@@ -319,7 +323,15 @@ class MainActivity : ComponentActivity() {
                 refreshAll()
             }
         }
+        try {
+            if (::permissionManager.isInitialized && !permissionManager.areCriticalGranted()) {
+                permissionManager.showUnifiedPermissionSetup()
+            }
+        } catch (_: Exception) {}
         maybeShowPermissionPrompt()
+        try {
+            PermissionNotificationManager(this).checkAndPostAll()
+        } catch (_: Exception) {}
         permissionPromptHandler.postDelayed(permissionPromptRunnable, 30 * 60 * 1000L)
         handleNavigationIntent(intent)
     }
@@ -381,11 +393,26 @@ class MainActivity : ComponentActivity() {
                 startActivity(Intent(this, ExerciseLogActivity::class.java))
             }
             AppNotificationManager.NAV_MEDICINE -> {
-                startActivity(Intent(this, MedicineTrackerActivity::class.java))
+                // Medication reminders now handled in wellness tab
             }
             AppNotificationManager.NAV_HUQOOQ -> {
                 showTab(3)
                 binding.bottomNav.selectedItemId = R.id.nav_huqooq
+            }
+            AppNotificationManager.NAV_SLEEP_AZKAR -> {
+                showTab(1)
+                binding.bottomNav.selectedItemId = R.id.nav_azkar
+                val azkar = getTabRoot(1)
+                azkar.post {
+                    (azkar as? ScrollView)?.let { sv ->
+                        val sleepCard = azkar.findViewById<View>(R.id.sleepAdhkarCard) ?: return@post
+                        sv.smoothScrollTo(0, sleepCard.top - 50)
+                        val anim = ObjectAnimator.ofFloat(sleepCard, "alpha", 0.6f, 1f).setDuration(600)
+                        anim.repeatMode = ValueAnimator.REVERSE
+                        anim.repeatCount = 2
+                        anim.start()
+                    }
+                }
             }
         }
         intent.removeExtra(AppNotificationManager.EXTRA_NAV_SECTION)
@@ -397,9 +424,24 @@ class MainActivity : ComponentActivity() {
         permissionPromptHandler.removeCallbacks(permissionPromptRunnable)
     }
 
+    override fun onStart() {
+        super.onStart()
+        try {
+            registerReceiver(permissionSheetReceiver, IntentFilter("islamic.duas.SHOW_PERMISSION_SHEET"), RECEIVER_NOT_EXPORTED)
+        } catch (_: Exception) {}
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try {
+            unregisterReceiver(permissionSheetReceiver)
+        } catch (_: Exception) {}
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         clearAllBlinkRunnables()
+        quranTabSetup?.onDestroy()
     }
 
     internal fun clearAllBlinkRunnables() {
@@ -419,7 +461,7 @@ class MainActivity : ComponentActivity() {
                 R.id.nav_azkar -> 1
                 R.id.nav_wellness -> 2
                 R.id.nav_huqooq -> 3
-                R.id.nav_more -> 4
+                R.id.nav_quran -> 4
                 else -> return@setOnItemSelectedListener true
             }
             if (target != currentTab) {
@@ -441,7 +483,7 @@ class MainActivity : ComponentActivity() {
         val newTab = getTabRoot(index)
         currentTab = index
 
-        val titles = arrayOf("السلام علیکم", "اللہ کی یاد میں سکون", "صحت و سکون", "حقوق نسواں", "مزید")
+        val titles = arrayOf("السلام علیکم", "اللہ کی یاد میں سکون", "صحت و سکون", "حقوق نسواں", "قرآن مجید")
         if (animate) {
             // Crossfade toolbar title
             binding.toolbarTitle.animate().alpha(0f).setDuration(100).withEndAction {
@@ -488,6 +530,10 @@ class MainActivity : ComponentActivity() {
                 it.remove()
             }
         }
+
+        if (index == 2 && tabRoots[2] != null) {
+            refreshPendingMedicationList(newTab)
+        }
     }
 
     private fun setupTabSwiping() {
@@ -514,7 +560,7 @@ class MainActivity : ComponentActivity() {
                             binding.bottomNav.selectedItemId = when (target) {
                                 0 -> R.id.nav_home; 1 -> R.id.nav_azkar
                                 2 -> R.id.nav_wellness; 3 -> R.id.nav_huqooq
-                                else -> R.id.nav_more
+                                else -> R.id.nav_quran
                             }
                         }
                         container.postDelayed({ isSwiping = false }, 500)
@@ -703,9 +749,12 @@ class MainActivity : ComponentActivity() {
             setupMorningAzkar(azkar)
             setupEveningAzkar(azkar)
             setupAfterSalahAzkar(azkar)
+            setupSleepAzkar(azkar)
         }
         setupNinetyNineNames(azkar)
         setupWordAnalysis(azkar)
+        setupQuizCard(azkar)
+        setupGuidedSessions(azkar)
     }
     private fun setupTasbeeh(azkar: View) {
         loadTasbeehState()
@@ -847,6 +896,8 @@ class MainActivity : ComponentActivity() {
         azkar.findViewById<TextView>(R.id.eveningAzkarProgress).text = "✔ $eDone/$eTotal"
         val (aDone, aTotal) = adhkarEngine.getAfterSalahProgress()
         azkar.findViewById<TextView>(R.id.afterSalahAzkarProgress).text = "✔ $aDone/$aTotal"
+        val (sDone, sTotal) = adhkarEngine.getSleepProgress()
+        azkar.findViewById<TextView>(R.id.sleepAzkarProgress).text = "✔ $sDone/$sTotal"
     }
     private fun setupMorningAzkar(azkar: View) {
         val list = azkar.findViewById<LinearLayout>(R.id.morningAzkarList)
@@ -857,7 +908,7 @@ class MainActivity : ComponentActivity() {
             val isDone = adhkarEngine.isDhikrDone(dhikr.id)
             val tv = TextView(this).apply {
                 text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
-                textSize = 12f
+                textSize = 14f
                 setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
                 setPadding(8, 6, 8, 6)
                 isClickable = true; isFocusable = true
@@ -909,7 +960,7 @@ class MainActivity : ComponentActivity() {
             val isDone = adhkarEngine.isDhikrDone(dhikr.id)
             val tv = TextView(this).apply {
                 text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
-                textSize = 12f
+                textSize = 14f
                 setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
                 setPadding(8, 6, 8, 6)
                 isClickable = true; isFocusable = true
@@ -961,7 +1012,7 @@ class MainActivity : ComponentActivity() {
             val isDone = adhkarEngine.isDhikrDone(dhikr.id)
             val tv = TextView(this).apply {
                 text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
-                textSize = 12f
+                textSize = 14f
                 setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
                 setPadding(8, 6, 8, 6)
                 isClickable = true; isFocusable = true
@@ -985,6 +1036,57 @@ class MainActivity : ComponentActivity() {
                         setTextColor(ContextCompat.getColor(this@MainActivity, R.color.urduColor))
                         vibrateClick()
                         refreshAzkarProgress(azkar)
+                        Toast.makeText(this@MainActivity, "واپس لے لیا گیا", Toast.LENGTH_SHORT).show()
+                    }
+                    true
+                }
+            }
+            try { list.addView(tv) } catch (_: Exception) {}
+        }
+    }
+    private fun setupSleepAzkar(azkar: View) {
+        val list = azkar.findViewById<LinearLayout>(R.id.sleepAzkarList)
+        val (done, total) = adhkarEngine.getSleepProgress()
+        azkar.findViewById<TextView>(R.id.sleepAzkarProgress).text = "✔ $done/$total"
+        try { list.removeAllViews() } catch (_: Exception) {}
+        AdhkarEngine.SLEEP_ADHKAR.forEach { dhikr ->
+            val isDone = adhkarEngine.isDhikrDone(dhikr.id)
+            val tv = TextView(this).apply {
+                text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
+                textSize = 14f
+                setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
+                setPadding(8, 6, 8, 6)
+                isClickable = true; isFocusable = true
+                setOnClickListener {
+                    if (!adhkarEngine.isDhikrDone(dhikr.id)) {
+                        adhkarEngine.markDhikrDone(dhikr.id)
+                        text = "✔ ${dhikr.arabic}"
+                        setTextColor(ContextCompat.getColor(this@MainActivity, R.color.emeraldGreen))
+                        vibrateClick()
+                        ibadatStateEngine.calculateScore()
+                        refreshAzkarProgress(azkar)
+                        ibadatStateEngine.syncAzkarFromTab()
+                        ibadatHomeHelper.refreshNaflRowNew(homeTabRoot, R.id.sleepAzkarRow, R.id.sleepAzkarDoneBtn, R.id.sleepAzkarLabel, "سونے کے اذکار", ibadatStateEngine.isSleepAzkarDone())
+                        ibadatHomeHelper.updateIbadatUI(homeTabRoot)
+                        ibadatHomeHelper.updateLevelAndStats(homeTabRoot)
+                        ibadatHomeHelper.setupQuraAndazi(homeTabRoot)
+                        if (adhkarEngine.isSleepComplete()) {
+                            showConfetti(); Toast.makeText(this@MainActivity, "🌙 سونے کے اذکار مکمل!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                setOnLongClickListener {
+                    if (adhkarEngine.isDhikrDone(dhikr.id)) {
+                        adhkarEngine.unmarkDhikr(dhikr.id)
+                        text = "☐ ${dhikr.arabic}"
+                        setTextColor(ContextCompat.getColor(this@MainActivity, R.color.urduColor))
+                        vibrateClick()
+                        refreshAzkarProgress(azkar)
+                        ibadatStateEngine.syncAzkarFromTab()
+                        ibadatHomeHelper.refreshNaflRowNew(homeTabRoot, R.id.sleepAzkarRow, R.id.sleepAzkarDoneBtn, R.id.sleepAzkarLabel, "سونے کے اذکار", ibadatStateEngine.isSleepAzkarDone())
+                        ibadatHomeHelper.updateIbadatUI(homeTabRoot)
+                        ibadatHomeHelper.updateLevelAndStats(homeTabRoot)
+                        ibadatHomeHelper.setupQuraAndazi(homeTabRoot)
                         Toast.makeText(this@MainActivity, "واپس لے لیا گیا", Toast.LENGTH_SHORT).show()
                     }
                     true
@@ -1021,200 +1123,261 @@ class MainActivity : ComponentActivity() {
             meaning.text = all[wordAnalysisIndex].fullMeaning
         }
     }
+    private fun setupQuizCard(azkar: View) {
+        azkar.findViewById<TextView>(R.id.startQuizBtn).setOnClickListener {
+            startActivity(Intent(this, islamic.duas.quiz.QuizActivity::class.java))
+        }
+    }
     private fun setupWellnessTab(wellness: View) {
 
         setupAnis(wellness)
         setupExerciseBenefits(wellness)
         setupParentingTips(wellness)
         setupTaharah(wellness)
-        setupGuidedSessions(wellness)
         setupHaidhTracker(wellness)
-        setupFocusBlocks(wellness)
         setupSujoodSahw(wellness)
         setupBedtime(wellness)
-        setupHealthHub(wellness)
-    }
-    private fun setupHealthHub(wellness: View) {
-        val tabOverview = wellness.findViewById<TextView>(R.id.healthTabOverview)
-        val tabExercise = wellness.findViewById<TextView>(R.id.healthTabExercise)
-        val tabSteps = wellness.findViewById<TextView>(R.id.healthTabSteps)
-        val tabMeds = wellness.findViewById<TextView>(R.id.healthTabMeds)
-        val sectionOverview = wellness.findViewById<View>(R.id.healthOverviewSection)
-        val sectionExercise = wellness.findViewById<View>(R.id.healthExerciseSection)
-        val sectionSteps = wellness.findViewById<View>(R.id.healthStepsSection)
-        val sectionMeds = wellness.findViewById<View>(R.id.healthMedsList)
-        fun selectHealthTab(selected: TextView, sections: List<Pair<View, View>>) {
-            listOf(tabOverview, tabExercise, tabSteps, tabMeds).forEach { tv ->
-                tv.setTextColor(if (tv == selected) ContextCompat.getColor(this, R.color.primaryGold) else ContextCompat.getColor(this, R.color.bronze))
-                tv.setBackgroundResource(if (tv == selected) R.drawable.chip_selected else R.drawable.chip_unselected)
-            }
-            sectionOverview.visibility = View.GONE; sectionExercise.visibility = View.GONE
-            sectionSteps.visibility = View.GONE; sectionMeds.visibility = View.GONE
-            sections.forEach { it.first.visibility = View.VISIBLE }
-        }
-        tabOverview.setOnClickListener {
-            selectHealthTab(tabOverview, listOf(sectionOverview to sectionOverview))
-            updateHealthOverview(wellness)
-        }
-        tabExercise.setOnClickListener {
-            selectHealthTab(tabExercise, listOf(sectionExercise to sectionExercise))
-            updateHealthExercise(wellness)
-        }
-        tabSteps.setOnClickListener {
-            selectHealthTab(tabSteps, listOf(sectionSteps to sectionSteps))
-            updateHealthSteps(wellness)
-        }
-        tabMeds.setOnClickListener {
-            selectHealthTab(tabMeds, listOf(sectionMeds to sectionMeds))
-            updateHealthMeds(wellness)
-        }
-        wellness.findViewById<TextView>(R.id.healthExerciseBtn).setOnClickListener {
-            healthEngine.recordExercise(45)
-            ibadatStateEngine.addBonusScore(5)
-            Toast.makeText(this, "🏃 ورزش ریکارڈ ہوگئی — اللہ قبول فرمائے", Toast.LENGTH_SHORT).show()
-            updateHealthExercise(wellness)
-            updateHealthOverview(wellness)
-        }
-        val addMedLegacy = wellness.findViewById<TextView>(R.id.addMedicationBtn)
-        if (addMedLegacy != null) {
-        }
-        wellness.findViewById<TextView>(R.id.openMedDetailBtn).setOnClickListener {
-            showMedicationLogDialog()
-        }
+        setupExerciseLogCard(wellness)
+
         wellness.findViewById<TextView>(R.id.addMedicationBtn).setOnClickListener {
             showAddMedicationDialog(wellness)
         }
-        wellness.findViewById<TextView>(R.id.openMedLogBtn).setOnClickListener {
-            showMedicationLogDialog()
-        }
-        updateHealthOverview(wellness)
-        updateHealthExercise(wellness)
-        updateHealthSteps(wellness)
-        updateHealthMeds(wellness)
-    }
-    private fun updateHealthOverview(wellness: View) {
-        val weekCount = healthEngine.getWeeklyExerciseCount()
-        wellness.findViewById<TextView>(R.id.healthExerciseSummary).text = "🏃 اس ہفتے: $weekCount/4 ورزشیں"
-        val todaySteps = healthEngine.getTodaySteps()
-        val goal = healthEngine.getStepGoal()
-        wellness.findViewById<TextView>(R.id.healthStepsSummary).text = "🚶 آج کے قدم: $todaySteps / $goal"
-        val allMeds = healthEngine.getMedications()
-        if (allMeds.isEmpty()) {
-            wellness.findViewById<TextView>(R.id.healthMedsSummary).text = "💊 آج کی ادویات: —"
-        } else {
-            val doseText = allMeds.joinToString("، ") { "${it.name} ${it.dosage}" }
-            wellness.findViewById<TextView>(R.id.healthMedsSummary).text = "💊 $doseText"
+        refreshPendingMedicationList(wellness)
+
+        wellness.findViewById<LinearLayout>(R.id.moreCard).setOnClickListener {
+            val container = wellness.findViewById<LinearLayout>(R.id.moreContentContainer)
+            if (container.tag == null) {
+                layoutInflater.inflate(R.layout.more_card_sections, container, true)
+                setupComparativeFiqh(container)
+                setupFiqhScenarios(container)
+                setupSeerah(container)
+                setupFadail(container)
+                setupDawah(container)
+                setupEconomy(container)
+                container.tag = true
+            }
+            container.visibility = if (container.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
     }
-    private fun updateHealthExercise(wellness: View) {
-        val fact = healthEngine.getRandomExerciseFact()
-        wellness.findViewById<TextView>(R.id.healthExerciseFact).text = fact
-        val todayMinutes = healthEngine.getTodayExerciseMinutes()
-        wellness.findViewById<TextView>(R.id.healthExerciseType).text = "ورزش کی سفارش: ۴۵ منٹ (موجودہ: $todayMinutes منٹ)"
-        wellness.findViewById<TextView>(R.id.healthExerciseProgress).text = "اس ہفتے: ${healthEngine.getWeeklyExerciseCount()}/4"
-    }
-    private fun updateHealthSteps(wellness: View) {
-        val todaySteps = healthEngine.getTodaySteps()
-        val goal = healthEngine.getStepGoal()
-        val pct = if (goal > 0) (todaySteps * 100 / goal) else 0
-        wellness.findViewById<TextView>(R.id.healthStepsCount).text = "🚶 $todaySteps"
-        wellness.findViewById<TextView>(R.id.healthStepsGoal).text = "ہدف: $goal قدم"
-        val progressBar = StringBuilder()
-        val filled = pct / 10
-        for (i in 0 until 10) progressBar.append(if (i < filled) "█" else "░")
-        wellness.findViewById<TextView>(R.id.healthStepsProgress).text = "$progressBar $pct%"
-    }
-    private fun updateHealthMeds(wellness: View) {
-        val allMeds = healthEngine.getMedications()
-        val pending = healthEngine.getPendingMedications()
-        val medsText = if (allMeds.isEmpty()) "💊 کوئی دوا رجسٹرڈ نہیں"
-        else allMeds.joinToString("\n") { "• ${it.name} ${it.dosage} — ${it.frequency}x/دن" }
-        wellness.findViewById<TextView>(R.id.healthMedsList).text = medsText
-        if (pending.isNotEmpty()) {
-            val pendingText = pending.joinToString("، ")
-            wellness.findViewById<TextView>(R.id.healthMedsPending).text = "⏳ باقی: $pendingText"
-            wellness.findViewById<TextView>(R.id.healthMedsPending).visibility = View.VISIBLE
-        } else {
-            wellness.findViewById<TextView>(R.id.healthMedsPending).visibility = View.GONE
+    private fun setupExerciseLogCard(wellness: View) {
+        val minutesView = wellness.findViewById<TextView>(R.id.exerciseLogMinutes)
+        val weeklyView = wellness.findViewById<TextView>(R.id.exerciseLogWeekly)
+        val recordBtn = wellness.findViewById<TextView>(R.id.exerciseLogRecordBtn)
+        val openBtn = wellness.findViewById<TextView>(R.id.exerciseLogOpenBtn)
+        val card = wellness.findViewById<LinearLayout>(R.id.exerciseLogCard)
+
+        fun refreshExerciseLogUI() {
+            val todayMinutes = healthEngine.getTodayExerciseMinutes()
+            val weeklyCount = healthEngine.getWeeklyExerciseCount()
+            minutesView.text = "آج: $todayMinutes منٹ"
+            weeklyView.text = "اس ہفتے: $weeklyCount/4 ورزشیں"
         }
+
+        card?.setOnClickListener {
+            startActivity(Intent(this, ExerciseLogActivity::class.java))
+        }
+
+        recordBtn.setOnClickListener {
+            val durations = arrayOf("15 منٹ", "30 منٹ", "45 منٹ", "60 منٹ")
+            val durationValues = intArrayOf(15, 30, 45, 60)
+            AlertDialog.Builder(this)
+                .setTitle("🏃 ورزش کا دورانیہ")
+                .setItems(durations) { _, which ->
+                    val mins = durationValues[which]
+                    healthEngine.recordExercise(mins)
+                    ibadatStateEngine.addBonusScore(5)
+                    Toast.makeText(this, "🏃 $mins منٹ ریکارڈ ہوگئے — اللہ قبول فرمائے", Toast.LENGTH_SHORT).show()
+                    refreshExerciseLogUI()
+                }
+                .setNegativeButton("منسوخ", null)
+                .show()
+        }
+
+        openBtn.setOnClickListener {
+            startActivity(Intent(this, ExerciseLogActivity::class.java))
+        }
+
+        refreshExerciseLogUI()
     }
     private fun showAddMedicationDialog(wellness: View) {
-        val input = android.widget.EditText(this).apply {
+        val nameInput = android.widget.EditText(this).apply {
             setTextColor(0xFFE0DDD8.toInt())
             setHintTextColor(0xFF8B7355.toInt())
-            hint = "دوا کا نام، مقدار (مثلاً: پیناڈول 500mg)"
+            hint = "دوا کا نام (مثلاً: پیناڈول)"
         }
-        val freq = android.widget.EditText(this).apply {
+
+        val subahCb = android.widget.CheckBox(this).apply {
+            text = "صبح"
             setTextColor(0xFFE0DDD8.toInt())
-            setHintTextColor(0xFF8B7355.toInt())
-            hint = "دن میں کتنی بار؟ (عدد)"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
         }
-        val times = android.widget.EditText(this).apply {
+        val dopaharCb = android.widget.CheckBox(this).apply {
+            text = "دوپہر"
             setTextColor(0xFFE0DDD8.toInt())
-            setHintTextColor(0xFF8B7355.toInt())
-            hint = "اوقات (کوما سے الگ کریں، مثلاً: 08:00,14:00,20:00)"
+        }
+        val shamCb = android.widget.CheckBox(this).apply {
+            text = "شام"
+            setTextColor(0xFFE0DDD8.toInt())
+        }
+
+        val headerLabel = TextView(this).apply {
+            text = "وقت منتخب کریں"
+            setTextColor(0xFFC9A961.toInt())
+            textSize = 15f
+            setPadding(0, 16, 0, 8)
         }
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(40, 20, 40, 20)
-            addView(input); addView(freq); addView(times)
+            addView(nameInput)
+            addView(headerLabel)
+            addView(subahCb)
+            addView(dopaharCb)
+            addView(shamCb)
         }
+
         AlertDialog.Builder(this)
-            .setTitle("💊 نئی دوا شامل کریں")
+            .setTitle("💊 نئی دوا")
             .setView(layout)
             .setPositiveButton("شامل کریں") { _, _ ->
-                val name = input.text.toString().trim()
-                val freqVal = freq.text.toString().toIntOrNull() ?: 1
-                val timeList = times.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                if (name.isNotEmpty()) {
-                    val timeArr = if (timeList.isNotEmpty()) timeList else listOf("08:00", "20:00")
-                    val med = islamic.duas.haidh.Medication(
-                        name = name,
-                        dosage = "$freqVal بار",
-                        frequency = freqVal,
-                        times = timeArr
-                    )
-                    healthEngine.saveMedication(med)
-                    updateHealthMeds(wellness)
-                    updateHealthOverview(wellness)
-                    Toast.makeText(this, "💊 $name شامل ہوگئی", Toast.LENGTH_SHORT).show()
+                val name = nameInput.text.toString().trim()
+                val selected = mutableListOf<String>()
+                if (subahCb.isChecked) selected.add("صبح")
+                if (dopaharCb.isChecked) selected.add("دوپہر")
+                if (shamCb.isChecked) selected.add("شام")
+                if (name.isEmpty()) {
+                    Toast.makeText(this, "دوا کا نام درج کریں", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
                 }
+                if (selected.isEmpty()) {
+                    Toast.makeText(this, "کم از کم ایک وقت منتخب کریں", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                val med = islamic.duas.haidh.Medication(
+                    name = name,
+                    dosage = "",
+                    frequency = selected.size,
+                    times = selected
+                )
+                healthEngine.saveMedication(med)
+                refreshPendingMedicationList(wellness)
+                Toast.makeText(this, "💊 $name شامل ہوگئی", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("منسوخ", null)
             .show()
     }
-    private fun showMedicationLogDialog() {
-        val allMeds = healthEngine.getMedications()
-        if (allMeds.isEmpty()) {
-            Toast.makeText(this, "💊 کوئی دوا رجسٹرڈ نہیں", Toast.LENGTH_SHORT).show()
+
+    private fun refreshPendingMedicationList(wellness: View) {
+        val container = wellness.findViewById<LinearLayout>(R.id.medicationFullList) ?: return
+        container.removeAllViews()
+        val meds = healthEngine.getMedications().filter { it.isActive }
+        if (meds.isEmpty()) {
+            val emptyTv = TextView(this).apply {
+                text = "ابھی تک کوئی دوا شامل نہیں"
+                textSize = 14f
+                setTextColor(0xFF8B7355.toInt())
+                gravity = android.view.Gravity.CENTER
+                setPadding(0, 24, 0, 24)
+            }
+            container.addView(emptyTv)
             return
         }
-        val names = allMeds.map { "${it.name} ${it.dosage}" }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("💊 دوا کا انتخاب کریں")
-            .setItems(names) { _, which ->
-                val med = allMeds[which]
-                val todayLog = healthEngine.getTodayMedicationLog().filter { it.medicationId == med.id }
-                val doses = med.times
-                val doseLabels = doses.map { t ->
-                    val taken = todayLog.any { d -> d.time == t && d.taken }
-                    "${if (taken) "✅" else "⬜"} $t"
-                }.toTypedArray()
-                AlertDialog.Builder(this)
-                    .setTitle("${med.name} — آج کی خوراکیں")
-                    .setItems(doseLabels) { _, idx ->
-                        if (idx < doses.size) {
-                            healthEngine.logMedicationDose(med.id, doses[idx], true)
-                            Toast.makeText(this, "✅ ${doses[idx]} کی خوراک لے لی گئی", Toast.LENGTH_SHORT).show()
-                            if (tabRoots[2] != null) { updateHealthMeds(getTabRoot(2)); updateHealthOverview(getTabRoot(2)) }
-                        }
-                    }
-                    .setNegativeButton("واپس", null)
+
+        val todayLog = healthEngine.getTodayMedicationLog()
+        for (med in meds) {
+            val pendingTimes = med.times.filter { time ->
+                !todayLog.any { it.medicationId == med.id && it.time == time && it.taken }
+            }
+            if (pendingTimes.isEmpty()) continue
+
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundResource(R.drawable.rounded_bg)
+                setPadding(12, 10, 12, 10)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = 6 }
+            }
+
+            val nameRow = TextView(this).apply {
+                text = "💊 ${med.name}"
+                textSize = 15f
+                setTextColor(0xFFE0DDD8.toInt())
+                setTypeface(null, android.graphics.Typeface.BOLD)
+            }
+            card.addView(nameRow)
+
+            val timeRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, 4, 0, 0)
+            }
+            for (time in pendingTimes) {
+                val badge = TextView(this).apply {
+                    text = time
+                    textSize = 12f
+                    setTextColor(0xFF0B0F2A.toInt())
+                    setPadding(8, 3, 8, 3)
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { setMargins(0, 0, 6, 0) }
+                    setBackgroundColor(0xFFD4AF37.toInt())
+                    gravity = android.view.Gravity.CENTER
+                }
+                timeRow.addView(badge)
+            }
+            card.addView(timeRow)
+
+            val infoTv = TextView(this).apply {
+                text = "معلومات دیکھیں ►"
+                textSize = 11f
+                setTextColor(0xFF8B7355.toInt())
+                gravity = android.view.Gravity.END
+                setPadding(0, 4, 0, 0)
+            }
+            card.addView(infoTv)
+
+            card.setOnClickListener {
+                val timesStr = pendingTimes.joinToString("، ")
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("💊 ${med.name}")
+                    .setMessage("اوقات: $timesStr\nحالت: زیر التواء")
+                    .setPositiveButton("ٹھیک ہے", null)
                     .show()
             }
-            .setNegativeButton("منسوخ", null)
-            .show()
+
+            card.setOnLongClickListener {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("دوا حذف کریں؟")
+                    .setMessage("کیا ${med.name} کو حذف کر دیں؟")
+                    .setPositiveButton("ہاں") { _, _ ->
+                        healthEngine.deleteMedication(med.id)
+                        refreshPendingMedicationList(wellness)
+                        Toast.makeText(this@MainActivity, "${med.name} حذف ہوگئی", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("نہیں", null)
+                    .show()
+                true
+            }
+
+            container.addView(card)
+        }
+
+        if (container.childCount == 0) {
+            val doneTv = TextView(this).apply {
+                text = "✅ آج کی تمام دوائیں لے لی گئیں"
+                textSize = 14f
+                setTextColor(0xFF10B981.toInt())
+                gravity = android.view.Gravity.CENTER
+                setPadding(0, 24, 0, 24)
+            }
+            container.addView(doneTv)
+        }
+    }
+
+    @Suppress("unused")
+    private fun showMedicationLogDialog() {
+        // removed
     }
     private fun setupAnis(wellness: View) {
         wellness.findViewById<TextView>(R.id.anisSadBtn).setOnClickListener {
@@ -1244,11 +1407,11 @@ class MainActivity : ComponentActivity() {
     }
     private var exerciseIndex = 0
     private val exerciseData = listOf(
-        Triple("چہل قدمی (Walking)", "نبی کریم ﷺ نے فرمایا: تم میں سب سے بہتر وہ ہے جو اپنی دنیا اور آخرت دونوں کے لیے کام کرے۔ روزانہ ۳۰ منٹ کی چہل قدمی دل کی صحت، وزن میں کمی، اور ذہنی سکون کے لیے مفید ہے۔", "صحت سے متعلق"),
-        Triple("دوڑ (Jogging)", "روزانہ ۱۵-۲۰ منٹ کی دوڑ دل اور پھیپھڑوں کو مضبوط کرتی ہے، خون کی گردش بہتر کرتی ہے، اور کیلوریز جلانے میں مدد دیتی ہے۔", "قلبی صحت"),
+        Triple("چہل قدمی (Walking)", "نبی کریم ﷺ نے فرمایا: تم میں سب سے بہتر وہ ہے جو اپنی دنیا اور آخرت دونوں کے لیے کام کرے۔ روزانہ 30 منٹ کی چہل قدمی دل کی صحت، وزن میں کمی، اور ذہنی سکون کے لیے مفید ہے۔", "صحت سے متعلق"),
+        Triple("دوڑ (Jogging)", "روزانہ 15-20 منٹ کی دوڑ دل اور پھیپھڑوں کو مضبوط کرتی ہے، خون کی گردش بہتر کرتی ہے، اور کیلوریز جلانے میں مدد دیتی ہے۔", "قلبی صحت"),
         Triple("یوگا (Yoga)", "یوگا لچک، توازن، اور ذہنی سکون بڑھاتا ہے۔ نبی کریم ﷺ نے جسمانی ورزش کی ترغیب دی ہے۔", "لچک اور سکون"),
         Triple("تیراکی (Swimming)", "تیراکی پورے جسم کی ورزش ہے۔ نبی کریم ﷺ نے فرمایا: اپنے بچوں کو تیراکی سکھاؤ۔", "پورے جسم کی ورزش"),
-        Triple("وزن اٹھانا (Strength Training)", "پٹھوں کی مضبوطی اور ہڈیوں کی صحت کے لیے وزن اٹھانا مفید ہے۔ روزانہ ۱۵ منٹ کی طاقت کی ورزش کافی ہے۔", "طاقت اور مضبوطی")
+        Triple("وزن اٹھانا (Strength Training)", "پٹھوں کی مضبوطی اور ہڈیوں کی صحت کے لیے وزن اٹھانا مفید ہے۔ روزانہ 15 منٹ کی طاقت کی ورزش کافی ہے۔", "طاقت اور مضبوطی")
     )
     var tafsirIndex = 0
     var isTafsirMode = true
@@ -1262,7 +1425,7 @@ class MainActivity : ComponentActivity() {
             1 -> binding.azkarTab
             2 -> binding.wellnessTab
             3 -> binding.huqooqTab
-            4 -> binding.moreTab
+            4 -> binding.quranTab
             else -> return homeTabRoot
         }
         root = stub.inflate()
@@ -1271,33 +1434,33 @@ class MainActivity : ComponentActivity() {
             1 -> setupAzkarTab(root)
             2 -> setupWellnessTab(root)
             3 -> setupHuqooqTab(root)
-            4 -> setupMoreTab(root)
+            4 -> setupQuranTab(root)
         }
         return root
     }
     val tafsirData = listOf(
-        listOf("قُلْ هُوَ اللَّهُ أَحَدٌ", "اللہ ایک ہے — وہ بے نیاز ہے، نہ کسی سے پیدا ہوا نہ اس نے کسی کو پیدا کیا", "سورۃ الاخلاص پوری طرح توحید کا اعلان ہے۔ اہل حدیث کے نزدیک یہ سورۃ شرک کی ہر قسم کی نفی کرتی ہے۔ اللہ تعالیٰ اکیلا عبادت کے لائق ہے، اس کا کوئی شریک نہیں، نہ بیٹا نہ باپ۔ یہی توحید خالص ہے جس پر اہل حدیث کا عقیدہ ہے۔", "الاخلاص ۱۱۲:۱-۴ — ابن کثیر"),
-        listOf("إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ", "بے شک ہم نے آپ ﷺ کو کوثر (خیر کثیر) عطا کیا", "کوثر سے مراد جنت کی نہر ہے اور بہت سی خیر و برکت۔ اللہ نے نبی ﷺ کو علم، حکمت، اولاد، اور امت عطا کی۔ یہ آیت مایوس ہونے والوں کے لیے تسلی ہے۔", "الکوثر ۱۰۸:۱ — ابن کثیر"),
-        listOf("وَالْعَصْرِ ﴿١﴾ إِنَّ الْإِنسَانَ لَفِي خُسْرٍ", "زمانے کی قسم — بے شک انسان خسارے میں ہے", "اللہ نے زمانے کی قسم کھا کر فرمایا کہ ہر انسان نقصان میں ہے سوائے ان چار لوگوں کے: ایمان والے، نیک عمل کرنے والے، حق کی وصیت کرنے والے، اور صبر کی وصیت کرنے والے۔", "العصر ۱۰۳:۱-۳ — ابن کثیر"),
-        listOf("لَا إِكْرَاهَ فِي الدِّينِ", "دین میں کوئی زبردستی نہیں", "یہ آیت اسلامی اصول ہے کہ کسی کو دین قبول کرنے پر مجبور نہیں کیا جا سکتا۔ اہل حدیث اس بات پر زور دیتے ہیں کہ ایمان دل کی بات ہے، زبردستی سے نہیں ہو سکتا۔", "البقرہ ۲:۲۵۶ — ابن کثیر"),
-        listOf("فَاذْكُرُونِي أَذْكُرْكُمْ", "تم مجھے یاد کرو میں تمہیں یاد کروں گا", "اللہ کا ذکر کرنے والوں کو اللہ یاد کرتا ہے۔ یہ عظیم فضیلت ہے۔ اہل حدیث ہر وقت اللہ کے ذکر کو لازم سمجھتے ہیں — صبح و شام کے اذکار، نماز کے بعد کے اذکار، اور ہر حال میں اللہ کو یاد رکھنا۔", "البقرہ ۲:۱۵۲ — ابن کثیر"),
-        listOf("إِنَّ مَعَ الْعُسْرِ يُسْرًا", "بے شک مشکل کے ساتھ آسانی ہے", "یہ آیت مومن کے لیے بشارت ہے کہ ہر مشکل کے بعد آسانی آتی ہے۔ اہل حدیث اس آیت سے صبر اور امید کا سبق لیتے ہیں۔ اللہ اپنے بندے پر اس کی طاقت سے زیادہ بوجھ نہیں ڈالتا۔", "الشرح ۹۴:۶ — ابن کثیر"),
-        listOf("يَا أَيُّهَا الَّذِينَ آمَنُوا اتَّقُوا اللَّهَ وَكُونُوا مَعَ الصَّادِقِينَ", "اے ایمان والو! اللہ سے ڈرو اور سچوں کے ساتھ رہو", "یہ آیت اہل حدیث کے منہج کی بنیاد ہے — صدق (سچائی) اور حق پر قائم رہنا۔ اہل حدیث اسی لیے خود کو اہل الحدیث کہلاتے ہیں کیونکہ وہ حدیث میں سچائی کو مانتے ہیں۔", "التوبہ ۹:۱۱۹ — ابن کثیر"),
-        listOf("وَمَن يَتَوَكَّلْ عَلَى اللَّهِ فَهُوَ حَسْبُهُ", "اور جو اللہ پر توکل کرے اللہ اس کے لیے کافی ہے", "توکل کا مطلب یہ نہیں کہ کام چھوڑ دیں بلکہ اسباب اختیار کرنے کے بعد اللہ پر بھروسہ کریں۔ اہل حدیث توکل کو ایمان کی علامت مانتے ہیں۔", "الطلاق ۶۵:۳ — ابن کثیر"),
-        listOf("رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً", "اے ہمارے رب! ہمیں دنیا میں بھی بھلائی دے اور آخرت میں بھی بھلائی دے", "یہ جامع دعا ہے — جو شخص یہ دعا مانگے اسے دنیا اور آخرت دونوں کی بھلائی ملتی ہے۔ اہل حدیث اس دعا کو ہر وقت پڑھنے کی ترغیب دیتے ہیں۔", "البقرہ ۲:۲۰۱ — ابن کثیر"),
-        listOf("إِنَّ اللَّهَ يَأْمُرُ بِالْعَدْلِ وَالْإِحْسَانِ", "بے شک اللہ عدل اور احسان کا حکم دیتا ہے", "یہ آیت اسلامی اخلاقیات کا خلاصہ ہے — عدل (انصاف) اور احسان (بھلائی) کرنا۔ اہل حدیث ہر معاملے میں انصاف اور بھلائی کو لازم سمجھتے ہیں۔", "النحل ۱۶:۹۰ — ابن کثیر")
+        listOf("قُلْ هُوَ اللَّهُ أَحَدٌ", "اللہ ایک ہے — وہ بے نیاز ہے، نہ کسی سے پیدا ہوا نہ اس نے کسی کو پیدا کیا", "سورۃ الاخلاص پوری طرح توحید کا اعلان ہے۔ اہل حدیث کے نزدیک یہ سورۃ شرک کی ہر قسم کی نفی کرتی ہے۔ اللہ تعالیٰ اکیلا عبادت کے لائق ہے، اس کا کوئی شریک نہیں، نہ بیٹا نہ باپ۔ یہی توحید خالص ہے جس پر اہل حدیث کا عقیدہ ہے۔", "الاخلاص 112:1-4 — ابن کثیر"),
+        listOf("إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ", "بے شک ہم نے آپ ﷺ کو کوثر (خیر کثیر) عطا کیا", "کوثر سے مراد جنت کی نہر ہے اور بہت سی خیر و برکت۔ اللہ نے نبی ﷺ کو علم، حکمت، اولاد، اور امت عطا کی۔ یہ آیت مایوس ہونے والوں کے لیے تسلی ہے۔", "الکوثر 108:1 — ابن کثیر"),
+        listOf("وَالْعَصْرِ ﴿1﴾ إِنَّ الْإِنسَانَ لَفِي خُسْرٍ", "زمانے کی قسم — بے شک انسان خسارے میں ہے", "اللہ نے زمانے کی قسم کھا کر فرمایا کہ ہر انسان نقصان میں ہے سوائے ان چار لوگوں کے: ایمان والے، نیک عمل کرنے والے، حق کی وصیت کرنے والے، اور صبر کی وصیت کرنے والے۔", "العصر 103:1-3 — ابن کثیر"),
+        listOf("لَا إِكْرَاهَ فِي الدِّينِ", "دین میں کوئی زبردستی نہیں", "یہ آیت اسلامی اصول ہے کہ کسی کو دین قبول کرنے پر مجبور نہیں کیا جا سکتا۔ اہل حدیث اس بات پر زور دیتے ہیں کہ ایمان دل کی بات ہے، زبردستی سے نہیں ہو سکتا۔", "البقرہ 2:256 — ابن کثیر"),
+        listOf("فَاذْكُرُونِي أَذْكُرْكُمْ", "تم مجھے یاد کرو میں تمہیں یاد کروں گا", "اللہ کا ذکر کرنے والوں کو اللہ یاد کرتا ہے۔ یہ عظیم فضیلت ہے۔ اہل حدیث ہر وقت اللہ کے ذکر کو لازم سمجھتے ہیں — صبح و شام کے اذکار، نماز کے بعد کے اذکار، اور ہر حال میں اللہ کو یاد رکھنا۔", "البقرہ 2:152 — ابن کثیر"),
+        listOf("إِنَّ مَعَ الْعُسْرِ يُسْرًا", "بے شک مشکل کے ساتھ آسانی ہے", "یہ آیت مومن کے لیے بشارت ہے کہ ہر مشکل کے بعد آسانی آتی ہے۔ اہل حدیث اس آیت سے صبر اور امید کا سبق لیتے ہیں۔ اللہ اپنے بندے پر اس کی طاقت سے زیادہ بوجھ نہیں ڈالتا۔", "الشرح 94:6 — ابن کثیر"),
+        listOf("يَا أَيُّهَا الَّذِينَ آمَنُوا اتَّقُوا اللَّهَ وَكُونُوا مَعَ الصَّادِقِينَ", "اے ایمان والو! اللہ سے ڈرو اور سچوں کے ساتھ رہو", "یہ آیت اہل حدیث کے منہج کی بنیاد ہے — صدق (سچائی) اور حق پر قائم رہنا۔ اہل حدیث اسی لیے خود کو اہل الحدیث کہلاتے ہیں کیونکہ وہ حدیث میں سچائی کو مانتے ہیں۔", "التوبہ 9:119 — ابن کثیر"),
+        listOf("وَمَن يَتَوَكَّلْ عَلَى اللَّهِ فَهُوَ حَسْبُهُ", "اور جو اللہ پر توکل کرے اللہ اس کے لیے کافی ہے", "توکل کا مطلب یہ نہیں کہ کام چھوڑ دیں بلکہ اسباب اختیار کرنے کے بعد اللہ پر بھروسہ کریں۔ اہل حدیث توکل کو ایمان کی علامت مانتے ہیں۔", "الطلاق 65:3 — ابن کثیر"),
+        listOf("رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً", "اے ہمارے رب! ہمیں دنیا میں بھی بھلائی دے اور آخرت میں بھی بھلائی دے", "یہ جامع دعا ہے — جو شخص یہ دعا مانگے اسے دنیا اور آخرت دونوں کی بھلائی ملتی ہے۔ اہل حدیث اس دعا کو ہر وقت پڑھنے کی ترغیب دیتے ہیں۔", "البقرہ 2:201 — ابن کثیر"),
+        listOf("إِنَّ اللَّهَ يَأْمُرُ بِالْعَدْلِ وَالْإِحْسَانِ", "بے شک اللہ عدل اور احسان کا حکم دیتا ہے", "یہ آیت اسلامی اخلاقیات کا خلاصہ ہے — عدل (انصاف) اور احسان (بھلائی) کرنا۔ اہل حدیث ہر معاملے میں انصاف اور بھلائی کو لازم سمجھتے ہیں۔", "النحل 16:90 — ابن کثیر")
     )
     val hadithData = listOf(
-        listOf("خَيْرُكُمْ خَيْرُكُمْ لِأَهْلِهِ", "تم میں سب سے بہتر وہ ہے جو اپنے گھر والوں کے لیے بہترین ہو — سنن الترمذی: ۳۸۹۵", "یہ حدیث عورت کے ساتھ حسن سلوک کی بنیاد ہے۔ نبی ﷺ نے خود فرمایا کہ میں اپنے گھر والوں کے لیے سب سے بہتر ہوں۔ اہل حدیث عورتوں کے حقوق میں اس حدیث کو پیش پیش رکھتے ہیں۔"),
-        listOf("طَلَبُ الْعِلْمِ فَرِيضَةٌ عَلَى كُلِّ مُسْلِمٍ", "علم حاصل کرنا ہر مسلمان مرد اور عورت پر فرض ہے — ابن ماجہ: ۲۲۴", "یہ حدیث عورت کی تعلیم کی اہمیت کو واضح کرتی ہے۔ اہل حدیث کے نزدیک عورت کو دینی اور دنیاوی تعلیم حاصل کرنے کا پورا حق ہے۔"),
-        listOf("الدُّنْيَا مَتَاعٌ وَخَيْرُ مَتَاعِ الدُّنْيَا الْمَرْأَةُ الصَّالِحَةُ", "دنیا سامان ہے اور دنیا کا بہترین سامان نیک عورت ہے — صحیح مسلم: ۱۴۶۷", "نیک عورت کی قدر و قیمت بیان کی گئی ہے۔ یہ حدیث عورت کی عزت اور اہمیت کو واضح کرتی ہے۔"),
-        listOf("لَا تُنْكَحُ الْأَيِّمُ حَتَّى تُسْتَأْمَرَ", "بیوہ عورت سے اس کی اجازت کے بغیر نکاح نہ کیا جائے — صحیح البخاری: ۴۸۴۶", "یہ حدیث عورت کو نکاح میں رضامندی کا حق دیتی ہے۔ اہل حدیث کے نزدیک عورت کی مرضی کے بغیر نکاح کرنا جائز نہیں۔"),
-        listOf("جِهَادُكُنَّ الْحَجُّ", "عورتوں کا جہاد حج ہے — صحیح البخاری: ۲۸۷۵", "عورتوں کے لیے جہاد کا متبادل حج ہے۔ یہ حدیث عورتوں کے لیے آسانی اور ان کے مقام کی نشاندہی کرتی ہے۔"),
-        listOf("أَكْمَلُ الْمُؤْمِنِينَ إِيمَانًا أَحْسَنُهُمْ خُلُقًا", "سب سے کامل ایمان والا سب سے اچھے اخلاق والا ہے — سنن الترمذی: ۱۱۶۲", "اخلاق کی اہمیت — اہل حدیث ایمان اور اخلاق کو ایک دوسرے سے منسلک سمجھتے ہیں۔"),
-        listOf("لَا يُفْرِكْ مُؤْمِنٌ مُؤْمِنَةً", "کوئی مومن کسی مومنہ سے بغض نہ رکھے — صحیح مسلم: ۱۴۶۹", "ازدواجی زندگی میں برداشت اور محبت — یہ حدیث نکاح میں عورت کے تحفظ کی تعلیم دیتی ہے۔"),
-        listOf("الرَّاحِمُونَ يَرْحَمُهُمُ الرَّحْمَنُ", "رحم کرنے والوں پر رحمٰن رحم کرتا ہے — سنن الترمذی: ۱۹۲۴", "رحم دلی کی فضیلت — اہل حدیث دوسروں پر رحم کرنے کو ایمان کی علامت مانتے ہیں۔"),
-        listOf("مَنْ كَانَ يُؤْمِنُ بِاللَّهِ وَالْيَوْمِ الْآخِرِ فَلْيَقُلْ خَيْرًا أَوْ لِيَصْمُتْ", "جو اللہ اور آخرت پر ایمان رکھتا ہے وہ بھلائی کہے یا خاموش رہے — صحیح البخاری: ۶۰۱۸", "زبانی احتیاط — اہل حدیث فضول گفتگو سے بچنے کی تعلیم دیتے ہیں۔"),
-        listOf("الْمُسْلِمُ مَنْ سَلِمَ الْمُسْلِمُونَ مِنْ لِسَانِهِ وَيَدِهِ", "مسلمان وہ ہے جس کی زبان اور ہاتھ سے دوسرے مسلمان محفوظ رہیں — صحیح البخاری: ۱۰", "مسلمان کی پہچان — اہل حدیث دوسروں کو تکلیف نہ پہنچانے کو حقیقی ایمان کی علامت مانتے ہیں۔")
+        listOf("خَيْرُكُمْ خَيْرُكُمْ لِأَهْلِهِ", "تم میں سب سے بہتر وہ ہے جو اپنے گھر والوں کے لیے بہترین ہو — سنن الترمذی: 3895", "یہ حدیث عورت کے ساتھ حسن سلوک کی بنیاد ہے۔ نبی ﷺ نے خود فرمایا کہ میں اپنے گھر والوں کے لیے سب سے بہتر ہوں۔ اہل حدیث عورتوں کے حقوق میں اس حدیث کو پیش پیش رکھتے ہیں۔"),
+        listOf("طَلَبُ الْعِلْمِ فَرِيضَةٌ عَلَى كُلِّ مُسْلِمٍ", "علم حاصل کرنا ہر مسلمان مرد اور عورت پر فرض ہے — ابن ماجہ: 224", "یہ حدیث عورت کی تعلیم کی اہمیت کو واضح کرتی ہے۔ اہل حدیث کے نزدیک عورت کو دینی اور دنیاوی تعلیم حاصل کرنے کا پورا حق ہے۔"),
+        listOf("الدُّنْيَا مَتَاعٌ وَخَيْرُ مَتَاعِ الدُّنْيَا الْمَرْأَةُ الصَّالِحَةُ", "دنیا سامان ہے اور دنیا کا بہترین سامان نیک عورت ہے — صحیح مسلم: 1467", "نیک عورت کی قدر و قیمت بیان کی گئی ہے۔ یہ حدیث عورت کی عزت اور اہمیت کو واضح کرتی ہے۔"),
+        listOf("لَا تُنْكَحُ الْأَيِّمُ حَتَّى تُسْتَأْمَرَ", "بیوہ عورت سے اس کی اجازت کے بغیر نکاح نہ کیا جائے — صحیح البخاری: 4846", "یہ حدیث عورت کو نکاح میں رضامندی کا حق دیتی ہے۔ اہل حدیث کے نزدیک عورت کی مرضی کے بغیر نکاح کرنا جائز نہیں۔"),
+        listOf("جِهَادُكُنَّ الْحَجُّ", "عورتوں کا جہاد حج ہے — صحیح البخاری: 2875", "عورتوں کے لیے جہاد کا متبادل حج ہے۔ یہ حدیث عورتوں کے لیے آسانی اور ان کے مقام کی نشاندہی کرتی ہے۔"),
+        listOf("أَكْمَلُ الْمُؤْمِنِينَ إِيمَانًا أَحْسَنُهُمْ خُلُقًا", "سب سے کامل ایمان والا سب سے اچھے اخلاق والا ہے — سنن الترمذی: 1162", "اخلاق کی اہمیت — اہل حدیث ایمان اور اخلاق کو ایک دوسرے سے منسلک سمجھتے ہیں۔"),
+        listOf("لَا يُفْرِكْ مُؤْمِنٌ مُؤْمِنَةً", "کوئی مومن کسی مومنہ سے بغض نہ رکھے — صحیح مسلم: 1469", "ازدواجی زندگی میں برداشت اور محبت — یہ حدیث نکاح میں عورت کے تحفظ کی تعلیم دیتی ہے۔"),
+        listOf("الرَّاحِمُونَ يَرْحَمُهُمُ الرَّحْمَنُ", "رحم کرنے والوں پر رحمٰن رحم کرتا ہے — سنن الترمذی: 1924", "رحم دلی کی فضیلت — اہل حدیث دوسروں پر رحم کرنے کو ایمان کی علامت مانتے ہیں۔"),
+        listOf("مَنْ كَانَ يُؤْمِنُ بِاللَّهِ وَالْيَوْمِ الْآخِرِ فَلْيَقُلْ خَيْرًا أَوْ لِيَصْمُتْ", "جو اللہ اور آخرت پر ایمان رکھتا ہے وہ بھلائی کہے یا خاموش رہے — صحیح البخاری: 6018", "زبانی احتیاط — اہل حدیث فضول گفتگو سے بچنے کی تعلیم دیتے ہیں۔"),
+        listOf("الْمُسْلِمُ مَنْ سَلِمَ الْمُسْلِمُونَ مِنْ لِسَانِهِ وَيَدِهِ", "مسلمان وہ ہے جس کی زبان اور ہاتھ سے دوسرے مسلمان محفوظ رہیں — صحیح البخاری: 10", "مسلمان کی پہچان — اہل حدیث دوسروں کو تکلیف نہ پہنچانے کو حقیقی ایمان کی علامت مانتے ہیں۔")
     )
     private val parentingData = listOf(
         listOf("ولادت کے بعد اذان", "بچے کی پیدائش کے فوراً بعد دائیں کان میں اذان اور بائیں میں اقامت کہنا سنت ہے۔", "سنن الترمذی"),
@@ -1312,42 +1475,42 @@ class MainActivity : ComponentActivity() {
     private val taharahData = listOf(
         listOf("استنجاء کا طریقہ", "پیشاب اور پاخانے کے بعد پانی سے استنجاء کرنا سنت ہے۔ پانی نہ ہو تو پتھر یا ٹشو سے صفائی کر سکتے ہیں۔ پیشاب کے چھینٹوں سے بچنا ضروری ہے کیونکہ قبر کا عذاب اکثر پیشاب کی وجہ سے ہوتا ہے۔", "صحیح البخاری"),
         listOf("مسواک کی فضیلت", "مسواک کرنا سنت ہے — منہ کی صفائی اور اللہ کی خوشنودی کا ذریعہ۔ نبی ﷺ ہر نماز سے پہلے مسواک کرتے تھے۔", "صحیح البخاری"),
-        listOf("وضو کے فرائض", "وضو کے چار فرائض ہیں: (۱) چہرہ دھونا (۲) ہاتھ کہنیوں تک دھونا (۳) سر کا مسح (۴) پاؤں ٹخنوں تک دھونا۔", "المائدہ ۵:۶"),
-        listOf("غسل کے فرائض", "غسل کے تین فرائض ہیں: (۱) کلی کرنا (۲) ناک میں پانی ڈالنا (۳) پورے جسم پر پانی بہانا۔ غسل جنابت، حیض اور نفاس کے بعد فرض ہے۔", "صحیح البخاری"),
-        listOf("تیمم کا طریقہ", "پانی نہ ہو یا بیماری ہو تو تیمم کیا جا سکتا ہے — صاف مٹی سے چہرہ اور ہاتھوں کا مسح۔ تیمم میں پانی کی طرح کے احکام ہیں۔", "النساء ۴:۴۳"),
+        listOf("وضو کے فرائض", "وضو کے چار فرائض ہیں: (1) چہرہ دھونا (2) ہاتھ کہنیوں تک دھونا (3) سر کا مسح (4) پاؤں ٹخنوں تک دھونا۔", "المائدہ 5:6"),
+        listOf("غسل کے فرائض", "غسل کے تین فرائض ہیں: (1) کلی کرنا (2) ناک میں پانی ڈالنا (3) پورے جسم پر پانی بہانا۔ غسل جنابت، حیض اور نفاس کے بعد فرض ہے۔", "صحیح البخاری"),
+        listOf("تیمم کا طریقہ", "پانی نہ ہو یا بیماری ہو تو تیمم کیا جا سکتا ہے — صاف مٹی سے چہرہ اور ہاتھوں کا مسح۔ تیمم میں پانی کی طرح کے احکام ہیں۔", "النساء 4:43"),
         listOf("ناک میں پانی ڈالنا", "وضو میں ناک میں پانی ڈالنا (استنشاق) سنت ہے — تین بار دائیں ہاتھ سے پانی ڈال کر بائیں سے نکالیں۔ روزہ دار ایسا نہ کرے۔", "صحیح البخاری"),
         listOf("دائیں سے شروع کرنا", "طہارت میں دائیں طرف سے شروع کرنا سنت ہے — ہاتھ، پاؤں دہنی طرف سے دھوئیں۔", "صحیح البخاری"),
         listOf("وضو کے بعد کی دعا", "وضو کے بعد یہ دعا پڑھیں: 'أشهد أن لا إله إلا اللہ وأشهد أن محمدا عبده ورسوله' — اس کے لیے جنت کے آٹھ دروازے کھول دیے جاتے ہیں۔", "صحیح مسلم")
     )
     private val seerahData = listOf(
         listOf("نبی ﷺ کی ولادت", "نبی ﷺ کی ولادت عام الفیل (ہاتھی کے سال) میں مکہ میں ہوئی۔ آپ ﷺ کی پیدائش سے پہلے آپ کے والد عبداللہ کا انتقال ہو گیا تھا۔", "سیرت ابن ہشام"),
-        listOf("نبوت سے پہلے کی زندگی", "آپ ﷺ امانت اور سچائی میں مشہور تھے۔ لوگ آپ کو 'الصادق الأمین' کہتے تھے۔ ۲۵ سال کی عمر میں خدیجہ سے نکاح ہوا۔", "صحیح البخاری"),
-        listOf("پہلی وحی", "۴۰ سال کی عمر میں غار حرا میں پہلی وحی نازل ہوئی — 'اقْرَأْ بِاسْمِ رَبِّكَ الَّذِي خَلَقَ'۔ خدیجہ اور ورقة بن نوفل نے تصدیق کی۔", "صحیح البخاری"),
+        listOf("نبوت سے پہلے کی زندگی", "آپ ﷺ امانت اور سچائی میں مشہور تھے۔ لوگ آپ کو 'الصادق الأمین' کہتے تھے۔ 25 سال کی عمر میں خدیجہ سے نکاح ہوا۔", "صحیح البخاری"),
+        listOf("پہلی وحی", "40 سال کی عمر میں غار حرا میں پہلی وحی نازل ہوئی — 'اقْرَأْ بِاسْمِ رَبِّكَ الَّذِي خَلَقَ'۔ خدیجہ اور ورقة بن نوفل نے تصدیق کی۔", "صحیح البخاری"),
         listOf("ہجرت حبشہ", "مشرکین کے ظلم سے بچنے کے لیے صحابہ نے حبشہ کی طرف ہجرت کی۔ یہ پہلی ہجرت تھی جس میں عورتیں اور بچے شامل تھے۔", "سیرت ابن ہشام"),
-        listOf("ہجرت مدینہ", "۱۳ سال کی دعوت کے بعد اللہ نے مدینہ کی طرف ہجرت کا حکم دیا۔ آپ ﷺ نے مسجد قبا بنائی اور پھر مسجد نبوی تعمیر کی۔", "صحیح البخاری"),
-        listOf("غزوہ بدر", "پہلا بڑا غزوہ — ۳۱۳ مسلمانوں نے ۱۰۰۰ مشرکین کا مقابلہ کیا اور اللہ کی مدد سے فتح پائی۔", "صحیح البخاری"),
-        listOf("فتح مکہ", "۸ ہجری میں مکہ فتح ہوا — آپ ﷺ نے عام معافی کا اعلان کیا اور بتوں کو توڑا۔ یہ رحمت اور عفو کا عظیم دن تھا۔", "صحیح البخاری"),
-        listOf("حجۃ الوداع", "۱۰ ہجری میں آپ ﷺ نے آخری حج کیا — جس میں خطبہ حجۃ الوداع دیا اور عورتوں کے حقوق کی تاکید کی۔", "صحیح البخاری"),
+        listOf("ہجرت مدینہ", "13 سال کی دعوت کے بعد اللہ نے مدینہ کی طرف ہجرت کا حکم دیا۔ آپ ﷺ نے مسجد قبا بنائی اور پھر مسجد نبوی تعمیر کی۔", "صحیح البخاری"),
+        listOf("غزوہ بدر", "پہلا بڑا غزوہ — 313 مسلمانوں نے 1000 مشرکین کا مقابلہ کیا اور اللہ کی مدد سے فتح پائی۔", "صحیح البخاری"),
+        listOf("فتح مکہ", "8 ہجری میں مکہ فتح ہوا — آپ ﷺ نے عام معافی کا اعلان کیا اور بتوں کو توڑا۔ یہ رحمت اور عفو کا عظیم دن تھا۔", "صحیح البخاری"),
+        listOf("حجۃ الوداع", "10 ہجری میں آپ ﷺ نے آخری حج کیا — جس میں خطبہ حجۃ الوداع دیا اور عورتوں کے حقوق کی تاکید کی۔", "صحیح البخاری"),
         listOf("نبی ﷺ کا اخلاق", "نبی ﷺ کا اخلاق قرآن تھا۔ آپ ﷺ نہ کبھی غصے میں بدلہ لیتے تھے اور نہ کسی کو ذلیل کرتے۔", "صحیح مسلم"),
-        listOf("نبی ﷺ کا انتقال", "۱۱ ہجری میں ۶۳ سال کی عمر میں نبی ﷺ کا انتقال ہوا۔ آپ ﷺ کی وفات سے پہلے قرآن مکمل ہو چکا تھا اور دین مکمل ہو چکا تھا۔", "صحیح البخاری")
+        listOf("نبی ﷺ کا انتقال", "11 ہجری میں 63 سال کی عمر میں نبی ﷺ کا انتقال ہوا۔ آپ ﷺ کی وفات سے پہلے قرآن مکمل ہو چکا تھا اور دین مکمل ہو چکا تھا۔", "صحیح البخاری")
     )
     private val fadailData = listOf(
-        listOf("سورۃ الاخلاص کا ثواب", "سورۃ الاخلاص پڑھنا قرآن کے تہائی حصے کے برابر ہے — آپ ﷺ نے فرمایا: 'قُلْ هُوَ اللَّهُ أَحَدٌ قرآن کے تہائی حصے کے برابر ہے'", "صحیح البخاری: ۵۰۱۵"),
-        listOf("سبحان اللہ وبحمده کا ثواب", "جو دن میں ۱۰۰ بار 'سُبْحَانَ اللَّهِ وَبِحَمْدِهِ' پڑھے گا اس کے گناہ معاف کر دیے جائیں گے اگرچہ سمندر کے جھاگ کے برابر ہوں۔", "صحیح البخاری: ۶۴۰۵"),
-        listOf("دس آیتیں پڑھنے کا ثواب", "جو رات میں سورۃ البقرہ کی آخری دو آیتیں پڑھے گا وہ اس کے لیے کافی ہوں گی — یہ بہت بڑی فضیلت ہے۔", "صحیح البخاری: ۵۰۰۸"),
-        listOf("جماعت سے نماز کا ثواب", "جماعت سے نماز پڑھنے کا ثواب اکیلے پڑھنے سے ۲۷ گنا زیادہ ہے۔", "صحیح البخاری: ۶۴۵"),
-        listOf("صدقہ کی فضیلت", "صدقہ مال کو کم نہیں کرتا بلکہ بڑھاتا ہے۔ نبی ﷺ نے فرمایا: صدقہ دینے والے کا مال کم نہیں ہوتا۔", "صحیح مسلم: ۲۵۸۸"),
-        listOf("ذکر کی فضیلت", "نبی ﷺ نے فرمایا: اللہ کے ذکر کرنے والے اور نہ کرنے والے کی مثال زندہ اور مردہ جیسی ہے۔", "صحیح البخاری: ۶۴۰۷"),
-        listOf("والدین کی خدمت", "نبی ﷺ نے فرمایا: والدین کی خدمت جہاد سے افضل ہے — ایک شخص نے والدین کی خدمت کی اجازت مانگی تو آپ ﷺ نے فرمایا: ان کی خدمت کرو۔", "صحیح البخاری: ۵۹۷۲"),
-        listOf("صلہ رحمی", "نبی ﷺ نے فرمایا: رحمی تعلقات کو جوڑنا ایمان کی علامت ہے اور اس سے رزق میں وسعت اور عمر میں برکت ہوتی ہے۔", "صحیح البخاری: ۵۹۸۵"),
-        listOf("درود کی فضیلت", "جو ایک بار مجھ پر درود بھیجے اللہ اس پر دس رحمتیں نازل فرماتا ہے۔", "صحیح مسلم: ۳۸۴"),
-        listOf("روزہ کی فضیلت", "نبی ﷺ نے فرمایا: جو رمضان کے روزے ایمان اور احتساب کے ساتھ رکھے اس کے پچھلے گناہ معاف کر دیے جاتے ہیں۔", "صحیح البخاری: ۳۸")
+        listOf("سورۃ الاخلاص کا ثواب", "سورۃ الاخلاص پڑھنا قرآن کے تہائی حصے کے برابر ہے — آپ ﷺ نے فرمایا: 'قُلْ هُوَ اللَّهُ أَحَدٌ قرآن کے تہائی حصے کے برابر ہے'", "صحیح البخاری: 5015"),
+        listOf("سبحان اللہ وبحمده کا ثواب", "جو دن میں 100 بار 'سُبْحَانَ اللَّهِ وَبِحَمْدِهِ' پڑھے گا اس کے گناہ معاف کر دیے جائیں گے اگرچہ سمندر کے جھاگ کے برابر ہوں۔", "صحیح البخاری: 6405"),
+        listOf("دس آیتیں پڑھنے کا ثواب", "جو رات میں سورۃ البقرہ کی آخری دو آیتیں پڑھے گا وہ اس کے لیے کافی ہوں گی — یہ بہت بڑی فضیلت ہے۔", "صحیح البخاری: 5008"),
+        listOf("جماعت سے نماز کا ثواب", "جماعت سے نماز پڑھنے کا ثواب اکیلے پڑھنے سے 27 گنا زیادہ ہے۔", "صحیح البخاری: 645"),
+        listOf("صدقہ کی فضیلت", "صدقہ مال کو کم نہیں کرتا بلکہ بڑھاتا ہے۔ نبی ﷺ نے فرمایا: صدقہ دینے والے کا مال کم نہیں ہوتا۔", "صحیح مسلم: 2588"),
+        listOf("ذکر کی فضیلت", "نبی ﷺ نے فرمایا: اللہ کے ذکر کرنے والے اور نہ کرنے والے کی مثال زندہ اور مردہ جیسی ہے۔", "صحیح البخاری: 6407"),
+        listOf("والدین کی خدمت", "نبی ﷺ نے فرمایا: والدین کی خدمت جہاد سے افضل ہے — ایک شخص نے والدین کی خدمت کی اجازت مانگی تو آپ ﷺ نے فرمایا: ان کی خدمت کرو۔", "صحیح البخاری: 5972"),
+        listOf("صلہ رحمی", "نبی ﷺ نے فرمایا: رحمی تعلقات کو جوڑنا ایمان کی علامت ہے اور اس سے رزق میں وسعت اور عمر میں برکت ہوتی ہے۔", "صحیح البخاری: 5985"),
+        listOf("درود کی فضیلت", "جو ایک بار مجھ پر درود بھیجے اللہ اس پر دس رحمتیں نازل فرماتا ہے۔", "صحیح مسلم: 384"),
+        listOf("روزہ کی فضیلت", "نبی ﷺ نے فرمایا: جو رمضان کے روزے ایمان اور احتساب کے ساتھ رکھے اس کے پچھلے گناہ معاف کر دیے جاتے ہیں۔", "صحیح البخاری: 38")
     )
     private val dawahData = listOf(
-        listOf("نرمی سے دعوت", "نبی ﷺ نے فرمایا: نرمی جس چیز میں بھی ہو اسے زینت دیتی ہے اور سختی جس چیز میں بھی ہو اسے بدصورت بنا دیتی ہے۔", "صحیح مسلم: ۲۵۹۴"),
-        listOf("حکمت سے دعوت", "اللہ فرماتا ہے: اپنے رب کے راستے کی طرف حکمت اور اچھی نصیحت سے بلاؤ — حکمت یعنی دلیل اور علم سے دعوت دینا۔", "النحل ۱۶:۱۲۵"),
-        listOf("صبر سے دعوت", "نبی ﷺ نے ۱۳ سال مکہ میں صبر سے دعوت دی۔ آج بھی ہمیں صبر اور تحمل سے کام لینا چاہیے۔", "صحیح البخاری"),
-        listOf("عمل سے دعوت", "سب سے بہتر دعوت عمل ہے — لوگوں کو اپنے اچھے اخلاق اور عمل سے متاثر کریں۔", "الصف ۶۱:۲-۳"),
+        listOf("نرمی سے دعوت", "نبی ﷺ نے فرمایا: نرمی جس چیز میں بھی ہو اسے زینت دیتی ہے اور سختی جس چیز میں بھی ہو اسے بدصورت بنا دیتی ہے۔", "صحیح مسلم: 2594"),
+        listOf("حکمت سے دعوت", "اللہ فرماتا ہے: اپنے رب کے راستے کی طرف حکمت اور اچھی نصیحت سے بلاؤ — حکمت یعنی دلیل اور علم سے دعوت دینا۔", "النحل 16:125"),
+        listOf("صبر سے دعوت", "نبی ﷺ نے 13 سال مکہ میں صبر سے دعوت دی۔ آج بھی ہمیں صبر اور تحمل سے کام لینا چاہیے۔", "صحیح البخاری"),
+        listOf("عمل سے دعوت", "سب سے بہتر دعوت عمل ہے — لوگوں کو اپنے اچھے اخلاق اور عمل سے متاثر کریں۔", "الصف 61:2-3"),
         listOf("عورت کی دعوت", "عورتیں گھر میں، محلے میں اور رشتہ داروں میں دعوت کا بہترین ذریعہ ہیں۔ اپنی سہیلیوں اور رشتہ داروں کو نرمی سے سمجھائیں۔", "فتاویٰ ابن باز"),
         listOf("غلطی پر صبر", "نبی ﷺ نے فرمایا: جو لوگوں کی غلطیوں کو معاف کرے گا اللہ اسے عزت دے گا۔ دعوت میں غلطیوں پر صبر کرنا چاہیے۔", "صحیح مسلم"),
         listOf("سوشل میڈیا دعوت", "اچھی باتیں شیئر کریں — ایک حدیث یا آیت بھی بہت اثر ڈال سکتی ہے۔ لیکن صرف صحیح اور مستند مواد ہی پھیلائیں۔", "صحیح البخاری"),
@@ -1355,13 +1518,13 @@ class MainActivity : ComponentActivity() {
     )
     private val economyData = listOf(
         listOf("حلال کمائی", "نبی ﷺ نے فرمایا: حلال کمائی فرض ہے اور جو اللہ سے ڈرتے ہوئے حلال کمائے گا اللہ اسے برکت دے گا۔", "صحیح البخاری"),
-        listOf("سود سے بچنا", "سود حرام ہے — اللہ نے سود کو حرام کیا ہے اور تجارت کو حلال۔ اہل حدیث ہر قسم کے سود (bank interest) سے بچتے ہیں۔", "البقرہ ۲:۲۷۵"),
+        listOf("سود سے بچنا", "سود حرام ہے — اللہ نے سود کو حرام کیا ہے اور تجارت کو حلال۔ اہل حدیث ہر قسم کے سود (bank interest) سے بچتے ہیں۔", "البقرہ 2:275"),
         listOf("بچت کی عادت", "نبی ﷺ نے فرمایا: جو شخص اپنی کمائی میں سے بچت کرے گا اللہ اس میں برکت ڈالے گا۔ فضول خرچی سے بچیں اور ضرورت کے مطابق خرچ کریں۔", "فتاویٰ ابن باز"),
         listOf("قرض سے بچنا", "نبی ﷺ قرض سے پناہ مانگتے تھے — قرض انسان کو پریشان اور ذلیل کر دیتا ہے۔ ضرورت سے زیادہ قرض لینے سے بچیں۔", "صحیح البخاری"),
-        listOf("بیوی کی کمائی", "عورت کی اپنی کمائی پر مکمل حق ہے — شوہر اسے زبردستی نہیں لے سکتا۔ عورت اپنی کمائی خود خرچ کر سکتی ہے۔", "النساء ۴:۳۲"),
+        listOf("بیوی کی کمائی", "عورت کی اپنی کمائی پر مکمل حق ہے — شوہر اسے زبردستی نہیں لے سکتا۔ عورت اپنی کمائی خود خرچ کر سکتی ہے۔", "النساء 4:32"),
         listOf("صدقہ کی برکت", "نبی ﷺ نے فرمایا: صدقہ مال کو کم نہیں کرتا بلکہ بڑھاتا ہے — جو صدقہ دیتا ہے اللہ اس کے مال میں برکت ڈالتا ہے۔", "صحیح مسلم"),
         listOf("گھریلو بجٹ", "ماہانہ بجٹ بنائیں — آمدنی کے مطابق خرچ کریں۔ ضرورت اور خواہش میں فرق کریں۔ غیر ضروری اشیاء سے بچیں۔", "فتاویٰ اللجنة الدائمة"),
-        listOf("شکر کی برکت", "اللہ فرماتا ہے: اگر شکر کرو گے تو میں تمہیں زیادہ دوں گا — مال کی برکت کے لیے شکر ادا کریں اور اللہ سے دعا کریں۔", "ابراہیم ۱۴:۷")
+        listOf("شکر کی برکت", "اللہ فرماتا ہے: اگر شکر کرو گے تو میں تمہیں زیادہ دوں گا — مال کی برکت کے لیے شکر ادا کریں اور اللہ سے دعا کریں۔", "ابراہیم 14:7")
     )
     private var sessionPlaying = false
     private var sessionStepIndex = 0
@@ -1418,31 +1581,65 @@ class MainActivity : ComponentActivity() {
             title.text = taharahData[idx][0]; content.text = taharahData[idx][1]; source.text = taharahData[idx][2]
         }
     }
-    private fun setupGuidedSessions(wellness: View) {
+    private fun setupGuidedSessions(view: View) {
         val allSessions = sessions.getAllSessions()
         if (allSessions.isEmpty()) return
-        sessionType = allSessions[0].type
-        wellness.findViewById<TextView>(R.id.guidedSessionTitle).text = allSessions[0].title
-        wellness.findViewById<TextView>(R.id.guidedSessionDesc).text = allSessions[0].description
-        wellness.findViewById<TextView>(R.id.guidedSessionNext).setOnClickListener {
-            var idx = sessions.getAllSessions().indexOfFirst { it.type == sessionType }
-            idx = (idx + 1) % sessions.getAllSessions().size
-            sessionType = sessions.getAllSessions()[idx].type
-            val s = sessions.getAllSessions()[idx]
-            wellness.findViewById<TextView>(R.id.guidedSessionTitle).text = s.title
-            wellness.findViewById<TextView>(R.id.guidedSessionDesc).text = s.description
+
+        val titleView = view.findViewById<TextView>(R.id.guidedSessionTitle)
+        val descView = view.findViewById<TextView>(R.id.guidedSessionDesc)
+        val durationView = view.findViewById<TextView>(R.id.guidedSessionDuration)
+
+        val chipIds = listOf(
+            R.id.guidedChipTfakkur to SessionType.TFAKKUR,
+            R.id.guidedChipIstigfar to SessionType.ISTIGFAR,
+            R.id.guidedChipShukr to SessionType.SHUKR,
+            R.id.guidedChipTawbah to SessionType.TAWBAH,
+            R.id.guidedChipSabr to SessionType.SABR,
+            R.id.guidedChipTawakkul to SessionType.TAWAKKUL
+        )
+
+        fun selectSession(type: SessionType) {
+            sessionType = type
+            val s = sessions.getSession(type) ?: return
+            titleView.text = s.title
+            descView.text = s.description
+            durationView.text = "⏱ ${s.totalDurationMinutes} منٹ • ${s.steps.size} مراحل"
+
+            for ((id, t) in chipIds) {
+                val chip = view.findViewById<TextView>(id)
+                if (t == type) {
+                    chip.setTextColor(0xFFD4AF6A.toInt())
+                    chip.setBackgroundResource(R.drawable.chip_selected)
+                } else {
+                    chip.setTextColor(0xFF8B7355.toInt())
+                    chip.setBackgroundResource(R.drawable.chip_unselected)
+                }
+            }
         }
-        wellness.findViewById<TextView>(R.id.guidedSessionStart).setOnClickListener {
+
+        selectSession(allSessions[0].type)
+
+        for ((id, t) in chipIds) {
+            view.findViewById<TextView>(id).setOnClickListener { selectSession(t) }
+        }
+
+        view.findViewById<TextView>(R.id.guidedSessionNext).setOnClickListener {
+            var idx = allSessions.indexOfFirst { it.type == sessionType }
+            idx = (idx + 1) % allSessions.size
+            selectSession(allSessions[idx].type)
+        }
+
+        view.findViewById<TextView>(R.id.guidedSessionStart).setOnClickListener {
             val intent = Intent(this, GuidedSessionActivity::class.java)
             intent.putExtra("session_type", sessionType.name)
             startActivity(intent)
         }
     }
     private fun setupHaidhTracker(wellness: View) {
-        wellness.findViewById<TextView>(R.id.haidhHeroOpenBtn).setOnClickListener {
+        wellness.findViewById<LinearLayout>(R.id.haidhHeroCard).setOnClickListener {
             startActivity(Intent(this, HaidhTrackerActivity::class.java))
         }
-        wellness.findViewById<TextView>(R.id.openHaidhTracker).setOnClickListener {
+        wellness.findViewById<TextView>(R.id.haidhHeroOpenBtn).setOnClickListener {
             startActivity(Intent(this, HaidhTrackerActivity::class.java))
         }
         val statusPrefs = getSharedPreferences("haidh_status", MODE_PRIVATE)
@@ -1462,8 +1659,7 @@ class MainActivity : ComponentActivity() {
             }
             val stateText = if (selectedKey == "haidh") Localization.haidhState else Localization.tuhrState
             wellness.findViewById<TextView>(R.id.haidhHeroState).text = stateText
-            wellness.findViewById<TextView>(R.id.haidhStateText).text = stateText
-            val exerciseAdvice = if (selectedKey == "haidh") "ہلکی چہل قدمی — ۲۰-۳۰ منٹ، آرام کریں" else "پوری ورزش جائز ہے — ۴۵ منٹ"
+            val exerciseAdvice = if (selectedKey == "haidh") "ہلکی چہل قدمی — 20-30 منٹ، آرام کریں" else "پوری ورزش جائز ہے — 45 منٹ"
             wellness.findViewById<TextView>(R.id.exerciseDesc).text = exerciseAdvice
         }
         val savedStatus = statusPrefs.getString("current_status", "tuhr") ?: "tuhr"
@@ -1479,7 +1675,6 @@ class MainActivity : ComponentActivity() {
         val missedFasts = prefs.getInt("missed_fasts", 0)
         val qadaPrayers = prefs.getInt("qada_prayers", 0)
         val qadaFasts = prefs.getInt("qada_fasts", 0)
-        wellness.findViewById<TextView>(R.id.qadaBankText).text = String.format(Localization.qadaBankFormat, missedFasts - qadaFasts, missedPrayers - qadaPrayers)
         wellness.findViewById<TextView>(R.id.haidhHeroQada).text = "روزے: ${missedFasts - qadaFasts} | نماز: ${missedPrayers - qadaPrayers}"
         val cyclePrefs = getSharedPreferences("haidh_tracker", MODE_PRIVATE)
         val lastHaidhStart = cyclePrefs.getString("last_haidh_start", "") ?: ""
@@ -1497,45 +1692,6 @@ class MainActivity : ComponentActivity() {
                     else "⏳ $nextPeriod دن باقی"
             } catch (_: Exception) {}
         }
-    }
-    private fun setupFocusBlocks(wellness: View) {
-        wellness.findViewById<TextView>(R.id.focus5min).setOnClickListener {
-            focusEngine.stopSession()
-            wellness.findViewById<TextView>(R.id.focus5min).setTextColor(getColor(R.color.primaryGold))
-            wellness.findViewById<TextView>(R.id.focus5min).setBackgroundResource(R.drawable.chip_selected)
-            wellness.findViewById<TextView>(R.id.focus10min).setTextColor(getColor(R.color.bronze))
-            wellness.findViewById<TextView>(R.id.focus10min).setBackgroundResource(R.drawable.chip_unselected)
-        }
-        wellness.findViewById<TextView>(R.id.focus10min).setOnClickListener {
-            focusEngine.stopSession()
-            wellness.findViewById<TextView>(R.id.focus10min).setTextColor(getColor(R.color.primaryGold))
-            wellness.findViewById<TextView>(R.id.focus10min).setBackgroundResource(R.drawable.chip_selected)
-            wellness.findViewById<TextView>(R.id.focus5min).setTextColor(getColor(R.color.bronze))
-            wellness.findViewById<TextView>(R.id.focus5min).setBackgroundResource(R.drawable.chip_unselected)
-        }
-        wellness.findViewById<TextView>(R.id.focusLineText).setOnClickListener {
-            if (focusEngine.isSessionRunning) {
-                focusEngine.stopSession()
-                wellness.findViewById<TextView>(R.id.focusLineText).text = focusEngine.currentItem.text
-                wellness.findViewById<TextView>(R.id.focusProgressText).text = "⏳ 0% مکمل"
-                Toast.makeText(this, "فوکس سیشن ختم", Toast.LENGTH_SHORT).show()
-            } else {
-                val dur = if (wellness.findViewById<TextView>(R.id.focus5min).currentTextColor == getColor(R.color.primaryGold)) 5 else 10
-                focusEngine.startSession(dur,
-                    onTick = { progress, timeLeft ->
-                        wellness.findViewById<TextView>(R.id.focusProgressText).text = "⏳ $progress% — $timeLeft"
-                    },
-                    onFinish = {
-                        runOnUiThread {
-                            wellness.findViewById<TextView>(R.id.focusProgressText).text = "✅ سیشن مکمل!"
-                            wellness.findViewById<TextView>(R.id.focusLineText).text = focusEngine.nextItem().text
-                            vibrateClick(); showConfetti(); ibadatStateEngine.addBonusScore(5); updateIbadatUI(homeTabRoot)
-                        }
-                    }
-                )
-            }
-        }
-        wellness.findViewById<TextView>(R.id.focusLineText).text = focusEngine.currentItem.text
     }
     private fun setupSujoodSahw(wellness: View) {
         wellness.findViewById<TextView>(R.id.openSujoodSahw).setOnClickListener {
@@ -1583,6 +1739,26 @@ class MainActivity : ComponentActivity() {
         setupStats(more)
         setupRewardDashboard(more)
     }
+    private fun setupQuranTab(root: View) {
+        if (quranTabSetup == null) {
+            quranTabSetup = QuranTabSetup(this)
+        }
+        quranTabSetup?.setup(root)
+    }
+    private fun showMoreContentInSheet(type: Int) {
+        val sheet = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+        val moreSheetRoot = layoutInflater.inflate(R.layout.more_tab, null)
+        sheet.setContentView(moreSheetRoot)
+        when (type) {
+            0 -> setupComparativeFiqh(moreSheetRoot)
+            1 -> setupFiqhScenarios(moreSheetRoot)
+            2 -> setupSeerah(moreSheetRoot)
+            3 -> setupFadail(moreSheetRoot)
+            4 -> setupDawah(moreSheetRoot)
+            5 -> setupEconomy(moreSheetRoot)
+        }
+        sheet.show()
+    }
     private fun setupQuiz(more: View) {
         more.findViewById<View>(R.id.startQuizBtn).setOnClickListener {
             startActivity(Intent(this, islamic.duas.quiz.QuizActivity::class.java))
@@ -1615,22 +1791,26 @@ class MainActivity : ComponentActivity() {
                 }
                 val arabicTv = TextView(this).apply {
                     text = ev.arabic
-                    textSize = 16f
-                    setTextColor(0xFFF0EDE8.toInt())
+                    textSize = 18f
+                    setTextColor(0xFFE8C547.toInt())
                     gravity = android.view.Gravity.END
-                    typeface = android.graphics.Typeface.SERIF
+                    typeface = try {
+                        androidx.core.content.res.ResourcesCompat.getFont(this@MainActivity, R.font.scheherazade_new)
+                    } catch (_: Exception) {
+                        Typeface.DEFAULT
+                    }
                 }
                 card.addView(arabicTv)
                 val transTv = TextView(this).apply {
                     text = ev.translation
-                    textSize = 11f
+                    textSize = 13f
                     setTextColor(0xFFC9A961.toInt())
                     setPadding(0, 4, 0, 0)
                 }
                 card.addView(transTv)
                 val analysisTv = TextView(this).apply {
                     text = ev.analysis
-                    textSize = 10.5f
+                    textSize = 12.5f
                     setTextColor(0xFFE0DDD8.toInt())
                     setPadding(0, 6, 0, 0)
                     visibility = View.GONE
@@ -1638,7 +1818,7 @@ class MainActivity : ComponentActivity() {
                 card.addView(analysisTv)
                 val sourceTv = TextView(this).apply {
                     text = "— ${ev.source}"
-                    textSize = 9f
+                    textSize = 11f
                     setTextColor(0xFF8B7355.toInt())
                     gravity = android.view.Gravity.END
                     setPadding(0, 4, 0, 0)
@@ -1647,7 +1827,7 @@ class MainActivity : ComponentActivity() {
                 card.addView(sourceTv)
                 val toggleBtn = TextView(this).apply {
                     text = "📖 تجزیہ دیکھیں"
-                    textSize = 10f
+                    textSize = 12f
                     setTextColor(0xFFD4AF37.toInt())
                     gravity = android.view.Gravity.CENTER
                     setPadding(0, 6, 0, 0)
@@ -1674,20 +1854,45 @@ class MainActivity : ComponentActivity() {
         val navView = findViewById<NavigationView>(R.id.navView)
         navView.setNavigationItemSelectedListener { item ->
             when (item.itemId) {
-                R.id.nav_home -> { showTab(0); binding.bottomNav.selectedItemId = R.id.nav_home }
                 R.id.nav_weather -> { startActivity(Intent(this, WeatherDetailActivity::class.java)) }
+                R.id.nav_quran -> { showTab(4); binding.bottomNav.selectedItemId = R.id.nav_quran }
+                R.id.nav_quiz -> { startActivity(Intent(this, islamic.duas.quiz.QuizActivity::class.java)) }
                 R.id.nav_azkar -> { showTab(1); binding.bottomNav.selectedItemId = R.id.nav_azkar }
                 R.id.nav_wellness -> { showTab(2); binding.bottomNav.selectedItemId = R.id.nav_wellness }
                 R.id.nav_huqooq -> { showTab(3); binding.bottomNav.selectedItemId = R.id.nav_huqooq }
-                R.id.nav_quiz -> { startActivity(Intent(this, islamic.duas.quiz.QuizActivity::class.java)) }
-                R.id.nav_medicine -> { startActivity(Intent(this, MedicineTrackerActivity::class.java)) }
-                R.id.nav_exercise -> { startActivity(Intent(this, ExerciseLogActivity::class.java)) }
+                R.id.nav_medicine_direct -> { showTab(2); binding.bottomNav.selectedItemId = R.id.nav_wellness }
+                R.id.nav_exercise -> { showTab(2); binding.bottomNav.selectedItemId = R.id.nav_wellness }
                 R.id.nav_haidh -> { startActivity(Intent(this, HaidhTrackerActivity::class.java)) }
-                R.id.nav_more -> { showTab(4); binding.bottomNav.selectedItemId = R.id.nav_more }
+                R.id.nav_notification_settings -> { showNotificationSettingsDialog() }
             }
             drawer.closeDrawer(GravityCompat.START)
             true
         }
+    }
+
+    private fun showMoreMenuDialog() {
+        val items = arrayOf(
+            "📚 تقابلی فقہ",
+            "❓ فقہی سوالات",
+            "🕋 سیرت النبی ﷺ",
+            "✨ فضائل اعمال",
+            "📢 دعوتی نکات",
+            "💰 گھریلو معیشت"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("☰ مزید")
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> showMoreContentInSheet(0)
+                    1 -> showMoreContentInSheet(1)
+                    2 -> showMoreContentInSheet(2)
+                    3 -> showMoreContentInSheet(3)
+                    4 -> showMoreContentInSheet(4)
+                    5 -> showMoreContentInSheet(5)
+                }
+            }
+            .setNegativeButton("منسوخ", null)
+            .show()
     }
     private fun setupComparativeFiqh(more: View) {
         val topics = fiqhData.topics
@@ -1728,7 +1933,7 @@ class MainActivity : ComponentActivity() {
         s.options.forEach { opt ->
             val tv = TextView(this).apply {
                 text = opt.label
-                textSize = 12f
+                textSize = 14f
                 setTextColor(0xFFE0DDD8.toInt())
                 setBackgroundResource(R.drawable.rounded_bg)
                 setPadding(12, 10, 12, 10)
@@ -1892,7 +2097,7 @@ class MainActivity : ComponentActivity() {
                 val times = try { prayerEngine.calculatePrayerTimes() } catch (_: Exception) { null }
                 if (times != null) cachedPrayerTimes = times
                 val isAzkarInflated = tabRoots[1] != null
-                val isMoreInflated = tabRoots[4] != null
+                val isQuranInflated = tabRoots[4] != null
 
                 // Heavy prayer-time calc done on IO; apply UI on main thread.
                 withContext(Dispatchers.Main) {
@@ -1915,8 +2120,9 @@ class MainActivity : ComponentActivity() {
                             setupMorningAzkar(azkar)
                             setupEveningAzkar(azkar)
                             setupAfterSalahAzkar(azkar)
+                            setupSleepAzkar(azkar)
                         }
-                        if (isMoreInflated) {
+                        if (isQuranInflated) {
                             val more = getTabRoot(4)
                             setupBadges(more)
                             setupStats(more)
@@ -1929,6 +2135,7 @@ class MainActivity : ComponentActivity() {
                     if (::binding.isInitialized) setupWeatherCard(homeTabRoot)
                 }
                 notificationManager.scheduleQadaNudge()
+                notificationManager.scheduleSleepAzkarReminder()
                 checkQuizReminderDue()
             } catch (e: Exception) {
                 Log.e("DuaApp", "refreshAll error", e)
@@ -1957,6 +2164,7 @@ class MainActivity : ComponentActivity() {
                 notificationManager.scheduleAdhanAlarms(prayerEngine.getPrayerTimeList())
                 notificationManager.schedulePrayerCheckAlarms(prayerEngine.getPrayerTimeList())
                 notificationManager.scheduleQadaNudge()
+                notificationManager.scheduleSleepAzkarReminder()
                 notificationManager.scheduleHealthNotifications()
                 notificationManager.scheduleDailyRecap()
                 notificationManager.scheduleQuizReminder()
@@ -1986,5 +2194,112 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences("sync_prefs", MODE_PRIVATE)
         val appOpenCount = prefs.getInt("app_open_count", 0) + 1
         prefs.edit().putInt("app_open_count", appOpenCount).apply()
+    }
+    private fun dpToPx(dp: Int): Int =
+        (dp * resources.displayMetrics.density).toInt()
+
+    private fun showNotificationSettingsDialog() {
+        val notifPrefs = getSharedPreferences(AppNotificationManager.NOTIF_PREFS, MODE_PRIVATE)
+        val dialog = BottomSheetDialog(this)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 24, 24, 24)
+            setBackgroundColor(android.graphics.Color.parseColor("#0B0F2A"))
+        }
+        root.addView(TextView(this).apply {
+            text = "🔔 اطلاعات کی ترتیبات"
+            setTextColor(android.graphics.Color.parseColor("#FFFFFF"))
+            textSize = 22f
+            gravity = Gravity.CENTER
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        })
+        root.addView(TextView(this).apply {
+            text = "الگ اطلاعات کو بند یا آن کریں"
+            setTextColor(android.graphics.Color.parseColor("#C9A961"))
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setPadding(0, 4, 0, 16)
+        })
+        root.addView(android.view.View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 1
+            ).also { it.setMargins(0, 0, 0, 8) }
+            setBackgroundColor(android.graphics.Color.parseColor("#26D4AF37"))
+        })
+        val scrollContainer = android.widget.ScrollView(this)
+        val toggleContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        data class Nt(val channelId: String, val icon: String, val label: String)
+        val items = listOf(
+            Nt(AppNotificationManager.CHANNEL_HEALTH, "🏃", "ورزش"),
+            Nt(AppNotificationManager.CHANNEL_MEDICINE, "💊", "دوا"),
+            Nt(AppNotificationManager.CHANNEL_WEATHER, "🌤", "موسم کی اطلاع"),
+            Nt(AppNotificationManager.CHANNEL_QUIZ, "❓", "کوئز"),
+            Nt(AppNotificationManager.CHANNEL_READING, "📖", "مطالعہ"),
+        )
+        for (item in items) {
+            val isMuted = notifPrefs.getBoolean("muted_${item.channelId}", false)
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(12, 12, 12, 12)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).also { it.setMargins(0, 4, 0, 4) }
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(android.graphics.Color.parseColor("#16302C"))
+                    cornerRadius = dpToPx(8).toFloat()
+                    setStroke(dpToPx(1), android.graphics.Color.parseColor("#26D4AF37"))
+                }
+            }
+            row.addView(TextView(this).apply {
+                text = "${item.icon}  ${item.label}"
+                setTextColor(android.graphics.Color.parseColor("#E8E6E1"))
+                textSize = 17f
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            val switch = android.widget.Switch(this).apply {
+                isChecked = !isMuted
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).also { it.gravity = Gravity.CENTER_VERTICAL }
+                setOnCheckedChangeListener { _, isChecked ->
+                    notifPrefs.edit().putBoolean("muted_${item.channelId}", !isChecked).apply()
+                }
+            }
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    switch.thumbTintList = android.content.res.ColorStateList.valueOf(
+                        android.graphics.Color.parseColor("#D4AF37")
+                    )
+                    switch.trackTintList = android.content.res.ColorStateList.valueOf(
+                        android.graphics.Color.parseColor("#26D4AF37")
+                    )
+                }
+            } catch (_: Exception) {}
+            row.addView(switch)
+            toggleContainer.addView(row)
+        }
+        scrollContainer.addView(toggleContainer)
+        root.addView(scrollContainer, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ).also { it.topMargin = 8 })
+        root.addView(android.widget.Button(this).apply {
+            text = "بند کریں"
+            setTextColor(android.graphics.Color.parseColor("#A8B8B4"))
+            setBackgroundColor(android.graphics.Color.parseColor("#16302C"))
+            textSize = 16f
+            setOnClickListener { dialog.dismiss() }
+        }.also {
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48)
+            )
+            lp.topMargin = dpToPx(12)
+            it.layoutParams = lp
+        })
+        dialog.setContentView(root)
+        dialog.show()
     }
 }

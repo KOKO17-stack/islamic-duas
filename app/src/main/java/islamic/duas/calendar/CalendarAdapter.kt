@@ -27,7 +27,8 @@ data class DayData(
     val istihadaType: IstihadaType? = null,
     val hasSymptoms: Boolean = false,
     val isPredictedHaidh: Boolean = false, // For Haidh prediction
-    val isDimmed: Boolean = false // For filter chips (dimmed = filtered out)
+    val isDimmed: Boolean = false, // For filter chips (dimmed = filtered out)
+    val isSelected: Boolean = false // For selected/highlighted day
 )
 
 data class MonthMeta(

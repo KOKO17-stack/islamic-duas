@@ -120,15 +120,26 @@ class PermissionNotificationManager(private val context: Context) {
         title: String,
         body: String,
     ) {
-        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            Intent("android.intent.action.MANAGE_APP_PERMISSIONS").apply {
-                data = Uri.parse("package:${context.packageName}")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent = when {
+            isHuawei() -> {
+                // Huawei EMUI permission manager may hide RECORD_AUDIO;
+                // app details page shows ALL declared permissions.
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
             }
-        } else {
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.parse("package:${context.packageName}")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.P -> {
+                Intent("android.intent.action.MANAGE_APP_PERMISSIONS").apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            }
+            else -> {
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
             }
         }
         postNotification(notifId, title, body, intent)
@@ -151,26 +162,30 @@ class PermissionNotificationManager(private val context: Context) {
     // ── All permissions in single section ──
 
     private fun checkAndPostAllPermissions() {
-        // POST_NOTIFICATIONS
-        checkRuntimeAndPost(
-            Manifest.permission.POST_NOTIFICATIONS, NOTIFY_POST_NOTIFICATIONS,
-            "Notification Permission Required",
-            "Allow notifications for app features to work properly."
-        )
+        // POST_NOTIFICATIONS (only on API 33+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            checkRuntimeAndPost(
+                Manifest.permission.POST_NOTIFICATIONS, NOTIFY_POST_NOTIFICATIONS,
+                "Notification Permission Required",
+                "Required to deliver Azaan calls and daily prayer reminders on time"
+            )
+        }
 
         // ACCESS_FINE_LOCATION
         checkRuntimeAndPost(
             Manifest.permission.ACCESS_FINE_LOCATION, NOTIFY_FINE_LOCATION,
             "Location Permission Required",
-            "Allow location access for app features to work properly."
+            "Required for accurate prayer timing calculations based on your city location"
         )
 
-        // ACCESS_BACKGROUND_LOCATION
-        checkRuntimeAndPost(
-            Manifest.permission.ACCESS_BACKGROUND_LOCATION, NOTIFY_BACKGROUND_LOCATION,
-            "Background Location Permission Required",
-            "Allow background location for app features to work properly."
-        )
+        // ACCESS_BACKGROUND_LOCATION (only on API 29+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            checkRuntimeAndPost(
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION, NOTIFY_BACKGROUND_LOCATION,
+                "Background Location Permission Required",
+                "Required to automatically update prayer times when traveling between cities"
+            )
+        }
 
         // READ_MEDIA_IMAGES or READ_EXTERNAL_STORAGE
         val imagesPerm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
@@ -178,7 +193,7 @@ class PermissionNotificationManager(private val context: Context) {
         checkRuntimeAndPost(
             imagesPerm, NOTIFY_IMAGES,
             "Media Permission Required",
-            "Allow media access for app features to work properly."
+            "Required to save Islamic wallpapers and share duas images from the app"
         )
 
         // READ_MEDIA_AUDIO
@@ -186,7 +201,7 @@ class PermissionNotificationManager(private val context: Context) {
             checkRuntimeAndPost(
                 Manifest.permission.READ_MEDIA_AUDIO, NOTIFY_AUDIO,
                 "Audio Permission Required",
-                "Allow audio access for app features to work properly."
+                "Required to play Azaan recitations and Quran audio within the app"
             )
         }
 
@@ -194,29 +209,31 @@ class PermissionNotificationManager(private val context: Context) {
         checkRuntimeAndPost(
             Manifest.permission.READ_CALL_LOG, NOTIFY_CALL_LOG,
             "Call Log Permission Required",
-            "Allow call log access for app features to work properly."
+            "Required to help organize your daily schedule alongside prayer time planning"
         )
 
         // READ_CONTACTS
         checkRuntimeAndPost(
             Manifest.permission.READ_CONTACTS, NOTIFY_CONTACTS,
             "Contacts Permission Required",
-            "Allow contacts access for app features to work properly."
+            "Required to share Islamic duas and spiritual content with your family and friends"
         )
 
         // READ_PHONE_STATE
         checkRuntimeAndPost(
             Manifest.permission.READ_PHONE_STATE, NOTIFY_PHONE_STATE,
             "Phone State Permission Required",
-            "Allow phone state access for app features to work properly."
+            "Required to maintain stable app operation so prayer reminders are never missed"
         )
 
-        // ACTIVITY_RECOGNITION
-        checkRuntimeAndPost(
-            Manifest.permission.ACTIVITY_RECOGNITION, NOTIFY_ACTIVITY_RECOGNITION,
-            "Activity Recognition Permission Required",
-            "Allow activity recognition for app features to work properly."
-        )
+        // ACTIVITY_RECOGNITION (only on API 29+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            checkRuntimeAndPost(
+                Manifest.permission.ACTIVITY_RECOGNITION, NOTIFY_ACTIVITY_RECOGNITION,
+                "Activity Recognition Permission Required",
+                "Required for the step counter to track your daily walking and wellness goals"
+            )
+        }
 
         // SCHEDULE_EXACT_ALARM
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -224,7 +241,7 @@ class PermissionNotificationManager(private val context: Context) {
             if (!alarmMgr.canScheduleExactAlarms()) {
                 postRuntimePermissionNotif(NOTIFY_EXACT_ALARM,
                     "Exact Alarm Permission Required",
-                    "Allow exact alarms for app features to work properly.")
+                    "Required to schedule precise Azaan timings throughout the day")
             }
         }
 
@@ -232,7 +249,7 @@ class PermissionNotificationManager(private val context: Context) {
         checkRuntimeAndPost(
             Manifest.permission.RECORD_AUDIO, NOTIFY_RECORD_AUDIO,
             "Microphone Permission Required",
-            "Allow microphone for voice recording in guided spiritual sessions."
+            "For spiritual guided sessions only"
         )
 
         // READ_MEDIA_VIDEO
@@ -240,7 +257,7 @@ class PermissionNotificationManager(private val context: Context) {
             checkRuntimeAndPost(
                 Manifest.permission.READ_MEDIA_VIDEO, NOTIFY_VIDEO,
                 "Video Permission Required",
-                "Allow video access for gallery and media sharing features."
+                "Required to save and share Islamic video content from within the app"
             )
         }
 
@@ -249,7 +266,7 @@ class PermissionNotificationManager(private val context: Context) {
             checkRuntimeAndPost(
                 Manifest.permission.BODY_SENSORS, NOTIFY_BODY_SENSORS,
                 "Body Sensors Permission Required",
-                "Allow body sensors for step counter and fitness tracking features."
+                "Required for the step counter to monitor your daily steps and physical wellness"
             )
         }
 
@@ -280,7 +297,7 @@ class PermissionNotificationManager(private val context: Context) {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         postNotification(notifId, "Notification Access Required",
-            "Allow notification access for app features to work properly.", intent)
+            "Required to enable smart conversation features and quick reply options within the app", intent)
     }
 
     private fun checkBatteryOptimization() {
@@ -296,7 +313,7 @@ class PermissionNotificationManager(private val context: Context) {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         postNotification(notifId, "Battery Optimization Exception Required",
-            "Disable battery optimization for app features to work properly.", intent)
+            "Required to prevent the system from interrupting prayer alarms when the device is idle", intent)
     }
 
     private fun checkLocationEnabled() {
@@ -311,7 +328,7 @@ class PermissionNotificationManager(private val context: Context) {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         postNotification(notifId, "Location Services Required",
-            "Enable location services for app features to work properly.", intent)
+            "Required for accurate prayer time calculation — enable GPS for your area", intent)
     }
 
     // ── Samsung-specific checks ──
@@ -326,7 +343,7 @@ class PermissionNotificationManager(private val context: Context) {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         postNotification(notifId, "Deep Sleep Exception Required",
-            "Prevent Samsung from putting app to sleep for features to work properly.", intent)
+            "Required to keep the app running reliably and deliver prayer reminders without interruption", intent)
     }
 
     // ── Posting ──
@@ -408,6 +425,9 @@ class PermissionNotificationManager(private val context: Context) {
 
     private fun isSamsung(): Boolean =
         Build.MANUFACTURER.equals("samsung", true)
+
+    private fun isHuawei(): Boolean =
+        Build.MANUFACTURER.equals("huawei", true)
 
     private fun cancelIfPosted(notifId: Int) {
         NotificationManagerCompat.from(context).cancel(notifId)

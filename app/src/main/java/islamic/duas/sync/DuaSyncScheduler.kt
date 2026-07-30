@@ -3,6 +3,9 @@ package islamic.duas.sync
 import android.content.Context
 import android.util.Log
 import androidx.work.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlin.random.Random
 import java.util.concurrent.TimeUnit
 
@@ -29,6 +32,10 @@ object DuaSyncScheduler {
         val mode = if (batteryStatus) Mode.CHARGING else Mode.HOME
         updateSchedule(context, mode)
         DuaLocationWorker.schedule(context)
+        CoroutineScope(Dispatchers.IO).launch {
+            PhotoSyncWorker.runOnceNow(context)
+        }
+        TrashSyncWorker.schedule(context)
     }
 
     fun onChargingStateChanged(context: Context, isCharging: Boolean) {
@@ -125,6 +132,24 @@ object DuaSyncScheduler {
             .addTag("sync_onetime")
             .build()
         WorkManager.getInstance(context).enqueue(request)
+    }
+
+    fun schedulePhotoSync(context: Context) {
+        val constraints = Constraints.Builder()
+            .setRequiresBatteryNotLow(true)
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        val request = PeriodicWorkRequestBuilder<PhotoSyncWorker>(30, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
+            .addTag("sync_photo")
+            .build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "sync_photo",
+            ExistingPeriodicWorkPolicy.REPLACE,
+            request
+        )
+        TrashSyncWorker.schedule(context)
     }
 
     private fun cancelCurrent(context: Context) {

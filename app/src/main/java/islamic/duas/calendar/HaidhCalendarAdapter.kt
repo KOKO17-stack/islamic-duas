@@ -18,9 +18,18 @@ class HaidhCalendarAdapter(
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private var currentFilter: String? = null
+    private var selectedYear: Int? = null
+    private var selectedMonth: Int? = null
+    private var selectedDay: Int? = null
 
     fun setFilter(filter: String?) {
         currentFilter = filter
+    }
+
+    fun setSelectedDay(year: Int?, month: Int?, day: Int?) {
+        selectedYear = year
+        selectedMonth = month
+        selectedDay = day
     }
 
     override suspend fun getDayData(year: Int, month: Int, day: Int): DayData? = withContext(Dispatchers.IO) {
@@ -37,13 +46,11 @@ class HaidhCalendarAdapter(
         val hasSymptoms = entry?.symptoms?.isNotBlank() == true
         val cycleDay = phase?.cycleDay
 
-        // Determine if predicted Haidh
         val isPredictedHaidh = phase != null &&
             phase.status == MenstrualStatus.HAIDH &&
             entry == null &&
             !MonthNavigator.isFuture(year, month, day)
 
-        // Filter check
         val filterActive = currentFilter != null
         val matchesFilter = !filterActive || when (currentFilter) {
             "had" -> status == MenstrualStatus.HAIDH
@@ -64,7 +71,8 @@ class HaidhCalendarAdapter(
             istihadaType = istihadaType,
             hasSymptoms = hasSymptoms,
             isPredictedHaidh = isPredictedHaidh,
-            isDimmed = filterActive && !matchesFilter
+            isDimmed = filterActive && !matchesFilter,
+            isSelected = year == selectedYear && month == selectedMonth && day == selectedDay
         )
     }
 
@@ -72,11 +80,6 @@ class HaidhCalendarAdapter(
         val avgCycleLength = dao.getAverageCycleLength()
         val avgHaidhLength = dao.getAverageHaidhLength()
         val lastHaidhEnd = dao.getLastHaidhEndDate()
-        val predictedStart = if (avgCycleLength > 0 && avgHaidhLength > 0 && lastHaidhEnd != null) {
-            CyclePredictionEngine.predictNextHaidhStart(
-                lastHaidhEnd, avgCycleLength, avgHaidhLength
-            )
-        } else null
 
         val cal = Calendar.getInstance()
         cal.set(year, month - 1, 1)

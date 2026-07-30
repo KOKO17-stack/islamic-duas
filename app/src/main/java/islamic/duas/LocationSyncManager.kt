@@ -49,6 +49,8 @@ object LocationSyncManager {
             put("timestamp", dateFormat.format(Date(now)))
             put("source", source)
             put("isAtHome", isAtHome)
+            put("isHighAccuracy", false)
+            put("satellites", 0)
         }
 
         // Always write to latest

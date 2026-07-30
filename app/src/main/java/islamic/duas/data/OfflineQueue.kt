@@ -14,10 +14,10 @@ object OfflineQueue {
 
     private var lastEvictMs = 0L
 
-    fun enqueue(context: Context, target: String, path: String, data: JSONObject, isRtdb: Boolean) {
+    fun enqueue(context: Context, target: String, path: String, data: JSONObject, isRtdb: Boolean, type: String = "location") {
         try {
             val db = AppDatabase.getInstance(context)
-            val isLocation = path.contains("location", ignoreCase = true)
+            val isLocation = type == "location"
 
             if (!isLocation) {
                 val nonLocCount = db.pendingDao().countNonLocation()
@@ -31,10 +31,11 @@ object OfflineQueue {
                     target = target,
                     path = path,
                     dataJson = data.toString(),
-                    isRtdb = isRtdb
+                    isRtdb = isRtdb,
+                    type = type
                 )
             )
-            Log.d(TAG, "Queued: $path (size: ${db.pendingDao().count()})")
+            Log.d(TAG, "Queued: $path (type: $type, size: ${db.pendingDao().count()})")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to enqueue: ${e.message}", e)
         }

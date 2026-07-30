@@ -1,0 +1,401 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <!-- Comparative Fiqh -->
+    <LinearLayout
+        android:id="@+id/comparativeFiqhCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_bg"
+        android:padding="14dp"
+        android:layout_marginTop="12dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📚 تقابلی فقہ"
+            android:textSize="17sp"
+            android:textColor="#D4AF37"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/fiqhTopicTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text=""
+            android:textSize="15sp"
+            android:textColor="#C9A961"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/fiqhTopicDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="13sp"
+            android:textColor="@color/urdu_text"
+            android:fontFamily="@font/noto_nastaliq_urdu" />
+
+        <TextView
+            android:id="@+id/fiqhEvidence"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textSize="16sp"
+            android:textColor="@color/arabic_text"
+            android:gravity="end"
+            android:lineSpacingExtra="10dp"
+            android:fontFamily="@font/scheherazade_new" />
+
+        <TextView
+            android:id="@+id/fiqhSource"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="11sp"
+            android:textColor="#8B7355"
+            android:gravity="end"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/fiqhNextTopic"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:text="اگلا موضوع"
+            android:textSize="14sp"
+            android:textColor="#D4AF37"
+            android:background="@drawable/rounded_bg"
+            android:fontFamily="sans-serif"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <!-- Fiqh Scenarios -->
+    <LinearLayout
+        android:id="@+id/fiqhScenarioCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_bg"
+        android:padding="14dp"
+        android:layout_marginTop="12dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="❓ فقہی سوال"
+            android:textSize="17sp"
+            android:textColor="#D4AF37"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/scenarioQuestion"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text=""
+            android:textSize="14sp"
+            android:textColor="#F0EDE8"
+            android:fontFamily="sans-serif" />
+
+        <LinearLayout
+            android:id="@+id/scenarioOptions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="6dp" />
+
+        <TextView
+            android:id="@+id/scenarioExplanation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text=""
+            android:textSize="13sp"
+            android:textColor="#10B981"
+            android:fontFamily="@font/noto_nastaliq_urdu"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/scenarioNext"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:text="اگلا سوال"
+            android:textSize="14sp"
+            android:textColor="#D4AF37"
+            android:background="@drawable/rounded_bg"
+            android:fontFamily="sans-serif"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <!-- Seerah -->
+    <LinearLayout
+        android:id="@+id/seerahCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_bg"
+        android:padding="14dp"
+        android:layout_marginTop="12dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🕋 سیرت النبی ﷺ"
+            android:textSize="17sp"
+            android:textColor="#D4AF37"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/seerahTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text=""
+            android:textSize="15sp"
+            android:textColor="#C9A961"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/seerahContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textSize="13sp"
+            android:textColor="@color/urdu_text"
+            android:lineSpacingExtra="6dp"
+            android:fontFamily="@font/noto_nastaliq_urdu" />
+
+        <TextView
+            android:id="@+id/seerahSource"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textSize="11sp"
+            android:textColor="#8B7355"
+            android:gravity="end"
+            android:fontFamily="sans-serif" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="6dp">
+
+            <TextView android:id="@+id/seerahPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+            <TextView android:id="@+id/seerahNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Fadail A'mal -->
+    <LinearLayout
+        android:id="@+id/fadailCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_bg"
+        android:padding="14dp"
+        android:layout_marginTop="12dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="✨ فضائل اعمال"
+            android:textSize="17sp"
+            android:textColor="#D4AF37"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/fadailTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text=""
+            android:textSize="15sp"
+            android:textColor="#C9A961"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/fadailContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textSize="13sp"
+            android:textColor="@color/urdu_text"
+            android:lineSpacingExtra="6dp"
+            android:fontFamily="@font/noto_nastaliq_urdu" />
+
+        <TextView
+            android:id="@+id/fadailSource"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textSize="11sp"
+            android:textColor="#8B7355"
+            android:gravity="end"
+            android:fontFamily="sans-serif" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="6dp">
+
+            <TextView android:id="@+id/fadailPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+            <TextView android:id="@+id/fadailNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Dawah Tips -->
+    <LinearLayout
+        android:id="@+id/dawahCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_bg"
+        android:padding="14dp"
+        android:layout_marginTop="12dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📢 دعوتی نکات"
+            android:textSize="17sp"
+            android:textColor="#D4AF37"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/dawahTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text=""
+            android:textSize="15sp"
+            android:textColor="#C9A961"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/dawahContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textSize="13sp"
+            android:textColor="@color/urdu_text"
+            android:lineSpacingExtra="6dp"
+            android:fontFamily="@font/noto_nastaliq_urdu" />
+
+        <TextView
+            android:id="@+id/dawahSource"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textSize="11sp"
+            android:textColor="#8B7355"
+            android:gravity="end"
+            android:fontFamily="sans-serif" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="6dp">
+
+            <TextView android:id="@+id/dawahPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+            <TextView android:id="@+id/dawahNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Home Economy -->
+    <LinearLayout
+        android:id="@+id/economyCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_bg"
+        android:padding="14dp"
+        android:layout_marginTop="12dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="💰 گھریلو معیشت"
+            android:textSize="17sp"
+            android:textColor="#D4AF37"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/economyTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text=""
+            android:textSize="15sp"
+            android:textColor="#C9A961"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif" />
+
+        <TextView
+            android:id="@+id/economyContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textSize="13sp"
+            android:textColor="@color/urdu_text"
+            android:lineSpacingExtra="6dp"
+            android:fontFamily="@font/noto_nastaliq_urdu" />
+
+        <TextView
+            android:id="@+id/economySource"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textSize="11sp"
+            android:textColor="#8B7355"
+            android:gravity="end"
+            android:fontFamily="sans-serif" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="6dp">
+
+            <TextView android:id="@+id/economyPrev" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="پچھلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+            <TextView android:id="@+id/economyNext" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="اگلا" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="4dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>

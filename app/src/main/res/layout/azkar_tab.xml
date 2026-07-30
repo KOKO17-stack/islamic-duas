@@ -23,7 +23,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="اللہ کی یاد میں سکون"
-                android:textSize="18sp"
+                android:textSize="20sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:gravity="center"
@@ -46,7 +46,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="تسبیح"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:gravity="center"
@@ -63,11 +63,11 @@
                 android:paddingVertical="4dp"
                 android:layout_marginTop="8dp">
 
-                <TextView android:id="@+id/dhikrOption1" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="سبحان اللہ" android:textSize="12sp" android:textColor="#D4AF37" android:background="@drawable/chip_selected" android:fontFamily="sans-serif" />
-                <TextView android:id="@+id/dhikrOption2" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="الحمدللہ" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
-                <TextView android:id="@+id/dhikrOption3" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="اللہ اکبر" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
-                <TextView android:id="@+id/dhikrOption4" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="لا الہ الا اللہ" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
-                <TextView android:id="@+id/dhikrOption5" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="سبحان اللہ و بحمدہ" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/dhikrOption1" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="سبحان اللہ" android:textSize="14sp" android:textColor="#D4AF37" android:background="@drawable/chip_selected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/dhikrOption2" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="الحمدللہ" android:textSize="14sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/dhikrOption3" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="اللہ اکبر" android:textSize="14sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/dhikrOption4" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="لا الہ الا اللہ" android:textSize="14sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/dhikrOption5" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="سبحان اللہ و بحمدہ" android:textSize="14sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
             </LinearLayout>
 
             <LinearLayout
@@ -81,8 +81,8 @@
                 android:paddingVertical="4dp"
                 android:layout_marginTop="4dp">
 
-                <TextView android:id="@+id/dhikrOption6" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="سبحان اللہ العظیم" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
-                <TextView android:id="@+id/dhikrOption7" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="استغفر اللہ" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/dhikrOption6" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="سبحان اللہ العظیم" android:textSize="14sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/dhikrOption7" android:layout_width="wrap_content" android:layout_height="34dp" android:paddingHorizontal="12dp" android:gravity="center" android:text="استغفر اللہ" android:textSize="14sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
             </LinearLayout>
 
             <FrameLayout
@@ -103,8 +103,8 @@
                     android:focusable="true">
 
                     <TextView android:id="@+id/tasbeehCountText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textSize="56sp" android:textColor="#D4AF37" android:textStyle="bold" android:fontFamily="sans-serif-light" />
-                    <TextView android:id="@+id/tasbeehDhikrText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="سبحان اللہ" android:textSize="14sp" android:textColor="#E8E6E1" android:layout_marginTop="4dp" android:fontFamily="sans-serif" />
-                    <TextView android:id="@+id/tasbeehProgressText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0 / 33" android:textSize="11sp" android:textColor="#8B7355" android:fontFamily="sans-serif" />
+                    <TextView android:id="@+id/tasbeehDhikrText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="سبحان اللہ" android:textSize="16sp" android:textColor="#F0EDE8" android:layout_marginTop="4dp" android:fontFamily="sans-serif" />
+                    <TextView android:id="@+id/tasbeehProgressText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0 / 33" android:textSize="13sp" android:textColor="#8B7355" android:fontFamily="sans-serif" />
                 </LinearLayout>
             </FrameLayout>
 
@@ -119,10 +119,10 @@
                 android:paddingVertical="4dp"
                 android:layout_marginTop="8dp">
 
-                <TextView android:id="@+id/target33" android:layout_width="40dp" android:layout_height="30dp" android:gravity="center" android:text="33" android:textSize="12sp" android:textColor="#D4AF37" android:background="@drawable/chip_selected" android:fontFamily="sans-serif" />
-                <TextView android:id="@+id/target99" android:layout_width="40dp" android:layout_height="30dp" android:gravity="center" android:text="99" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
-                <TextView android:id="@+id/target100" android:layout_width="40dp" android:layout_height="30dp" android:gravity="center" android:text="100" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
-                <TextView android:id="@+id/target1000" android:layout_width="40dp" android:layout_height="30dp" android:gravity="center" android:text="1000" android:textSize="12sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/target33" android:layout_width="40dp" android:layout_height="30dp" android:gravity="center" android:text="33" android:textSize="14sp" android:textColor="#D4AF37" android:background="@drawable/chip_selected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/target99" android:layout_width="40dp" android:layout_height="30dp" android:gravity="center" android:text="99" android:textSize="14sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/target100" android:layout_width="40dp" android:layout_height="30dp" android:gravity="center" android:text="100" android:textSize="14sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/target1000" android:layout_width="40dp" android:layout_height="30dp" android:gravity="center" android:text="1000" android:textSize="14sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" />
             </LinearLayout>
 
             <LinearLayout
@@ -132,9 +132,9 @@
                 android:gravity="center"
                 android:layout_marginTop="8dp">
 
-                <TextView android:id="@+id/azkarSession" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Today: 0" android:textSize="11sp" android:textColor="#8B7355" android:fontFamily="sans-serif" />
-                <TextView android:id="@+id/azkarStreaks" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="" android:textSize="11sp" android:textColor="#8B7355" android:fontFamily="sans-serif" android:layout_marginEnd="12dp" />
-                <TextView android:id="@+id/azkarReset" android:layout_width="wrap_content" android:layout_height="30dp" android:paddingHorizontal="14dp" android:gravity="center" android:text="ری سیٹ" android:textSize="11sp" android:textColor="#8B7355" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" />
+                <TextView android:id="@+id/azkarSession" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Today: 0" android:textSize="13sp" android:textColor="#8B7355" android:fontFamily="sans-serif" />
+                <TextView android:id="@+id/azkarStreaks" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="" android:textSize="13sp" android:textColor="#8B7355" android:fontFamily="sans-serif" android:layout_marginEnd="12dp" />
+                <TextView android:id="@+id/azkarReset" android:layout_width="wrap_content" android:layout_height="30dp" android:paddingHorizontal="14dp" android:gravity="center" android:text="ری سیٹ" android:textSize="13sp" android:textColor="#8B7355" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" />
             </LinearLayout>
         </LinearLayout>
 
@@ -152,7 +152,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="🌅 صبح کے اذکار"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -162,8 +162,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="۰/۱۲"
-                android:textSize="11sp"
+                android:text="0/12"
+                android:textSize="13sp"
                 android:textColor="#10B981"
                 android:fontFamily="sans-serif" />
 
@@ -189,7 +189,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="🌇 شام کے اذکار"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -199,8 +199,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="۰/۱۲"
-                android:textSize="11sp"
+                android:text="0/12"
+                android:textSize="13sp"
                 android:textColor="#10B981"
                 android:fontFamily="sans-serif" />
 
@@ -226,7 +226,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="🕌 بعد از نماز اذکار"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -236,13 +236,50 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="۰/۵"
-                android:textSize="11sp"
+                android:text="0/5"
+                android:textSize="13sp"
                 android:textColor="#10B981"
                 android:fontFamily="sans-serif" />
 
             <LinearLayout
                 android:id="@+id/afterSalahAzkarList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="6dp" />
+        </LinearLayout>
+
+        <!-- Sleep Adhkar -->
+        <LinearLayout
+            android:id="@+id/sleepAdhkarCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_bg"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🌙 سونے سے پہلے کے اذکار"
+                android:textSize="17sp"
+                android:textColor="#D4AF37"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/sleepAzkarProgress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="0/10"
+                android:textSize="13sp"
+                android:textColor="#10B981"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:id="@+id/sleepAzkarList"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -262,10 +299,11 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="✨ اللہ کے ۹۹ نام"
-                android:textSize="15sp"
+                android:text="✨ اللہ کے 99 نام"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
+                android:gravity="center"
                 android:fontFamily="sans-serif" />
 
             <TextView
@@ -274,7 +312,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text="کسی نام پر کلک کریں — اس کا معنی دیکھیں"
-                android:textSize="11sp"
+                android:textSize="13sp"
                 android:textColor="#C9A961"
                 android:fontFamily="sans-serif" />
 
@@ -285,20 +323,20 @@
                 android:layout_marginTop="6dp"
                 android:gravity="center"
                 android:text=""
-                android:textSize="18sp"
-                android:textColor="#F0EDE8"
-                android:fontFamily="serif"
-                android:clickable="true"
-                android:focusable="true"
-                android:background="@drawable/rounded_bg" />
+                android:textSize="20sp"
+                android:textColor="@color/arabic_text"
+            android:fontFamily="@font/scheherazade_new"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/rounded_bg" />
 
             <TextView
                 android:id="@+id/ninetyNineNamesMeaning"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=""
-                android:textSize="12sp"
-                android:textColor="#E0DDD8"
+                android:textSize="14sp"
+                android:textColor="#E8E0D8"
                 android:gravity="center"
                 android:fontFamily="sans-serif" />
         </LinearLayout>
@@ -317,7 +355,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="📖 لفظی تجزیہ"
-                android:textSize="15sp"
+                android:textSize="17sp"
                 android:textColor="#D4AF37"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
@@ -328,18 +366,19 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
                 android:text=""
-                android:textSize="16sp"
-                android:textColor="#F0EDE8"
+                android:textSize="18sp"
+                android:textColor="@color/arabic_text"
                 android:gravity="center"
-                android:fontFamily="serif" />
+                android:lineSpacingExtra="10dp"
+                android:fontFamily="@font/scheherazade_new" />
 
             <TextView
                 android:id="@+id/wordAnalysisMeaning"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=""
-                android:textSize="12sp"
-                android:textColor="#E0DDD8"
+                android:textSize="14sp"
+                android:textColor="#E8E0D8"
                 android:gravity="center"
                 android:fontFamily="sans-serif" />
 
@@ -350,13 +389,148 @@
                 android:layout_marginTop="6dp"
                 android:gravity="center"
                 android:text="اگلا"
-                android:textSize="12sp"
+                android:textSize="14sp"
                 android:textColor="#D4AF37"
                 android:background="@drawable/rounded_bg"
                 android:fontFamily="sans-serif"
                 android:clickable="true"
                 android:focusable="true" />
         </LinearLayout>
+        <!-- Guided Sessions — Enhanced Prominent Card -->
+        <LinearLayout
+            android:id="@+id/guidedSessionCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_elevated_gold_border"
+            android:padding="16dp"
+            android:layout_marginTop="12dp">
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="🌿 گائیڈڈ سیشن"
+                    android:textSize="18sp"
+                    android:textColor="#D4AF6A"
+                    android:textStyle="bold"
+                    android:fontFamily="sans-serif" />
+
+                <TextView
+                    android:id="@+id/guidedSessionDuration"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textSize="12sp"
+                    android:textColor="#8B7355"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <View android:layout_width="48dp" android:layout_height="1dp" android:layout_marginTop="6dp" android:background="#D4AF37" android:layout_gravity="center" />
+
+            <TextView
+                android:id="@+id/guidedSessionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text=""
+                android:textSize="16sp"
+                android:textColor="#C9A961"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/guidedSessionDesc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="13sp"
+                android:textColor="@color/urdu_text"
+                android:lineSpacingExtra="3dp"
+                android:fontFamily="sans-serif" />
+
+            <!-- Session type chips -->
+            <LinearLayout
+                android:id="@+id/guidedSessionChips"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="8dp">
+
+                <TextView android:id="@+id/guidedChipTfakkur" android:layout_width="0dp" android:layout_height="28dp" android:layout_weight="1" android:gravity="center" android:text="🌿 تفکر" android:textSize="10sp" android:textColor="#D4AF6A" android:background="@drawable/chip_selected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="2dp" />
+                <TextView android:id="@+id/guidedChipIstigfar" android:layout_width="0dp" android:layout_height="28dp" android:layout_weight="1" android:gravity="center" android:text="🤲 استغفار" android:textSize="10sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="2dp" />
+                <TextView android:id="@+id/guidedChipShukr" android:layout_width="0dp" android:layout_height="28dp" android:layout_weight="1" android:gravity="center" android:text="🌸 شکر" android:textSize="10sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="2dp" />
+                <TextView android:id="@+id/guidedChipTawbah" android:layout_width="0dp" android:layout_height="28dp" android:layout_weight="1" android:gravity="center" android:text="💧 توبہ" android:textSize="10sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="2dp" />
+                <TextView android:id="@+id/guidedChipSabr" android:layout_width="0dp" android:layout_height="28dp" android:layout_weight="1" android:gravity="center" android:text="🌙 صبر" android:textSize="10sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="2dp" />
+                <TextView android:id="@+id/guidedChipTawakkul" android:layout_width="0dp" android:layout_height="28dp" android:layout_weight="1" android:gravity="center" android:text="☂️ توکل" android:textSize="10sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="2dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="8dp">
+
+                <TextView android:id="@+id/guidedSessionStart" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:gravity="center" android:text="▶ شروع کریں" android:textSize="15sp" android:textColor="#0B0F2A" android:background="#D4AF37" android:fontFamily="sans-serif" android:textStyle="bold" android:clickable="true" android:focusable="true" android:layout_marginEnd="4dp" />
+                <TextView android:id="@+id/guidedSessionNext" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:gravity="center" android:layout_marginStart="4dp" android:text="← اگلا" android:textSize="15sp" android:textColor="#D4AF6A" android:background="@drawable/rounded_bg" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Islamic Quiz — Prominent Card -->
+        <LinearLayout
+            android:id="@+id/quizCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_elevated_gold_border"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📝 اسلامی کوئز — اپنے علم کی جانچ کریں"
+                android:textSize="17sp"
+                android:textColor="#D4AF6A"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif" />
+
+            <View android:layout_width="48dp" android:layout_height="1dp" android:layout_marginTop="6dp" android:background="#D4AF37" android:layout_gravity="center" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="قرآن، حدیث، فقہ، سیرت، خواتین کے حقوق، صحابہ اور تاریخ اسلام پر مبنی ۵۰۰+ سوالات"
+                android:textSize="13sp"
+                android:textColor="@color/urdu_text"
+                android:gravity="center"
+                android:lineSpacingExtra="3dp"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/startQuizBtn"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="10dp"
+                android:gravity="center"
+                android:text="🎯 کوئز شروع کریں"
+                android:textSize="16sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:background="@drawable/card_elevated_gold_border"
+                android:fontFamily="sans-serif"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>

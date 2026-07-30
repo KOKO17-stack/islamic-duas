@@ -82,7 +82,7 @@ class GuidedSessionActivity : ComponentActivity() {
                 }
 
                 override fun onFinish() {
-                    sessionTimer.text = "۰۰:۰۰"
+                    sessionTimer.text = "00:00"
                     if (currentStep < session.steps.size - 1) {
                         currentStep++
                         showStep(currentStep)

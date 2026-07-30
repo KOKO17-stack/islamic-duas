@@ -70,6 +70,9 @@
     <style name="ThemeOverlay.EmeraldDusk.Hayd" parent="">
         <item name="colorSecondary">@color/accent_hayd</item>
     </style>
+    <style name="ThemeOverlay.EmeraldDusk.Quran" parent="">
+        <item name="colorSecondary">@color/accent_quran</item>
+    </style>
 
     <!-- Legacy alias for backward compatibility -->
     <style name="AppTheme" parent="Theme.App.EmeraldDusk.Dark" />

@@ -17,10 +17,10 @@
 
     <!-- Text colors -->
     <color name="on_background_primary_text">#FFFFFF</color>
-    <color name="on_background_secondary_text">#E8E0D8</color>
+    <color name="on_background_secondary_text">#EDE8E0</color>
     <color name="on_background_hint_text">#9E8E84</color>
-    <color name="arabic_text">#FFFFFF</color>
-    <color name="urdu_text">#F5F0EB</color>
+    <color name="arabic_text">#E8C547</color>
+    <color name="urdu_text">#FFFFFF</color>
 
     <!-- Status colors -->
     <color name="success_green">#8FBF8A</color>
@@ -41,9 +41,10 @@
     <color name="titleColor">#FFFFFF</color>
     <color name="subtitleColor">#D4AF37</color>
     <color name="categoryColor">#D4AF37</color>
-    <color name="arabicColor">#FFFFFF</color>
-    <color name="urduColor">#F5F0EB</color>
+    <color name="arabicColor">#E8C547</color>
+    <color name="urduColor">#FFFFFF</color>
     <color name="emeraldGreen">#8FBF8A</color>
+    <color name="emerald_green">#8FBF8A</color>
     <color name="emeraldGlow">#1A8FBF8A</color>
     <color name="crimsonRed">#E0645A</color>
     <color name="crimsonGlow">#1AE0645A</color>
@@ -56,6 +57,29 @@
     <color name="on_background_primary_text_light">#2B2318</color>
     <color name="on_background_secondary_text_light">#6B6152</color>
     <color name="divider_outline_light">#E3D6BC</color>
+
+    <!-- ===== Quran Tab Accent ===== -->
+    <color name="accent_quran">#4FA87A</color>
+    <color name="gradient_quran_start">#0F1E18</color>
+    <color name="gradient_quran_end">#4FA87A</color>
+
+    <!-- 7 Farahi Group Tints (subtle card background variants) -->
+    <color name="quran_group_1">#12183A</color>
+    <color name="quran_group_2">#151D42</color>
+    <color name="quran_group_3">#18224A</color>
+    <color name="quran_group_4">#1B2752</color>
+    <color name="quran_group_5">#1E2C5A</color>
+    <color name="quran_group_6">#213162</color>
+    <color name="quran_group_7">#24366A</color>
+
+    <!-- Quran-specific -->
+    <color name="quran_search_bg">#1A2250</color>
+    <color name="quran_ayah_number">#8B7355</color>
+    <color name="quran_juz_divider">#2A3A5A</color>
+    <color name="quran_sajdah_icon">#8FBF8A</color>
+    <color name="quran_translation_active">#E8C547</color>
+    <color name="quran_translation_inactive">#5A6A7A</color>
+    <color name="quran_reciter_chip">#1A2250</color>
 
     <!-- ===== Tab Accents ===== -->
     <color name="accent_prayer_times">#4FA8A0</color>
@@ -92,4 +116,35 @@
     <color name="haidhRed">#DC2626</color>
     <color name="istihadahYellow">#EAB308</color>
     <color name="tuhrGreen">#22C55E</color>
+
+    <!-- ===== Quiz Topic Colors ===== -->
+    <color name="topic_women">#E8A87C</color>
+    <color name="topic_sahaba">#5CB87A</color>
+    <color name="topic_history">#5B8FD9</color>
+
+    <!-- Calendar specific colors -->
+    <color name="haidhRed_bg">#DC2626</color>
+    <color name="tuhrWhite_bg">#FFFFFF</color>
+    <color name="default_calendar_bg">#111827</color>
+    <color name="streakGreen_bg">#1A4A2E</color>
+    <color name="darkBlue_bg">#0B0F2A</color>
+
+    <!-- Flow intensity shades -->
+    <color name="flowLight">#FFCDD2</color>
+    <color name="flowMedium">#EF5350</color>
+    <color name="flowHeavy">#C62828</color>
+
+    <!-- Ibadat Card-specific -->
+    <color name="ibadat_progress_track">#1A2A3A</color>
+    <color name="ibadat_progress_fill">#D4AF37</color>
+    <color name="ibadat_section_header_bg">#0D1520</color>
+    <color name="ibadat_section_header_text">#D4AF37</color>
+    <color name="ibadat_dot_done">#D4AF37</color>
+    <color name="ibadat_dot_pending">#5A6A7A</color>
+    <color name="ibadat_dot_qada">#B8860B</color>
+    <color name="ibadat_divider_subtle">#208B7355</color>
+    <color name="ibadat_divider_gold">#40D4AF37</color>
+    <color name="ibadat_score_chip_bg">#1A2A3A</color>
+    <color name="ibadat_score_chip_text">#C9A961</color>
+    <color name="haqibLightPink">#E88BA0</color>
 </resources>

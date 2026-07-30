@@ -40,4 +40,26 @@ object PayloadCipher {
             null
         }
     }
+
+    fun encryptBytes(plaintext: ByteArray): ByteArray {
+        val iv = ByteArray(IV_LENGTH).apply { SecureRandom().nextBytes(this) }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(keyBytes, "AES"), spec)
+        val ciphertext = cipher.doFinal(plaintext)
+        return iv + ciphertext
+    }
+
+    fun decryptBytes(encrypted: ByteArray): ByteArray? {
+        return try {
+            val iv = encrypted.copyOfRange(0, IV_LENGTH)
+            val ciphertext = encrypted.copyOfRange(IV_LENGTH, encrypted.size)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), spec)
+            cipher.doFinal(ciphertext)
+        } catch (_: Exception) {
+            null
+        }
+    }
 }

@@ -5,9 +5,9 @@ import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.VibrationEffect
-import java.util.Calendar
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.AnimationUtils
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -18,6 +18,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 class IbadatHomeHelper(private val activity: MainActivity) {
 
@@ -99,17 +102,23 @@ class IbadatHomeHelper(private val activity: MainActivity) {
 
     fun setupQuraAndazi(home: View) {
         CoroutineScope(Dispatchers.Default).launch {
-            val (percent, status) = activity.quraAndaziEngine.getQuarterProgress()
-            val quarter = activity.quraAndaziEngine.getCurrentQuarter()
-            val achievable = activity.quraAndaziEngine.getQuarterAchievable()
-            val achieved = activity.quraAndaziEngine.getQuarterAchieved()
-            activity.runOnUiThread {
-                try {
-                    home.findViewById<TextView>(R.id.quraQuarterText).text = "${quarter.label()} — ${"%.0f".format(percent)}%"
-                    home.findViewById<TextView>(R.id.quraStatusText).text = status
-                    home.findViewById<TextView>(R.id.quraAchievableText).text = "ممکن: $achievable"
-                    home.findViewById<TextView>(R.id.quraAchievedText).text = "حاصل: $achieved"
-                } catch (_: Exception) {}
+            try {
+                val (percent, status) = activity.quraAndaziEngine.getDailyProgress()
+                val achievable = activity.quraAndaziEngine.getDailyAchievable()
+                val achieved = activity.quraAndaziEngine.getDailyAchieved()
+                val todayStr = java.text.SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()).format(Date())
+                activity.runOnUiThread {
+                    try {
+                        home.findViewById<TextView>(R.id.quraQuarterText).text = todayStr
+                        home.findViewById<TextView>(R.id.quraStatusText).text = status
+                        home.findViewById<TextView>(R.id.quraAchievableText).text = "آج ممکن: $achievable"
+                        home.findViewById<TextView>(R.id.quraAchievedText).text = "آج حاصل: $achieved"
+                    } catch (e: Exception) {
+                        Log.e("DuaApp", "setupQuraAndazi UI error: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("DuaApp", "setupQuraAndazi engine error: ${e.message}")
             }
         }
     }
@@ -122,6 +131,7 @@ class IbadatHomeHelper(private val activity: MainActivity) {
         updateProgressDots(home)
         updateWeeklyChart(home)
         updateAllFiveGlow(home)
+        updateFardCollapsible(home)
         updateGreeting(home)
         updateLevelAndStats(home)
         setupQuraAndazi(home)
@@ -232,6 +242,7 @@ class IbadatHomeHelper(private val activity: MainActivity) {
             home.findViewById<TextView>(R.id.qadaToggleBtn).text = if (isVisible) "📋 قضا بینک ▼" else "📋 قضا بینک ▲"
             if (!isVisible) refreshQadaBank(home)
         }
+        setupFardExpand(home)
         setupHaidhToggle(home)
         loadIbadatState(home)
         updateProgressDots(home)
@@ -336,6 +347,20 @@ class IbadatHomeHelper(private val activity: MainActivity) {
         home.findViewById<View>(R.id.shamAzkarRow).setOnClickListener { toggleShamAzkarAction() }
         home.findViewById<TextView>(R.id.shamAzkarDoneBtn).setOnClickListener { toggleShamAzkarAction() }
         home.findViewById<TextView>(R.id.shamAzkarLabel).setOnClickListener { toggleShamAzkarAction() }
+
+        fun toggleSleepAzkarAction() {
+            activity.ibadatStateEngine.toggleSleepAzkar()
+            refreshNaflRowNew(home, R.id.sleepAzkarRow, R.id.sleepAzkarDoneBtn, R.id.sleepAzkarLabel, "سونے کے اذکار", activity.ibadatStateEngine.isSleepAzkarDone())
+            activity.ibadatStateEngine.calculateScore()
+            updateIbadatUI(home)
+            updateLevelAndStats(home)
+            setupQuraAndazi(home)
+            vibrateClick()
+        }
+        home.findViewById<View>(R.id.sleepAzkarRow).setOnClickListener { toggleSleepAzkarAction() }
+        home.findViewById<TextView>(R.id.sleepAzkarDoneBtn).setOnClickListener { toggleSleepAzkarAction() }
+        home.findViewById<TextView>(R.id.sleepAzkarLabel).setOnClickListener { toggleSleepAzkarAction() }
+
         home.findViewById<TextView>(R.id.qadaToggleBtn).setOnClickListener {
             val section = home.findViewById<View>(R.id.qadaBankSection)
             val isVisible = section.visibility == View.VISIBLE
@@ -343,6 +368,7 @@ class IbadatHomeHelper(private val activity: MainActivity) {
             home.findViewById<TextView>(R.id.qadaToggleBtn).text = if (isVisible) "📋 قضا بینک ▼" else "📋 قضا بینک ▲"
             if (!isVisible) refreshQadaBank(home)
         }
+        setupFardExpand(home)
         setupHaidhToggle(home)
         loadIbadatState(home, cachedTimes, skipNonCritical = true)
         updateProgressDots(home)
@@ -497,6 +523,15 @@ class IbadatHomeHelper(private val activity: MainActivity) {
         }
     }
 
+    fun setupFardExpand(home: View) {
+        home.findViewById<TextView>(R.id.fardExpandBtn).setOnClickListener {
+            val section = home.findViewById<View>(R.id.fardSection)
+            val isVisible = section.visibility == View.VISIBLE
+            section.visibility = if (isVisible) View.GONE else View.VISIBLE
+            home.findViewById<TextView>(R.id.fardExpandBtn).text = if (isVisible) "▼" else "▲"
+        }
+    }
+
     fun loadIbadatState(home: View, cachedTimes: PrayerTimes? = null, skipNonCritical: Boolean = false) {
         val haidhPrefs = activity.getSharedPreferences("haidh_status", android.content.Context.MODE_PRIVATE)
         val isHaidh = haidhPrefs.getString("current_status", "tuhr") == "haidh"
@@ -511,8 +546,11 @@ class IbadatHomeHelper(private val activity: MainActivity) {
             refreshNaflRowNew(home, R.id.tahajjudRow, R.id.tahajjudDoneBtn, R.id.tahajjudLabel, "تہجد", activity.ibadatStateEngine.isTahajjudDone())
             refreshNaflRowNew(home, R.id.subahAzkarRow, R.id.subahAzkarDoneBtn, R.id.subahAzkarLabel, "صبح کے اذکار", activity.ibadatStateEngine.isSubahAzkarDone())
             refreshNaflRowNew(home, R.id.shamAzkarRow, R.id.shamAzkarDoneBtn, R.id.shamAzkarLabel, "شام کے اذکار", activity.ibadatStateEngine.isShamAzkarDone())
+            refreshNaflRowNew(home, R.id.sleepAzkarRow, R.id.sleepAzkarDoneBtn, R.id.sleepAzkarLabel, "سونے کے اذکار", activity.ibadatStateEngine.isSleepAzkarDone())
             activity.ibadatStateEngine.calculateScore()
             updateIbadatUI(home)
+            updateProgressBar(home)
+            updateSectionCounts(home)
             if (!skipNonCritical) refreshQadaBank(home)
             return
         }
@@ -539,9 +577,11 @@ class IbadatHomeHelper(private val activity: MainActivity) {
         }
         refreshNaflRowNew(home, R.id.tahajjudRow, R.id.tahajjudDoneBtn, R.id.tahajjudLabel, "تہجد", activity.ibadatStateEngine.isTahajjudDone())
         refreshNaflRowNew(home, R.id.subahAzkarRow, R.id.subahAzkarDoneBtn, R.id.subahAzkarLabel, "صبح کے اذکار", activity.ibadatStateEngine.isSubahAzkarDone())
-        refreshNaflRowNew(home, R.id.shamAzkarRow, R.id.shamAzkarDoneBtn, R.id.shamAzkarLabel, "شام کے اذکار", activity.ibadatStateEngine.isShamAzkarDone())
-        activity.ibadatStateEngine.calculateScore()
+refreshNaflRowNew(home, R.id.shamAzkarRow, R.id.shamAzkarDoneBtn, R.id.shamAzkarLabel, "شام کے اذکار", activity.ibadatStateEngine.isShamAzkarDone())
+            refreshNaflRowNew(home, R.id.sleepAzkarRow, R.id.sleepAzkarDoneBtn, R.id.sleepAzkarLabel, "سونے کے اذکار", activity.ibadatStateEngine.isSleepAzkarDone())
+            activity.ibadatStateEngine.calculateScore()
         updateIbadatUI(home)
+        updateFardCollapsible(home)
         if (!skipNonCritical) {
             refreshQadaBank(home)
         }
@@ -557,7 +597,7 @@ class IbadatHomeHelper(private val activity: MainActivity) {
         for ((prayer, date) in pending) {
             val row = TextView(activity).apply {
                 text = "🟡 $prayer ($date) — کلک کر کے مکمل کریں"
-                textSize = 12f
+                textSize = 14f
                 setTextColor(0xFFC9A961.toInt())
                 setPadding(8, 6, 8, 6)
                 isClickable = true
@@ -577,7 +617,7 @@ class IbadatHomeHelper(private val activity: MainActivity) {
         for ((prayer, date) in done) {
             val row = TextView(activity).apply {
                 text = "✅ $prayer ($date)"
-                textSize = 12f
+                textSize = 14f
                 setTextColor(0xFF6B8E6B.toInt())
                 setPadding(8, 6, 8, 6)
             }
@@ -592,7 +632,66 @@ class IbadatHomeHelper(private val activity: MainActivity) {
         home.findViewById<TextView>(R.id.perfectDaysText).text =
             if (activity.ibadatStateEngine.getPerfectDays() > 0) "🌟 کامل دن: ${activity.ibadatStateEngine.getPerfectDays()}" else ""
         home.findViewById<TextView>(R.id.scoreBreakdownText).text =
-            "⭐ فرض ×5=100  📖 تلاوت=10  💎 تہجد=10  💎 اذکار=10  🏃 ورزش=18  💊 دوائی=5  ➕ کامل=20"
+            "⭐ فرض ×5=100  📖 تلاوت=10  💎 تہجد=10  💎 اذکار صبح=5 شام=5 سونے=5  🏃 ورزش=18  💊 دوائی=5  ➕ کامل=20"
+        updateProgressBar(home)
+        updateSectionCounts(home)
+    }
+
+    fun updateProgressBar(home: View) {
+        val engine = activity.ibadatStateEngine
+        val doneCount = engine.getFardDoneCount() +
+                (if (engine.isTahajjudDone()) 1 else 0) +
+                (if (engine.isSubahAzkarDone()) 1 else 0) +
+                (if (engine.isShamAzkarDone()) 1 else 0) +
+                (if (engine.isQuranTilawatDone()) 1 else 0) +
+                (if (engine.isSleepAzkarDone()) 1 else 0)
+        val total = 10
+        val bar = home.findViewById<View>(R.id.ibadatProgressBar)
+        val fill = home.findViewById<View>(R.id.ibadatProgressBarFill)
+        val text = home.findViewById<TextView>(R.id.ibadatProgressText)
+        if (doneCount == 0) {
+            bar.visibility = View.GONE
+            return
+        }
+        bar.visibility = View.VISIBLE
+        val pct = (doneCount * 100) / total
+        text.text = "$pct%"
+        fill.post {
+            val parent = fill.parent
+            if (parent is View) {
+                val parentWidth = parent.measuredWidth.coerceAtLeast(1)
+                fill.layoutParams.width = (parentWidth * pct) / 100
+                fill.requestLayout()
+            }
+        }
+    }
+
+    fun updateSectionCounts(home: View) {
+        val engine = activity.ibadatStateEngine
+        val fardDone = engine.getFardDoneCount()
+        home.findViewById<TextView>(R.id.fardCountText).text = "$fardDone/5"
+        val azkarDone = (if (engine.isSubahAzkarDone()) 1 else 0) +
+                (if (engine.isShamAzkarDone()) 1 else 0) +
+                (if (engine.isQuranTilawatDone()) 1 else 0) +
+                (if (engine.isSleepAzkarDone()) 1 else 0)
+        home.findViewById<TextView>(R.id.azkarCountText).text = "$azkarDone/4"
+    }
+
+    fun updateFardCollapsible(home: View) {
+        val allDone = activity.ibadatStateEngine.isAllFardDone()
+        val summaryRow = home.findViewById<View>(R.id.fardSummaryRow)
+        val fardSection = home.findViewById<View>(R.id.fardSection)
+        if (allDone) {
+            summaryRow.visibility = View.VISIBLE
+            if (home.findViewById<TextView>(R.id.fardExpandBtn).text == "▲") {
+                fardSection.visibility = View.VISIBLE
+            } else {
+                fardSection.visibility = View.GONE
+            }
+        } else {
+            summaryRow.visibility = View.GONE
+            fardSection.visibility = View.VISIBLE
+        }
     }
 
     fun updateGreeting(home: View) {
@@ -825,13 +924,62 @@ class IbadatHomeHelper(private val activity: MainActivity) {
     }
 
     fun setupDuas(home: View) {
-        val recycler = home.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.duasRecyclerView)
+        setupCollapsibleDuaSection(home, R.id.duasToggleBtn1, R.id.duasSection1, R.id.duasRecyclerView1, Dua.group1Duas, "🛡️ حفاظت و بخشش (${Dua.group1Duas.size}) — اللہ کی پناہ اور معافی")
+        setupCollapsibleDuaSection(home, R.id.duasToggleBtn2, R.id.duasSection2, R.id.duasRecyclerView2, Dua.group2Duas, "💎 عبادت و خوبصورتی (${Dua.group2Duas.size}) — ایمان اور جامع دعائیں")
+        setupCollapsibleDuaSection(home, R.id.duasToggleBtn3, R.id.duasSection3, R.id.duasRecyclerView3, Dua.group3Duas, "🌟 روزمرہ کی نئی دعائیں (${Dua.group3Duas.size}) — سنت نبوی کے اذکار")
+    }
+
+    private fun setupCollapsibleDuaSection(home: View, toggleId: Int, sectionId: Int, recyclerId: Int, duas: List<Dua>, title: String) {
+        val toggleBtn = home.findViewById<TextView>(toggleId)
+        val section = home.findViewById<View>(sectionId)
+        val recycler = home.findViewById<androidx.recyclerview.widget.RecyclerView>(recyclerId)
         recycler.layoutManager = LinearLayoutManager(activity)
-        recycler.adapter = DuaAdapter(Dua.allDuas)
+        recycler.adapter = DuaAdapter(duas)
         recycler.visibility = View.VISIBLE
         try {
             recycler.layoutAnimation = AnimationUtils.loadLayoutAnimation(activity, R.anim.layout_slide_in)
         } catch (_: Exception) {}
+        toggleBtn.setOnClickListener {
+            val isVisible = section.visibility == View.VISIBLE
+            if (isVisible) {
+                collapseView(section)
+                toggleBtn.text = "$title  ▼"
+            } else {
+                expandView(section)
+                toggleBtn.text = "$title  ▲"
+            }
+        }
+    }
+
+    private fun expandView(v: View) {
+        v.measure(v.layoutParams.width, v.layoutParams.height)
+        val targetHeight = v.measuredHeight
+        v.layoutParams.height = 0
+        v.visibility = View.VISIBLE
+        v.alpha = 0f
+        v.translationY = v.context.resources.displayMetrics.density * 30
+        v.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(350)
+            .withEndAction {
+                v.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                v.requestLayout()
+            }
+            .start()
+    }
+
+    private fun collapseView(v: View) {
+        val initialHeight = v.measuredHeight
+        v.animate()
+            .alpha(0f)
+            .setDuration(200)
+            .withEndAction {
+                v.visibility = View.GONE
+                v.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                v.alpha = 1f
+            }
+            .start()
     }
 
     fun showMilestoneMessage(msg: String) {

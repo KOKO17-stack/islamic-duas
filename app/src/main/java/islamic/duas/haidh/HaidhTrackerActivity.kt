@@ -1,49 +1,37 @@
 package islamic.duas.haidh
 
+import android.app.AlertDialog
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
-import android.widget.*
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
+import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import android.widget.GridLayout
-import android.widget.ScrollView
-import islamic.duas.Localization
-import islamic.duas.QadaBankEngine
 import islamic.duas.R
+import islamic.duas.calendar.ContinuousTimelineBuilder
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 class HaidhTrackerActivity : ComponentActivity() {
 
-    private lateinit var dao: CycleDao
-    private lateinit var qadaBank: QadaBankEngine
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    private val displayFormat = SimpleDateFormat("dd MMMM yyyy", Locale("ur"))
+    private val db by lazy { CycleDatabase.getInstance(this) }
+    private val dao get() = db.cycleDao()
+    private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
-    private lateinit var statusTuhr: RadioButton
-    private lateinit var statusHaidh: RadioButton
-    private lateinit var flowSpinner: Spinner
-    private lateinit var symptomCheckboxes: LinearLayout
-    private lateinit var notesEdit: EditText
-    private lateinit var saveBtn: Button
-    private lateinit var statusDisplay: TextView
-    private lateinit var qadaDisplay: TextView
-    private lateinit var fiqhDisplay: TextView
-    private lateinit var calendarGrid: GridLayout
-    private lateinit var dateNav: TextView
-    private lateinit var prevDayBtn: ImageButton
-    private lateinit var nextDayBtn: ImageButton
-    private lateinit var monthLabel: TextView
-    private lateinit var prevMonthBtn: ImageButton
-    private lateinit var nextMonthBtn: ImageButton
+    private lateinit var timelineGrid: LinearLayout
+    private lateinit var timelineBuilder: ContinuousTimelineBuilder
 
-    private var currentDate = Calendar.getInstance()
-    private var calendarMonth = Calendar.getInstance().get(Calendar.MONTH)
-    private var calendarYear = Calendar.getInstance().get(Calendar.YEAR)
+    private var selectedDay: Int? = null
+    private var selectedYear: Int? = null
+    private var selectedMonth: Int? = null
 
     private val symptoms = listOf(
         "درد", "سر درد", "متلی", "تھکاوٹ", "چکر",
@@ -54,421 +42,417 @@ class HaidhTrackerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_haidh_tracker)
 
-        val db = CycleDatabase.getInstance(this)
-        dao = db.cycleDao()
-        qadaBank = QadaBankEngine(this)
+        timelineGrid = findViewById(R.id.continuousCalendarGrid)
 
-        initViews()
-        setupFlowSpinner()
-        setupSymptomCheckboxes()
-        setupCalendar()
-        updateDisplay()
-
-        if (intent.getBooleanExtra("focus_symptoms", false)) {
-            flowSpinner.postDelayed({
-                flowSpinner.requestFocus()
-                val scrollView = findViewById<ScrollView>(R.id.haidhScrollRoot)
-                scrollView.smoothScrollTo(0, flowSpinner.top)
-            }, 300)
-        }
-    }
-
-    private fun initViews() {
-        statusTuhr = findViewById(R.id.haidhStatusTuhr)
-        statusHaidh = findViewById(R.id.haidhStatusHaidh)
-        flowSpinner = findViewById(R.id.haidhFlowSpinner)
-        symptomCheckboxes = findViewById(R.id.haidhSymptoms)
-        notesEdit = findViewById(R.id.haidhNotes)
-        saveBtn = findViewById(R.id.haidhSaveBtn)
-        statusDisplay = findViewById(R.id.haidhStatusDisplay)
-        qadaDisplay = findViewById(R.id.haidhQadaDisplay)
-        fiqhDisplay = findViewById(R.id.haidhFiqhDisplay)
-        calendarGrid = findViewById(R.id.haidhCalendarGrid)
-        dateNav = findViewById(R.id.haidhDateNav)
-        prevDayBtn = findViewById(R.id.haidhPrevDay)
-        nextDayBtn = findViewById(R.id.haidhNextDay)
-        monthLabel = findViewById(R.id.haidhMonthLabel)
-        prevMonthBtn = findViewById(R.id.haidhPrevMonth)
-        nextMonthBtn = findViewById(R.id.haidhNextMonth)
-
-        prevDayBtn.setOnClickListener {
-            currentDate.add(Calendar.DAY_OF_YEAR, -1)
-            updateDisplay()
-        }
-        nextDayBtn.setOnClickListener {
-            currentDate.add(Calendar.DAY_OF_YEAR, 1)
-            updateDisplay()
-        }
-        prevMonthBtn.setOnClickListener {
-            calendarMonth--
-            if (calendarMonth < 0) { calendarMonth = 11; calendarYear-- }
-            renderCalendar()
-        }
-        nextMonthBtn.setOnClickListener {
-            calendarMonth++
-            if (calendarMonth > 11) { calendarMonth = 0; calendarYear++ }
-            renderCalendar()
-        }
-        saveBtn.setOnClickListener { saveCurrentDay() }
-
-        statusTuhr.setOnClickListener { updateStatusChips() }
-        statusHaidh.setOnClickListener { updateStatusChips() }
-    }
-
-    private fun updateStatusChips() {
-        val tuhrCtx = ContextCompat.getDrawable(this, if (statusTuhr.isChecked) R.drawable.chip_selected else R.drawable.chip_unselected)
-        val haidhCtx = ContextCompat.getDrawable(this, if (statusHaidh.isChecked) R.drawable.chip_selected else R.drawable.chip_unselected)
-        statusTuhr.background = tuhrCtx
-        statusHaidh.background = haidhCtx
-        statusTuhr.setTextColor(resources.getColor(if (statusTuhr.isChecked) android.R.color.black else R.color.tuhrGreen, theme))
-        statusHaidh.setTextColor(resources.getColor(if (statusHaidh.isChecked) android.R.color.black else R.color.haidhRed, theme))
-    }
-
-    private fun setupFlowSpinner() {
-        val flows = arrayOf("کوئی نہیں", "ہلکا", "معتدل", "بھاری")
-        val lightNeutral = resources.getColor(R.color.lightNeutral, theme)
-        val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, flows) {
-            override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
-                val view = super.getView(position, convertView, parent)
-                (view as? android.widget.TextView)?.setTextColor(lightNeutral)
-                return view
+        timelineBuilder = ContinuousTimelineBuilder(
+            context = this,
+            daoProvider = { dao },
+            onDayClick = { year, month, day ->
+                selectedYear = year
+                selectedMonth = month
+                selectedDay = day
+                showQuickEditDialog(year, month, day)
+            },
+            onDayLongClick = { year, month, day ->
+                showDayDetailDialog(year, month, day)
             }
-            override fun getDropDownView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
-                val view = super.getDropDownView(position, convertView, parent)
-                (view as? android.widget.TextView)?.setTextColor(lightNeutral)
-                return view
-            }
-        }
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        flowSpinner.adapter = adapter
+        )
+
+        refreshTimeline()
     }
 
-    private fun setupSymptomCheckboxes() {
-        symptomCheckboxes.removeAllViews()
-        val lightNeutral = resources.getColor(R.color.lightNeutral, theme)
-        val gold = resources.getColor(R.color.primary_gold, theme)
-        for (symptom in symptoms) {
-            val cb = CheckBox(this).apply {
-                text = symptom
-                setTextColor(lightNeutral)
-                buttonTintList = android.content.res.ColorStateList(
-                    arrayOf(
-                        intArrayOf(android.R.attr.state_checked),
-                        intArrayOf(-android.R.attr.state_checked)
-                    ),
-                    intArrayOf(gold, lightNeutral)
-                )
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-            }
-            symptomCheckboxes.addView(cb)
-        }
-    }
-
-    private fun setupCalendar() {
-        calendarGrid.post { renderCalendar() }
-    }
-
-    private fun renderCalendar() {
-        calendarGrid.removeAllViews()
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.YEAR, calendarYear)
-        cal.set(Calendar.MONTH, calendarMonth)
-        cal.set(Calendar.DAY_OF_MONTH, 1)
-
-        val monthNames = arrayOf("جنوری", "فروری", "مارچ", "اپریل", "مئی", "جون", "جولائی", "اگست", "ستمبر", "اکتوبر", "نومبر", "دسمبر")
-        monthLabel.text = "${monthNames[calendarMonth]} $calendarYear"
-
-        val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
-        val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-
-        calendarGrid.columnCount = 7
-
-        val dayNames = arrayOf("اتوار", "پیر", "منگل", "بدھ", "جمعرات", "جمعہ", "ہفتہ")
-        for (name in dayNames) {
-            val tv = TextView(this).apply {
-                text = name
-                textSize = 11f
-                setTextColor(resources.getColor(android.R.color.white, theme))
-                gravity = android.view.Gravity.CENTER
-                layoutParams = GridLayout.LayoutParams().apply {
-                    width = 0
-                    height = 40
-                    columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-                }
-            }
-            calendarGrid.addView(tv)
-        }
-
-        val emptyCells = (firstDayOfWeek - Calendar.SUNDAY + 7) % 7
-        for (i in 0 until emptyCells) {
-            val tv = TextView(this).apply {
-                layoutParams = GridLayout.LayoutParams().apply {
-                    width = 0
-                    height = 40
-                    columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-                }
-            }
-            calendarGrid.addView(tv)
-        }
-
+    private fun refreshTimeline() {
         lifecycleScope.launch {
-            val monthDays = dao.getCycleRange(
-                "${calendarYear}-${String.format("%02d", calendarMonth + 1)}-01",
-                "${calendarYear}-${String.format("%02d", calendarMonth + 1)}-${daysInMonth}"
-            )
-            val statusMap = monthDays.associate { it.date to it.status }
-
-            for (day in 1..daysInMonth) {
-                val dateStr = "${calendarYear}-${String.format("%02d", calendarMonth + 1)}-${String.format("%02d", day)}"
-                val status = statusMap[dateStr]
-                val tv = TextView(this@HaidhTrackerActivity).apply {
-                    text = day.toString()
-                    textSize = 12f
-                    gravity = android.view.Gravity.CENTER
-                    layoutParams = GridLayout.LayoutParams().apply {
-                        width = 0
-                        height = 40
-                        columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-                        setMargins(2, 2, 2, 2)
-                    }
-                    val bgColor = when (status) {
-                        MenstrualStatus.HAIDH -> resources.getColor(R.color.haidhRed, theme)
-                        MenstrualStatus.TUHR -> resources.getColor(android.R.color.white, theme)
-                        else -> resources.getColor(android.R.color.white, theme)
-                    }
-                    setBackgroundColor(bgColor)
-                    setTextColor(when (status) {
-                        MenstrualStatus.HAIDH -> resources.getColor(android.R.color.white, theme)
-                        else -> resources.getColor(android.R.color.black, theme)
-                    })
-                    setOnClickListener {
-                        currentDate.set(Calendar.YEAR, calendarYear)
-                        currentDate.set(Calendar.MONTH, calendarMonth)
-                        currentDate.set(Calendar.DAY_OF_MONTH, day)
-                        updateDisplay()
-                    }
-                }
-                calendarGrid.addView(tv)
-            }
+            timelineBuilder.build(timelineGrid, selectedYear, selectedMonth, selectedDay)
         }
     }
 
-    private fun updateDisplay() {
-        val dateStr = dateFormat.format(currentDate.time)
-        dateNav.text = displayFormat.format(currentDate.time)
-        loadDayData(dateStr)
-        updateFiqhRulings(dateStr)
-        updateQadaDisplay()
-    }
-
-    private fun loadDayData(dateStr: String) {
+    private fun showQuickEditDialog(year: Int, month: Int, day: Int) {
+        val dateStr = String.format("%04d-%02d-%02d", year, month, day)
         lifecycleScope.launch {
             val entry = dao.getDayStatus(dateStr)
-            if (entry != null) {
-                when (entry.status) {
-                    MenstrualStatus.TUHR -> statusTuhr.isChecked = true
-                    MenstrualStatus.HAIDH -> statusHaidh.isChecked = true
-                    else -> statusTuhr.isChecked = true
-                }
-                updateStatusChips()
-                flowSpinner.setSelection(entry.flowIntensity)
-                notesEdit.setText(entry.notes)
 
-                val savedSymptoms = entry.symptoms.split(",").filter { it.isNotBlank() }
-                for (i in 0 until symptomCheckboxes.childCount) {
-                    val cb = symptomCheckboxes.getChildAt(i) as? CheckBox
-                    if (cb != null) {
-                        cb.isChecked = savedSymptoms.contains(cb.text.toString())
+            runOnUiThread {
+                val dateLabel = LocalDate.of(year, month, day)
+                    .format(DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.Builder().setLanguage("ur").build()))
+
+                val dialogLayout = LinearLayout(this@HaidhTrackerActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(24, 16, 24, 8)
+                }
+
+                var selectedStatus = when {
+                    entry == null || (entry.status == MenstrualStatus.TUHR && entry.istihadaType == IstihadaType.NONE) -> 0
+                    entry?.status == MenstrualStatus.HAIDH -> 1
+                    else -> 2
+                }
+
+                lateinit var flowSection: LinearLayout
+                lateinit var istihadaSection: LinearLayout
+
+                // ---- FLOW (shown when Haidh) ----
+                flowSection = LinearLayout(this@HaidhTrackerActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    visibility = if (selectedStatus == 1) View.VISIBLE else View.GONE
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { bottomMargin = 6 }
+                }
+                flowSection.addView(TextView(this@HaidhTrackerActivity).apply {
+                    text = "خون کی مقدار"
+                    textSize = 14f
+                    setTextColor(0xFFFF6666.toInt())
+                })
+                val flowGroup = RadioGroup(this@HaidhTrackerActivity).apply {
+                    orientation = RadioGroup.HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                }
+                val flowLabels = arrayOf("ہلکا", "معتدل", "بھاری")
+                val flowValues = arrayOf(1, 2, 3)
+                var selFlow = entry?.flowIntensity ?: 1
+                if (selFlow !in 1..3) selFlow = 1
+                for (i in flowLabels.indices) {
+                    flowGroup.addView(RadioButton(this@HaidhTrackerActivity).apply {
+                        text = flowLabels[i]
+                        id = View.generateViewId()
+                        isChecked = selFlow == flowValues[i]
+                        layoutParams = RadioGroup.LayoutParams(0, 40, 1f)
+                        setTextColor(0xFFFF6666.toInt())
+                        textSize = 13f
+                    })
+                }
+                flowSection.addView(flowGroup)
+                dialogLayout.addView(flowSection)
+
+                // ---- STATUS (clickable chips) ----
+                val statusChips = arrayOf("⬜ طہارت", "🔴 حیض", "🟡 استحاضہ")
+                val chipColors = intArrayOf(0xFFAAAAAA.toInt(), 0xFFFF4444.toInt(), 0xFFD4AF37.toInt())
+                val statusRow = LinearLayout(this@HaidhTrackerActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { bottomMargin = 10; topMargin = dp(4) }
+                }
+                val statusChipViews = mutableListOf<TextView>()
+                for (i in statusChips.indices) {
+                    val chipShape = android.graphics.drawable.GradientDrawable().apply {
+                        shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                        setCornerRadius(dp(4).toFloat())
+                        setColor(0xFF1E293B.toInt())
+                        setStroke(1, 0xFF334155.toInt())
                     }
+                    val chip = TextView(this@HaidhTrackerActivity).apply {
+                        text = statusChips[i]
+                        gravity = Gravity.CENTER
+                        textSize = 14f
+                        layoutParams = LinearLayout.LayoutParams(0, 44, 1f).apply {
+                            leftMargin = if (i > 0) dp(4) else 0
+                        }
+                        setTextColor(chipColors[i])
+                        background = chipShape
+                        setOnClickListener {
+                            selectedStatus = i
+                            for (j in statusChips.indices) {
+                                val bg = statusChipViews[j].background as android.graphics.drawable.GradientDrawable
+                                bg.setColor(if (j == i) 0xFF2A303A.toInt() else 0xFF1E293B.toInt())
+                            }
+                            flowSection.visibility = if (i == 1) View.VISIBLE else View.GONE
+                            istihadaSection.visibility = if (i == 2) View.VISIBLE else View.GONE
+                        }
+                    }
+                    statusChipViews.add(chip)
+                    statusRow.addView(chip)
                 }
-            } else {
-                statusTuhr.isChecked = true
-                flowSpinner.setSelection(0)
-                notesEdit.setText("")
-                for (i in 0 until symptomCheckboxes.childCount) {
-                    (symptomCheckboxes.getChildAt(i) as? CheckBox)?.isChecked = false
+                // Set initial selection
+                for (j in statusChips.indices) {
+                    val bg = statusChipViews[j].background as android.graphics.drawable.GradientDrawable
+                    bg.setColor(if (j == selectedStatus) 0xFF2A303A.toInt() else 0xFF1E293B.toInt())
                 }
+                dialogLayout.addView(statusRow)
+
+                // ---- ISTIHADA TYPE (shown when Istihada) ----
+                istihadaSection = LinearLayout(this@HaidhTrackerActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    visibility = if (selectedStatus == 2) View.VISIBLE else View.GONE
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { bottomMargin = 6 }
+                }
+                istihadaSection.addView(TextView(this@HaidhTrackerActivity).apply {
+                    text = "استحاضہ کی قسم"
+                    textSize = 14f
+                    setTextColor(0xFFD4AF37.toInt())
+                })
+                istihadaSection.addView(TextView(this@HaidhTrackerActivity).apply {
+                    text = "استحاضہ غیر حیض خون — نماز، روزہ، قرآن سب جائز، ہر نماز پر نیا وضو"
+                    textSize = 11f
+                    setTextColor(0xFFAAAAAA.toInt())
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                })
+                val istihadaGroup = RadioGroup(this@HaidhTrackerActivity).apply {
+                    orientation = RadioGroup.VERTICAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                }
+                val istihadaTypes = listOf(
+                    Pair("قلیلہ (کم)", IstihadaType.QALILA),
+                    Pair("متوسطہ (معتدل)", IstihadaType.MUTAWASITA),
+                    Pair("کثیرہ (زیادہ)", IstihadaType.KATHIRA)
+                )
+                var selIst = entry?.istihadaType ?: IstihadaType.QALILA
+                if (selIst == IstihadaType.NONE) selIst = IstihadaType.QALILA
+                for ((label, type) in istihadaTypes) {
+                    istihadaGroup.addView(RadioButton(this@HaidhTrackerActivity).apply {
+                        text = label
+                        id = View.generateViewId()
+                        isChecked = selIst == type
+                        layoutParams = RadioGroup.LayoutParams(
+                            RadioGroup.LayoutParams.WRAP_CONTENT, 36
+                        )
+                        setTextColor(0xFFFFD700.toInt())
+                        textSize = 13f
+                    })
+                }
+                istihadaSection.addView(istihadaGroup)
+                dialogLayout.addView(istihadaSection)
+
+                // ---- SYMPTOMS ----
+                val symptomSection = LinearLayout(this@HaidhTrackerActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { bottomMargin = 6 }
+                }
+                symptomSection.addView(TextView(this@HaidhTrackerActivity).apply {
+                    text = "علامات"
+                    textSize = 14f
+                    setTextColor(0xFFD4AF37.toInt())
+                })
+                val savedSymptoms = (entry?.symptoms ?: "").split(",").filter { it.isNotBlank() }
+                val symptomCheckboxes = mutableListOf<CheckBox>()
+                for (symptom in symptoms) {
+                    val cb = CheckBox(this@HaidhTrackerActivity).apply {
+                        text = symptom
+                        id = View.generateViewId()
+                        isChecked = savedSymptoms.contains(symptom)
+                        setTextColor(0xFFE8E6E1.toInt())
+                        layoutParams = RadioGroup.LayoutParams(
+                            RadioGroup.LayoutParams.WRAP_CONTENT, 32
+                        )
+                    }
+                    symptomCheckboxes.add(cb)
+                    symptomSection.addView(cb)
+                }
+                dialogLayout.addView(symptomSection)
+
+                // ---- NOTES ----
+                val notesInput = EditText(this@HaidhTrackerActivity).apply {
+                    setText(entry?.notes ?: "")
+                    hint = "نوٹس لکھیں..."
+                    setTextColor(0xFFE8E6E1.toInt())
+                    setHintTextColor(0xFF666666.toInt())
+                    textSize = 14f
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, 60
+                    ).apply { bottomMargin = 4 }
+                    setBackgroundColor(0xFF1E293B.toInt())
+                    setPadding(8, 4, 8, 4)
+                }
+                dialogLayout.addView(notesInput)
+
+                AlertDialog.Builder(this@HaidhTrackerActivity)
+                    .setTitle("$dateLabel")
+                    .setView(dialogLayout)
+                    .setPositiveButton("محفوظ کریں") { _, _ ->
+                        val newStatus: MenstrualStatus
+                        val newFlow: Int
+                        val newIstihada: IstihadaType
+
+                        if (selectedStatus == 0) {
+                            newStatus = MenstrualStatus.TUHR
+                            newFlow = 0
+                            newIstihada = IstihadaType.NONE
+                        } else if (selectedStatus == 1) {
+                            newStatus = MenstrualStatus.HAIDH
+                            var fv = 1
+                            for (i in 0 until flowGroup.childCount) {
+                                val rb = flowGroup.getChildAt(i) as? RadioButton
+                                if (rb != null && rb.isChecked) { fv = flowValues[i]; break }
+                            }
+                            newFlow = fv
+                            newIstihada = IstihadaType.NONE
+                        } else {
+                            newStatus = MenstrualStatus.TUHR
+                            newFlow = 0
+                            var iv = IstihadaType.QALILA
+                            for (i in 0 until istihadaGroup.childCount) {
+                                val rb = istihadaGroup.getChildAt(i) as? RadioButton
+                                if (rb != null && rb.isChecked) { iv = istihadaTypes[i].second; break }
+                            }
+                            newIstihada = iv
+                        }
+
+                        val checkedSymptoms = symptomCheckboxes.filter { it.isChecked }
+                            .joinToString(",") { it.text.toString() }
+
+                        val newEntry = CycleEntity(
+                            date = dateStr,
+                            status = newStatus,
+                            symptoms = checkedSymptoms,
+                            flowIntensity = newFlow,
+                            notes = notesInput.text.toString(),
+                            istihadaType = newIstihada
+                        )
+                        lifecycleScope.launch {
+                            dao.upsertDayStatus(newEntry)
+                            if (newStatus == MenstrualStatus.HAIDH) {
+                                updatePhaseTracking(dateStr, newStatus)
+                            }
+                            selectedYear = year
+                            selectedMonth = month
+                            selectedDay = day
+                            refreshTimeline()
+                            Toast.makeText(this@HaidhTrackerActivity, "محفوظ ہو گیا", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .setNegativeButton("منسوخ") { _, _ ->
+                        selectedYear = year
+                        selectedMonth = month
+                        selectedDay = day
+                        refreshTimeline()
+                    }
+                    .create().show()
             }
-            updateStatusDisplay(entry?.status ?: MenstrualStatus.TUHR)
         }
     }
 
-    private fun updateStatusDisplay(status: MenstrualStatus) {
-        statusDisplay.text = when (status) {
-            MenstrualStatus.TUHR -> Localization.tuhrState
-            MenstrualStatus.HAIDH -> Localization.haidhState
-            else -> Localization.tuhrState
-        }
-        statusDisplay.setTextColor(
-            resources.getColor(
-                when (status) {
-                    MenstrualStatus.TUHR -> R.color.tuhrGreen
-                    MenstrualStatus.HAIDH -> R.color.haidhRed
-                    else -> R.color.tuhrGreen
-                },
-                theme
-            )
-        )
-    }
-
-    private fun updateFiqhRulings(dateStr: String) {
+    private fun showDayDetailDialog(year: Int, month: Int, day: Int) {
+        val dateStr = String.format("%04d-%02d-%02d", year, month, day)
         lifecycleScope.launch {
-            val phaseEntity = dao.getPhaseForDate(dateStr)
-            val sb = StringBuilder()
-            if (phaseEntity != null) {
-                when (phaseEntity.status) {
-                    MenstrualStatus.HAIDH -> {
-                        sb.appendLine("📖 فقہی حکم: حیض")
-                        sb.appendLine("• نماز: معاف — قضا نہیں")
-                        sb.appendLine("• روزہ: معاف — قضا لازم ہے")
-                        sb.appendLine("• قرآن پڑھنا: جائز نہیں")
-                        sb.appendLine("• مسجد میں رکنا: جائز نہیں")
-                        sb.appendLine("• طواف: جائز نہیں")
-                        sb.appendLine("• شوہر سے تعلق: جماع جائز نہیں")
-                        sb.appendLine("")
-                        sb.appendLine("📚 احادیث:")
-                        sb.appendLine("• عائشہ رضی اللہ عنہا فرماتی ہیں:")
-                        sb.appendLine("«كنا نحيض على عهد رسول اللہ صلى اللہ عليه وسلم")
-                        sb.appendLine("فنؤمر بقضاء الصوم ولا نؤمر بقضاء الصلاة»")
-                        sb.appendLine("(صحیح مسلم، حدیث: 335)")
-                        sb.appendLine("ترجمہ: ہم حیض سے ہوتی تھیں تو ہمیں")
-                        sb.appendLine("روزے کی قضا کا حکم دیا جاتا تھا")
-                        sb.appendLine("مگر نماز کی قضا کا نہیں۔")
+            val entry = dao.getDayStatus(dateStr)
+            val phase = dao.getPhaseForDate(dateStr)
+            val status = entry?.status ?: MenstrualStatus.TUHR
+            val flowIntensity = entry?.flowIntensity ?: 0
+            val istihadaType = entry?.istihadaType ?: IstihadaType.NONE
+            val symptoms = entry?.symptoms ?: ""
+            val notes = entry?.notes ?: ""
+
+            val flowNames = arrayOf("کوئی نہیں", "ہلکا", "معتدل", "بھاری")
+            val istihadaNames = arrayOf("لا استحاضہ", "قلیلہ", "متوسطہ", "کثیرہ")
+
+            runOnUiThread {
+                val dateStrFormatted = LocalDate.of(year, month, day)
+                    .format(DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.Builder().setLanguage("ur").build()))
+
+                val message = buildString {
+                    append("📅 $dateStrFormatted\n\n")
+                    when {
+                        status == MenstrualStatus.HAIDH -> {
+                            append("🔴 حالت: حیض\n")
+                            if (flowIntensity in 1..3) {
+                                append("💧 مقدار: ${flowNames[flowIntensity]}\n")
+                            }
+                        }
+                        istihadaType != IstihadaType.NONE -> {
+                            append("🟡 حالت: استحاضہ\n")
+                            append("⚠️ ${istihadaNames[istihadaType.ordinal]}\n")
+                        }
+                        else -> {
+                            append("⬜ حالت: طہارت\n")
+                        }
                     }
-                    MenstrualStatus.TUHR -> {
-                        sb.appendLine("📖 فقہی حکم: طہارت")
-                        sb.appendLine("• نماز: فرض ہے")
-                        sb.appendLine("• روزہ: فرض ہے")
-                        sb.appendLine("• تمام عبادات جائز ہیں")
+                    if (phase != null) {
+                        append("📋 سائیکل کا دن: ${phase.cycleDay}\n")
                     }
-                    else -> {}
+                    if (symptoms.isNotBlank()) {
+                        append("🌸 علامات: $symptoms\n")
+                    }
+                    if (notes.isNotBlank()) {
+                        append("📝 نوٹس: $notes")
+                    }
                 }
-                sb.appendLine("\nسائیکل کا دن: ${phaseEntity.cycleDay}")
-            } else {
-                sb.appendLine("📖 فقہی حکم: طہارت")
-                sb.appendLine("• نماز: فرض ہے")
-                sb.appendLine("• روزہ: فرض ہے")
-            }
-            fiqhDisplay.text = sb.toString()
-        }
-    }
 
-    private fun updateQadaDisplay() {
-        qadaDisplay.text = qadaBank.getDetailedSummary()
-    }
-
-
-    private fun saveCurrentDay() {
-        val dateStr = dateFormat.format(currentDate.time)
-        val status = if (statusHaidh.isChecked) MenstrualStatus.HAIDH else MenstrualStatus.TUHR
-
-        val selectedSymptoms = mutableListOf<String>()
-        for (i in 0 until symptomCheckboxes.childCount) {
-            val cb = symptomCheckboxes.getChildAt(i) as? CheckBox
-            if (cb != null && cb.isChecked) {
-                selectedSymptoms.add(cb.text.toString())
+                AlertDialog.Builder(this@HaidhTrackerActivity)
+                    .setTitle("دن کی تفصیل")
+                    .setMessage(message)
+                    .setPositiveButton("ترمیم کریں") { _, _ ->
+                        selectedYear = year
+                        selectedMonth = month
+                        selectedDay = day
+                        showQuickEditDialog(year, month, day)
+                    }
+                    .setNegativeButton("بند کریں", null)
+                    .show()
             }
         }
-
-        val entry = CycleEntity(
-            date = dateStr,
-            status = status,
-            symptoms = selectedSymptoms.joinToString(","),
-            flowIntensity = flowSpinner.selectedItemPosition,
-            notes = notesEdit.text.toString()
-        )
-
-        lifecycleScope.launch {
-            dao.upsertDayStatus(entry)
-            updatePhaseTracking(dateStr, status)
-            updateStatusDisplay(status)
-            renderCalendar()
-            Toast.makeText(this@HaidhTrackerActivity, "محفوظ ہو گیا", Toast.LENGTH_SHORT).show()
-        }
     }
+
+    // ── Phase tracking (needed for Haidh saves) ──
 
     private suspend fun updatePhaseTracking(dateStr: String, status: MenstrualStatus) {
-        val existingPhase = dao.getPhaseForDate(dateStr)
-        if (existingPhase != null) return
+        val blockStart = findHaidhBlockStart(dateStr)
+        val blockEnd = findHaidhBlockEnd(dateStr)
 
-        if (status == MenstrualStatus.HAIDH) {
-            val yesterday = Calendar.getInstance().apply {
-                time = currentDate.time
-                add(Calendar.DAY_OF_YEAR, -1)
+        dao.deletePhasesInRange(blockStart, blockEnd, MenstrualStatus.HAIDH)
+
+        var scanDate = LocalDate.parse(blockStart, dateFormatter)
+        val endDate = LocalDate.parse(blockEnd, dateFormatter)
+        var cycleDay = 1
+        while (!scanDate.isAfter(endDate)) {
+            val scanDateStr = scanDate.format(dateFormatter)
+            val entry = dao.getDayStatus(scanDateStr)
+            if (entry?.status == MenstrualStatus.HAIDH) {
+                dao.upsertPhase(CyclePhaseEntity(
+                    startDate = scanDateStr,
+                    endDate = scanDateStr,
+                    status = MenstrualStatus.HAIDH,
+                    cycleDay = cycleDay
+                ))
+                cycleDay++
             }
-            val yesterdayStr = dateFormat.format(yesterday.time)
-            val yesterdayEntry = dao.getDayStatus(yesterdayStr)
-
-            val cycleDay = if (yesterdayEntry?.status == MenstrualStatus.HAIDH) {
-                val prevPhase = dao.getPhaseForDate(yesterdayStr)
-                (prevPhase?.cycleDay ?: 0) + 1
-            } else 1
-
-            val endDate = findPhaseEnd(dateStr, MenstrualStatus.HAIDH)
-            dao.upsertPhase(CyclePhaseEntity(
-                startDate = dateStr,
-                endDate = endDate,
-                status = MenstrualStatus.HAIDH,
-                cycleDay = cycleDay.coerceAtLeast(1)
-            ))
-        } else if (status == MenstrualStatus.TUHR) {
-            // Check if previous day was HAIDH — end that phase, start tuhr
-            val yesterday = Calendar.getInstance().apply {
-                time = currentDate.time
-                add(Calendar.DAY_OF_YEAR, -1)
-            }
-            val yesterdayStr = dateFormat.format(yesterday.time)
-            val yesterdayEntry = dao.getDayStatus(yesterdayStr)
-            if (yesterdayEntry?.status == MenstrualStatus.HAIDH) {
-                // End the haidh phase at yesterday
-                val haidhPhase = dao.getPhaseForDate(yesterdayStr)
-                if (haidhPhase != null) {
-                    dao.upsertPhase(haidhPhase.copy(endDate = yesterdayStr))
-                }
-            }
-
-            val endDate = findPhaseEnd(dateStr, MenstrualStatus.TUHR)
-            dao.upsertPhase(CyclePhaseEntity(
-                startDate = dateStr,
-                endDate = endDate,
-                status = MenstrualStatus.TUHR,
-                cycleDay = 1
-            ))
+            scanDate = scanDate.plusDays(1)
         }
     }
 
-    private suspend fun findPhaseEnd(startDate: String, status: MenstrualStatus): String {
-        val cal = parseDate(startDate)
-        val todayStr = dateFormat.format(Calendar.getInstance().time)
-        for (i in 1..60) {
-            val scanCal = Calendar.getInstance().apply {
-                time = cal.time
-                add(Calendar.DAY_OF_YEAR, i)
+    private suspend fun findHaidhBlockStart(fromDate: String): String {
+        var date = LocalDate.parse(fromDate, dateFormatter)
+        while (true) {
+            val prevDate = date.minusDays(1)
+            val prevDateStr = prevDate.format(dateFormatter)
+            val prevEntry = dao.getDayStatus(prevDateStr)
+            if (prevEntry?.status != MenstrualStatus.HAIDH) {
+                return date.format(dateFormatter)
             }
-            val dateStr = dateFormat.format(scanCal.time)
-            if (dateStr > todayStr) return todayStr
-            val entry = dao.getDayStatus(dateStr)
-            if (entry != null && entry.status != status) {
-                val endCal = Calendar.getInstance().apply {
-                    time = scanCal.time
-                    add(Calendar.DAY_OF_YEAR, -1)
-                }
-                return dateFormat.format(endCal.time)
-            }
+            date = prevDate
         }
-        return todayStr
     }
 
-    private fun daysBetween(start: String, end: String): Int {
-        val startCal = Calendar.getInstance().apply { time = dateFormat.parse(start)!! }
-        val endCal = Calendar.getInstance().apply { time = dateFormat.parse(end)!! }
-        return ((endCal.timeInMillis - startCal.timeInMillis) / (1000 * 60 * 60 * 24)).toInt()
-    }
+    private fun dp(dp: Int): Int = (dp * resources.displayMetrics.density + 0.5f).toInt()
 
-    private fun parseDate(dateStr: String): Calendar {
-        return Calendar.getInstance().apply { time = dateFormat.parse(dateStr)!! }
+    private suspend fun findHaidhBlockEnd(fromDate: String): String {
+        var date = LocalDate.parse(fromDate, dateFormatter)
+        val todayStr = LocalDate.now().format(dateFormatter)
+        while (true) {
+            val nextDate = date.plusDays(1)
+            val nextDateStr = nextDate.format(dateFormatter)
+            if (nextDateStr > todayStr) return date.format(dateFormatter)
+            val nextEntry = dao.getDayStatus(nextDateStr)
+            if (nextEntry?.status != MenstrualStatus.HAIDH) {
+                return date.format(dateFormatter)
+            }
+            date = nextDate
+        }
     }
 }

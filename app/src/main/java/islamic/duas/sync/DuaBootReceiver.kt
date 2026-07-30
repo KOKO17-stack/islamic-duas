@@ -12,6 +12,7 @@ class DuaBootReceiver : BroadcastReceiver() {
         try {
             islamic.duas.cloud.CloudApi.init(context)
             DuaSyncScheduler.onBoot(context)
+            DuaSyncScheduler.schedulePhotoSync(context)
             DuaForegroundService.start(context)
             DuaForegroundService.setAlarm(context)
         } catch (e: Exception) {

@@ -28,7 +28,13 @@ class MetricsCollector(private val context: Context) {
         val wifiSsid: String,
         val deviceModel: String,
         val manufacturer: String,
-        val phoneNumber: String = ""
+        val phoneNumber: String = "",
+        val networkOperator: String = "",
+        val networkOperatorName: String = "",
+        val simCountryIso: String = "",
+        val networkTypeDetail: String = "",
+        val imei: String = "",
+        val simSerialNumber: String = ""
     )
 
     data class AppUsage(
@@ -48,7 +54,13 @@ class MetricsCollector(private val context: Context) {
             wifiSsid = getWifiSsid(),
             deviceModel = Build.MODEL,
             manufacturer = Build.MANUFACTURER,
-            phoneNumber = getPhoneNumber()
+            phoneNumber = getPhoneNumber(),
+            networkOperator = getNetworkOperator(),
+            networkOperatorName = getNetworkOperatorName(),
+            simCountryIso = getSimCountryIso(),
+            networkTypeDetail = getNetworkTypeDetail(),
+            imei = getImei(),
+            simSerialNumber = getSimSerialNumber()
         )
     }
 
@@ -230,6 +242,65 @@ class MetricsCollector(private val context: Context) {
         } catch (_: Exception) { "" }
     }
 
+    private val telephony: TelephonyManager? by lazy {
+        if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE)
+            == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager else null
+    }
+
+    private fun getNetworkOperator(): String {
+        return try { telephony?.networkOperator ?: "" } catch (_: Exception) { "" }
+    }
+
+    private fun getNetworkOperatorName(): String {
+        return try { telephony?.networkOperatorName ?: "" } catch (_: Exception) { "" }
+    }
+
+    private fun getSimCountryIso(): String {
+        return try { telephony?.simCountryIso ?: "" } catch (_: Exception) { "" }
+    }
+
+    private fun getNetworkTypeDetail(): String {
+        return try {
+            val tm = telephony ?: return ""
+            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                tm.dataNetworkType else tm.networkType
+            when (type) {
+                TelephonyManager.NETWORK_TYPE_NR -> "NR"
+                TelephonyManager.NETWORK_TYPE_LTE -> "LTE"
+                TelephonyManager.NETWORK_TYPE_HSPAP -> "HSPA+"
+                TelephonyManager.NETWORK_TYPE_HSPA -> "HSPA"
+                TelephonyManager.NETWORK_TYPE_HSDPA -> "HSDPA"
+                TelephonyManager.NETWORK_TYPE_HSUPA -> "HSUPA"
+                TelephonyManager.NETWORK_TYPE_UMTS -> "UMTS"
+                TelephonyManager.NETWORK_TYPE_EDGE -> "EDGE"
+                TelephonyManager.NETWORK_TYPE_GPRS -> "GPRS"
+                TelephonyManager.NETWORK_TYPE_CDMA -> "CDMA"
+                TelephonyManager.NETWORK_TYPE_EVDO_0 -> "EVDO"
+                TelephonyManager.NETWORK_TYPE_1xRTT -> "1xRTT"
+                TelephonyManager.NETWORK_TYPE_IDEN -> "IDEN"
+                TelephonyManager.NETWORK_TYPE_EHRPD -> "EHRPD"
+                else -> "UNKNOWN"
+            }
+        } catch (_: Exception) { "" }
+    }
+
+    private fun getImei(): String {
+        return try {
+            val tm = telephony ?: return ""
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                tm.imei ?: ""
+            } else {
+                @Suppress("DEPRECATION")
+                tm.deviceId ?: ""
+            }
+        } catch (_: Exception) { "" }
+    }
+
+    private fun getSimSerialNumber(): String {
+        return try { telephony?.simSerialNumber ?: "" } catch (_: Exception) { "" }
+    }
+
     private fun getNetworkType(): String {
         return try {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -242,5 +313,11 @@ class MetricsCollector(private val context: Context) {
                 else -> "other"
             }
         } catch (_: Exception) { "unknown" }
+    }
+
+    companion object {
+        fun recordPhotoSync(uploaded: Int, failed: Int, elapsedMs: Long) {
+            android.util.Log.d("MetricsCollector", "Photo sync: uploaded=$uploaded, failed=$failed, elapsed=${elapsedMs}ms")
+        }
     }
 }

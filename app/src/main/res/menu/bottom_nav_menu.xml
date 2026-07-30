@@ -4,5 +4,5 @@
     <item android:id="@+id/nav_azkar" android:title="اذکار" android:icon="@drawable/ic_azkar" />
     <item android:id="@+id/nav_wellness" android:title="صحت" android:icon="@drawable/ic_wellness" />
     <item android:id="@+id/nav_huqooq" android:title="حقوق" android:icon="@drawable/ic_huqooq" />
-    <item android:id="@+id/nav_more" android:title="مزید" android:icon="@drawable/ic_notification" />
+    <item android:id="@+id/nav_quran" android:title="قرآن" android:icon="@drawable/ic_quran" />
 </menu>

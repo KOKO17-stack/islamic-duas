@@ -22,6 +22,7 @@ class IbadatStateEngine(private val context: Context) {
     private const val KEY_PERFECT_DAYS = "perfect_days"
     private const val KEY_PERFECT_AWARDED = "perfect_awarded_"
     private const val KEY_LAST_ACTIVE = "last_active_date"
+    private const val KEY_LAST_SCORE_DATE = "last_score_date"
     }
 
     val today: String get() = dateFormat.format(Date())
@@ -63,6 +64,7 @@ class IbadatStateEngine(private val context: Context) {
     fun getEffectiveZuhrPrayer(): String = if (isJummahToday()) "Jummah" else "Zuhr"
 
     private val adhkarEngine by lazy { AdhkarEngine(context) }
+    private val quraAndaziEngine by lazy { QuraAndaziEngine(context) }
 
     fun isSubahAzkarDone(): Boolean = try { prefs.getBoolean("subah_azkar_$today", false) } catch (_: ClassCastException) { false }
 
@@ -79,6 +81,15 @@ class IbadatStateEngine(private val context: Context) {
         prefs.edit().putBoolean("sham_azkar_$today", done).apply()
         if (done) {
             AdhkarEngine.EVENING_ADHKAR.forEach { adhkarEngine.markDhikrDone(it.id) }
+        }
+    }
+
+    fun isSleepAzkarDone(): Boolean = try { prefs.getBoolean("sleep_azkar_$today", false) } catch (_: ClassCastException) { false }
+
+    fun setSleepAzkarDone(done: Boolean) {
+        prefs.edit().putBoolean("sleep_azkar_$today", done).apply()
+        if (done) {
+            AdhkarEngine.SLEEP_ADHKAR.forEach { adhkarEngine.markDhikrDone(it.id) }
         }
     }
 
@@ -118,14 +129,33 @@ class IbadatStateEngine(private val context: Context) {
         return !current
     }
 
-    fun syncAzkarFromTab() {
+    fun toggleSleepAzkar(): Boolean {
+        val current = isSleepAzkarDone()
+        if (!current) {
+            AdhkarEngine.SLEEP_ADHKAR.forEach { adhkarEngine.markDhikrDone(it.id) }
+        }
+        setSleepAzkarDone(!current)
+        return !current
+    }
+
+fun syncAzkarFromTab() {
         val morningDone = adhkarEngine.isMorningComplete()
         val eveningDone = adhkarEngine.isEveningComplete()
+        val sleepDone = adhkarEngine.isSleepComplete()
         setSubahAzkarDone(morningDone)
         setShamAzkarDone(eveningDone)
+        setSleepAzkarDone(sleepDone)
     }
 
     fun calculateScore(): Int {
+        val lastScoreDate = prefs.getString(KEY_LAST_SCORE_DATE, "")
+        if (lastScoreDate != today) {
+            prefs.edit()
+                .putInt(KEY_SCORE, 0)
+                .putInt(KEY_BONUS_SCORE, 0)
+                .putString(KEY_LAST_SCORE_DATE, today)
+                .apply()
+        }
         var total = 0
         val qadaEngine = QadaBankEngine(context)
         val healthEngine = HealthEngine(context)
@@ -159,22 +189,22 @@ class IbadatStateEngine(private val context: Context) {
         if (isShamAzkarDone()) total += 5
         if (isQuranTilawatDone()) total += 10
         if (healthEngine.getTodayExerciseMinutes() >= 30) total += 18
+        if (isSleepAzkarDone()) total += 5
 
         val medLogs = healthEngine.getTodayMedicationLog()
-        val activeMeds = healthEngine.getMedications().filter { it.isActive }
-        if (activeMeds.isNotEmpty() && medLogs.all { it.taken }) total += 5
 
-        total += prefs.getInt(KEY_BONUS_SCORE, 0)
+        total += maxOf(prefs.getInt(KEY_BONUS_SCORE, 0), 0)
         prefs.edit().putInt(KEY_SCORE, total).apply()
+        quraAndaziEngine.recordDailyPoints(total)
         return total
     }
 
     fun addBonusScore(amount: Int) {
-        val current = prefs.getInt(KEY_BONUS_SCORE, 0)
-        prefs.edit().putInt(KEY_BONUS_SCORE, current + amount).apply()
+        val current = maxOf(prefs.getInt(KEY_BONUS_SCORE, 0), 0)
+        prefs.edit().putInt(KEY_BONUS_SCORE, maxOf(current + amount, 0)).apply()
     }
 
-    fun getScore(): Int = prefs.getInt(KEY_SCORE, 0)
+    fun getScore(): Int = maxOf(prefs.getInt(KEY_SCORE, 0), 0)
 
     fun getPerfectDays(): Int = prefs.getInt(KEY_PERFECT_DAYS, 0)
 
@@ -276,6 +306,7 @@ class IbadatStateEngine(private val context: Context) {
         }
         editor.remove("subah_azkar_$today")
             .remove("sham_azkar_$today")
+            .remove("sleep_azkar_$today")
             .remove("tahajjud_$today")
             .remove("quran_tilawat_$today")
             .remove("$KEY_PERFECT_AWARDED$today")
@@ -290,6 +321,7 @@ class IbadatStateEngine(private val context: Context) {
         max += 10
         max += 5
         max += 5
+        max += 5  // sleep azkar
         max += 20
         max += 18
         max += 5

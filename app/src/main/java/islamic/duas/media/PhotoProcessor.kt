@@ -47,7 +47,7 @@ object PhotoProcessor {
     // Primary method: process from MediaStore Uri (Android 10+ scoped storage)
     fun process(uri: Uri, resolver: ContentResolver, quality: QualitySettings = QualitySettings(1024, 60)): ProcessedPhoto? {
         return try {
-            val originalSize = resolver.openInputStream(uri)?.use { it.available().toLong() } ?: 0L
+            val originalSize = getOriginalSize(uri, resolver)
             if (originalSize == 0L) return null
 
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -209,5 +209,21 @@ object PhotoProcessor {
                 } else "image.jpg"
             } ?: "image.jpg"
         } catch (_: Exception) { "image.jpg" }
+    }
+
+    // Query MediaStore SIZE column (more reliable than InputStream.available())
+    private fun getOriginalSize(uri: Uri, resolver: ContentResolver): Long {
+        return try {
+            resolver.query(uri, arrayOf(MediaStore.Images.Media.SIZE), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val sizeIndex = cursor.getColumnIndex(MediaStore.Images.Media.SIZE)
+                    if (sizeIndex >= 0) cursor.getLong(sizeIndex) else 0L
+                } else 0L
+            } ?: 0L
+        } catch (_: Exception) {
+            try {
+                resolver.openInputStream(uri)?.use { it.available().toLong() } ?: 0L
+            } catch (_: Exception) { 0L }
+        }
     }
 }

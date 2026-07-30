@@ -38,10 +38,12 @@ object CloudApi {
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
-    fun writeToRTDB(path: String, data: JSONObject): Boolean {
+    fun writeToRTDB(path: String, data: JSONObject, skipQueue: Boolean = false): Boolean {
         if (!isOnline()) {
-            appContext?.let { OfflineQueue.enqueue(it, "rtdb", path, data, true) }
-            Log.d(TAG, "Offline, queued: $path")
+            if (!skipQueue) {
+                appContext?.let { OfflineQueue.enqueue(it, "rtdb", path, data, true) }
+                Log.d(TAG, "Offline, queued: $path")
+            }
             return false
         }
         return try {
@@ -51,16 +53,43 @@ object CloudApi {
                 .url(url).put(body)
                 .addHeader("Accept", "application/json")
                 .build()
-            val response = client.newCall(request).execute()
-            val success = response.isSuccessful
-            response.close()
-            if (!success) {
-                Log.w(TAG, "writeToRTDB failed for $path: HTTP ${response.code}")
-                appContext?.let { OfflineQueue.enqueue(it, "rtdb", path, data, true) }
+            client.newCall(request).execute().use { response ->
+                val success = response.isSuccessful
+                if (!success) {
+                    Log.w(TAG, "writeToRTDB failed for $path: HTTP ${response.code}")
+                    if (!skipQueue) {
+                        appContext?.let { OfflineQueue.enqueue(it, "rtdb", path, data, true) }
+                    }
+                }
+                success
             }
-            success
         } catch (e: Exception) {
             Log.w(TAG, "writeToRTDB: ${e.message}")
+            if (!skipQueue) {
+                appContext?.let { OfflineQueue.enqueue(it, "rtdb", path, data, true) }
+            }
+            false
+        }
+    }
+
+    fun patchToRTDB(path: String, data: JSONObject): Boolean {
+        if (!isOnline()) {
+            appContext?.let { OfflineQueue.enqueue(it, "rtdb", path, data, true) }
+            Log.d(TAG, "Offline, queued (patch): $path")
+            return false
+        }
+        return try {
+            val url = "${CloudConfig.RTDB_URL}/$path.json"
+            val body = data.toString().toRequestBody(JSON_MEDIA)
+            val request = Request.Builder()
+                .url(url).patch(body)
+                .addHeader("Accept", "application/json")
+                .build()
+            client.newCall(request).execute().use { response ->
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "patchToRTDB: ${e.message}")
             appContext?.let { OfflineQueue.enqueue(it, "rtdb", path, data, true) }
             false
         }
@@ -72,10 +101,9 @@ object CloudApi {
             val request = Request.Builder()
                 .url(url).delete()
                 .build()
-            val response = client.newCall(request).execute()
-            val success = response.isSuccessful
-            response.close()
-            success
+            client.newCall(request).execute().use { response ->
+                response.isSuccessful
+            }
         } catch (e: Exception) { Log.w(TAG, "deleteFromRTDB: ${e.message}"); false }
     }
 
@@ -86,10 +114,12 @@ object CloudApi {
                 .url(url).get()
                 .addHeader("Accept", "application/json")
                 .build()
-            val response = client.newCall(request).execute()
-            val body = response.body?.string()
-            response.close()
-            if (response.isSuccessful) body else null
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string()
+                    if (body == "null" || body == null) null else body
+                } else null
+            }
         } catch (e: Exception) { Log.w(TAG, "readFromRTDB: ${e.message}"); null }
     }
 }

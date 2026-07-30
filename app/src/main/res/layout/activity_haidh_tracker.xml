@@ -1,359 +1,85 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/haidhScrollRoot"
+    android:id="@+id/haidhFormScroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/background_gradient"
-    android:fillViewport="true">
+    android:background="@drawable/background_gradient">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingHorizontal="16dp"
-        android:paddingBottom="32dp">
+        android:paddingHorizontal="8dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="8dp">
 
-        <!-- Header -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingTop="48dp"
-            android:paddingBottom="4dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="حیض و طہارت — کلینکل ٹریکر"
-                android:textSize="18sp"
-                android:textColor="@color/primaryGold"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:fontFamily="sans-serif" />
-
-            <View
-                android:layout_width="48dp"
-                android:layout_height="2dp"
-                android:layout_marginTop="8dp"
-                android:layout_gravity="center"
-                android:background="@color/primaryGold" />
-        </LinearLayout>
-
-        <!-- Date Navigation -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_marginTop="12dp">
-
-            <ImageButton
-                android:id="@+id/haidhPrevDay"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/rounded_bg"
-                android:src="@android:drawable/ic_media_previous"
-                android:contentDescription="پچھلا دن" />
-
-            <TextView
-                android:id="@+id/haidhDateNav"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="01 جنوری 2026"
-                android:textSize="14sp"
-                android:textColor="@color/lightNeutral"
-                android:gravity="center"
-                android:fontFamily="sans-serif" />
-
-            <ImageButton
-                android:id="@+id/haidhNextDay"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/rounded_bg"
-                android:src="@android:drawable/ic_media_next"
-                android:contentDescription="اگلا دن" />
-        </LinearLayout>
-
-        <!-- Status Display -->
         <TextView
-            android:id="@+id/haidhStatusDisplay"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="🟢 حالت: طہارت"
+            android:text="📅 ٹیپ کریں دن کو ریکارڈ کرنے کے لیے"
             android:textSize="14sp"
-            android:textColor="@color/tuhrGreen"
-            android:gravity="center"
-            android:fontFamily="sans-serif" />
-
-        <!-- Qada Display -->
-        <TextView
-            android:id="@+id/haidhQadaDisplay"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text=""
-            android:textSize="12sp"
-            android:textColor="@color/mutedGold"
-            android:gravity="center"
-            android:fontFamily="sans-serif" />
-
-        <!-- Status Selection -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/rounded_bg"
-            android:padding="16dp"
-            android:layout_marginTop="12dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="🔴 آج کا سٹیٹس"
-                android:textSize="16sp"
-                android:textColor="@color/primaryGold"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:fontFamily="sans-serif" />
-
-            <RadioGroup
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginTop="12dp"
-                android:gravity="center">
-
-                <RadioButton
-                    android:id="@+id/haidhStatusTuhr"
-                    android:layout_width="0dp"
-                    android:layout_height="52dp"
-                    android:layout_weight="1"
-                    android:layout_marginRight="6dp"
-                    android:text="✅ طہارت"
-                    android:textSize="16sp"
-                    android:textColor="@color/tuhrGreen"
-                    android:gravity="center"
-                    android:button="@null"
-                    android:background="@drawable/chip_unselected"
-                    android:padding="8dp"
-                    android:textStyle="bold"
-                    android:fontFamily="sans-serif" />
-
-                <RadioButton
-                    android:id="@+id/haidhStatusHaidh"
-                    android:layout_width="0dp"
-                    android:layout_height="52dp"
-                    android:layout_weight="1"
-                    android:layout_marginLeft="6dp"
-                    android:text="🔴 حیض"
-                    android:textSize="16sp"
-                    android:textColor="@color/haidhRed"
-                    android:gravity="center"
-                    android:button="@null"
-                    android:background="@drawable/chip_unselected"
-                    android:padding="8dp"
-                    android:textStyle="bold"
-                    android:fontFamily="sans-serif" />
-
-            </RadioGroup>
-        </LinearLayout>
-
-        <!-- Flow Intensity -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/rounded_bg"
-            android:padding="12dp"
-            android:layout_marginTop="8dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="خون کی مقدار"
-                android:textSize="14sp"
-                android:textColor="@color/primaryGold"
-                android:textStyle="bold"
-                android:fontFamily="sans-serif" />
-
-            <Spinner
-                android:id="@+id/haidhFlowSpinner"
-                android:layout_width="match_parent"
-                android:layout_height="40dp"
-                android:layout_marginTop="4dp"
-                android:background="@drawable/rounded_bg" />
-        </LinearLayout>
-
-        <!-- Symptoms -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/rounded_bg"
-            android:padding="12dp"
-            android:layout_marginTop="8dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="علامات"
-                android:textSize="14sp"
-                android:textColor="@color/primaryGold"
-                android:textStyle="bold"
-                android:fontFamily="sans-serif" />
-
-            <LinearLayout
-                android:id="@+id/haidhSymptoms"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:layout_marginTop="4dp" />
-        </LinearLayout>
-
-        <!-- Notes -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/rounded_bg"
-            android:padding="12dp"
-            android:layout_marginTop="8dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="نوٹس"
-                android:textSize="14sp"
-                android:textColor="@color/primaryGold"
-                android:textStyle="bold"
-                android:fontFamily="sans-serif" />
-
-            <EditText
-                android:id="@+id/haidhNotes"
-                android:layout_width="match_parent"
-                android:layout_height="80dp"
-                android:layout_marginTop="4dp"
-                android:background="@drawable/rounded_bg"
-                android:padding="8dp"
-                android:textColor="@color/lightNeutral"
-                android:textColorHint="@color/scoreNeutral"
-                android:hint="نوٹس لکھیں..."
-                android:fontFamily="sans-serif"
-                android:gravity="top" />
-        </LinearLayout>
-
-        <!-- Save Button -->
-        <Button
-            android:id="@+id/haidhSaveBtn"
-            android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:layout_marginTop="16dp"
-            android:layout_marginHorizontal="4dp"
-            android:text="💾 محفوظ کریں"
-            android:textSize="19sp"
+            android:textColor="@color/primaryGold"
             android:textStyle="bold"
-            android:textColor="@color/lightNeutral"
-            android:background="@drawable/chip_selected"
-            android:elevation="6dp"
-            android:shadowColor="#000000"
-            android:shadowDx="0"
-            android:shadowDy="2"
-            android:shadowRadius="4"
+            android:gravity="center"
             android:fontFamily="sans-serif" />
 
-        <!-- Fiqh Dashboard -->
         <LinearLayout
+            android:id="@+id/continuousCalendarContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:background="@drawable/rounded_bg"
-            android:padding="12dp"
-            android:layout_marginTop="12dp">
+            android:padding="4dp"
+            android:layout_marginTop="4dp">
 
-            <TextView
+            <LinearLayout
+                android:id="@+id/continuousCalendarGrid"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="فقہی احکام"
-                android:textSize="14sp"
-                android:textColor="@color/primaryGold"
-                android:textStyle="bold"
-                android:fontFamily="sans-serif" />
-
-            <TextView
-                android:id="@+id/haidhFiqhDisplay"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text=""
-                android:textSize="12sp"
-                android:textColor="@color/lightNeutral"
-                android:lineSpacingExtra="3dp"
-                android:fontFamily="sans-serif" />
-        </LinearLayout>
-
-
-        <!-- Calendar -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/rounded_bg"
-            android:padding="12dp"
-            android:layout_marginTop="12dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="سائیکل کیلنڈر"
-                android:textSize="14sp"
-                android:textColor="@color/primaryGold"
-                android:textStyle="bold"
-                android:fontFamily="sans-serif" />
+                android:orientation="vertical" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center"
-                android:layout_marginTop="4dp">
-
-                <ImageButton
-                    android:id="@+id/haidhPrevMonth"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/rounded_bg"
-                    android:src="@android:drawable/ic_media_previous"
-                    android:contentDescription="پچھلا مہینہ"
-                    android:scaleType="centerInside" />
+                android:layout_marginTop="3dp">
 
                 <TextView
-                    android:id="@+id/haidhMonthLabel"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text=""
-                    android:textSize="13sp"
+                    android:text="🔴 حیض"
+                    android:textSize="10sp"
                     android:textColor="@color/lightNeutral"
-                    android:gravity="center"
+                    android:fontFamily="sans-serif"
+                    android:layout_marginEnd="6dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🟡 استحاضہ"
+                    android:textSize="10sp"
+                    android:textColor="@color/lightNeutral"
+                    android:fontFamily="sans-serif"
+                    android:layout_marginEnd="6dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="⬛ طہارت"
+                    android:textSize="10sp"
+                    android:textColor="@color/lightNeutral"
+                    android:fontFamily="sans-serif"
+                    android:layout_marginEnd="6dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="⭕ پیش گوئی"
+                    android:textSize="10sp"
+                    android:textColor="@color/lightNeutral"
                     android:fontFamily="sans-serif" />
-
-                <ImageButton
-                    android:id="@+id/haidhNextMonth"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/rounded_bg"
-                    android:src="@android:drawable/ic_media_next"
-                    android:contentDescription="اگلا مہینہ"
-                    android:scaleType="centerInside" />
             </LinearLayout>
-
-            <GridLayout
-                android:id="@+id/haidhCalendarGrid"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" />
         </LinearLayout>
 
     </LinearLayout>

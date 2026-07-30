@@ -13,6 +13,15 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
+data class DailyForecast(
+    val dayName: String,
+    val date: String,
+    val maxTemp: Double,
+    val minTemp: Double,
+    val precipitationProb: Int,
+    val emoji: String
+)
+
 data class RainWindow(
     val startHour: String,
     val endHour: String,
@@ -43,7 +52,8 @@ data class RainForecast(
     val todayMaxFeelsLike: Double,
     val tomorrowMaxTemp: Double,
     val tomorrowMinTemp: Double,
-    val heatLevel: HeatLevel
+    val heatLevel: HeatLevel,
+    val dailyForecast: List<DailyForecast> = emptyList()
 )
 
 class WeatherEngine(private val context: Context) {
@@ -52,7 +62,7 @@ class WeatherEngine(private val context: Context) {
         private const val LAT = 32.05687
         private const val LON = 73.55269
         private const val API_URL =
-            "https://api.open-meteo.com/v1/ecmwf?latitude=$LAT&longitude=$LON&hourly=precipitation_probability,temperature_2m,apparent_temperature&daily=temperature_2m_max,temperature_2m_min&timezone=Asia%2FKarachi&forecast_days=2"
+            "https://api.open-meteo.com/v1/ecmwf?latitude=$LAT&longitude=$LON&hourly=precipitation_probability,temperature_2m,apparent_temperature&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FKarachi&forecast_days=7"
         private const val CACHE_TTL_MS = 15 * 60 * 1000L
 
         private var cachedForecast: RainForecast? = null
@@ -117,12 +127,31 @@ class WeatherEngine(private val context: Context) {
         val feels = hourly.getJSONArray("apparent_temperature")
 
         val daily = obj.getJSONObject("daily")
+        val dailyTime = daily.getJSONArray("time")
         val dailyMax = daily.getJSONArray("temperature_2m_max")
         val dailyMin = daily.getJSONArray("temperature_2m_min")
+        val dailyPrecip = daily.optJSONArray("precipitation_probability_max")
 
         val now = Calendar.getInstance()
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm", Locale.US)
         val hourFormat = SimpleDateFormat("h a", Locale.US)
+        val dayFormat = SimpleDateFormat("EEEE", Locale("ur"))
+        val dateOnlyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
+        // Parse daily forecast (7 days)
+        val dailyForecast = mutableListOf<DailyForecast>()
+        for (i in 0 until dailyMax.length()) {
+            val dateStr = dailyTime.optString(i, "")
+            if (dateStr.isBlank()) continue
+            val dateCal = Calendar.getInstance()
+            dateCal.time = dateOnlyFormat.parse(dateStr) ?: continue
+            val maxT = dailyMax.optDouble(i, 0.0)
+            val minT = dailyMin.optDouble(i, 0.0)
+            val precipProb = dailyPrecip?.optInt(i, 0) ?: 0
+            val dayName = dayFormat.format(dateCal.time)
+            val emoji = conditionEmoji(precipProb)
+            dailyForecast.add(DailyForecast(dayName, dateStr, maxT, minT, precipProb, emoji))
+        }
 
         val hourlyData = mutableListOf<HourlyWeather>()
         var maxChance = 0
@@ -191,7 +220,8 @@ class WeatherEngine(private val context: Context) {
             todayMaxFeelsLike = todayMaxFeels,
             tomorrowMaxTemp = tomorrowMaxTemp,
             tomorrowMinTemp = tomorrowMinTemp,
-            heatLevel = heatLevel
+            heatLevel = heatLevel,
+            dailyForecast = dailyForecast
         )
     }
 }

@@ -6,6 +6,7 @@ data class PendingData(
     val path: String,
     val dataJson: String,
     val isRtdb: Boolean,
+    val type: String = "location",
     val createdAt: Long = System.currentTimeMillis(),
     val retryCount: Int = 0
 )

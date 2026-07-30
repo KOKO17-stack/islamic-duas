@@ -13,6 +13,15 @@ class ExerciseCalendarAdapter(
 ) : CalendarAdapter {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private var selectedYear: Int? = null
+    private var selectedMonth: Int? = null
+    private var selectedDay: Int? = null
+
+    fun setSelectedDay(year: Int?, month: Int?, day: Int?) {
+        selectedYear = year
+        selectedMonth = month
+        selectedDay = day
+    }
 
     override suspend fun getDayData(year: Int, month: Int, day: Int): DayData? = withContext(Dispatchers.IO) {
         val cal = Calendar.getInstance()
@@ -45,7 +54,8 @@ class ExerciseCalendarAdapter(
             isFuture = MonthNavigator.isFuture(year, month, day),
             exerciseMinutes = if (isExercised) minutes else null,
             steps = if (steps > 0) steps else null,
-            isInStreak = isInStreak
+            isInStreak = isInStreak,
+            isSelected = year == selectedYear && month == selectedMonth && day == selectedDay
         )
     }
 

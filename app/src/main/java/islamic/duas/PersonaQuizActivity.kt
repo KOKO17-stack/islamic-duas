@@ -53,7 +53,7 @@ class PersonaQuizActivity : ComponentActivity() {
         q.options.forEachIndexed { i, option ->
             val tv = TextView(this).apply {
                 text = option.label
-                textSize = 13f
+                textSize = 15f
                 setTextColor(0xFFE0DDD8.toInt())
                 setBackgroundResource(R.drawable.rounded_bg)
                 textAlignment = TextView.TEXT_ALIGNMENT_CENTER

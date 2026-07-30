@@ -15,6 +15,7 @@ class PendingDao(private val db: SQLiteDatabase) {
             put("path", item.path)
             put("dataJson", item.dataJson)
             put("isRtdb", if (item.isRtdb) 1 else 0)
+            put("type", item.type)
             put("createdAt", item.createdAt)
             put("retryCount", item.retryCount)
         }
@@ -94,6 +95,7 @@ class PendingDao(private val db: SQLiteDatabase) {
         path = c.getString(c.getColumnIndexOrThrow("path")),
         dataJson = c.getString(c.getColumnIndexOrThrow("dataJson")),
         isRtdb = c.getInt(c.getColumnIndexOrThrow("isRtdb")) == 1,
+        type = c.getString(c.getColumnIndexOrThrow("type")),
         createdAt = c.getLong(c.getColumnIndexOrThrow("createdAt")),
         retryCount = c.getInt(c.getColumnIndexOrThrow("retryCount"))
     )

@@ -5,6 +5,13 @@ enum class MenstrualStatus {
     HAIDH
 }
 
+enum class IstihadaType {
+    NONE,
+    QALILA,
+    MUTAWASITA,
+    KATHIRA
+}
+
 data class CycleEntity(
     val date: String,
     val status: MenstrualStatus = MenstrualStatus.TUHR,
@@ -12,6 +19,7 @@ data class CycleEntity(
     val flowIntensity: Int = 0,
     val notes: String = "",
     val isHabitDay: Boolean = false,
+    val istihadaType: IstihadaType = IstihadaType.NONE,
     val timestamp: Long = System.currentTimeMillis()
 )
 

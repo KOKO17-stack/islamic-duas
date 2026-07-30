@@ -6,6 +6,7 @@ import java.util.Locale
 data class CalendarConfig(
     val showHijriHeader: Boolean = true,
     val showHijriPerDay: Boolean = false,
+    val showWeekNumbers: Boolean = false,
     val urduMonthNames: Array<String> = arrayOf(
         "جنوری", "فروری", "مارچ", "اپریل", "مئی", "جون",
         "جولائی", "اگست", "ستمبر", "اکتوبر", "نومبر", "دسمبر"

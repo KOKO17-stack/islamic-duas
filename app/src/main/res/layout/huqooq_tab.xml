@@ -29,7 +29,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="حقوق النساء"
-                    android:textSize="20sp"
+                    android:textSize="22sp"
                     android:textColor="#D4AF37"
                     android:textStyle="bold"
                     android:gravity="center"
@@ -40,7 +40,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="آپ کے شرعی حقوق — قرآن و سنت کی روشنی میں"
-                    android:textSize="11sp"
+                    android:textSize="13sp"
                     android:textColor="#C9A961"
                     android:gravity="center"
                     android:fontFamily="sans-serif" />
@@ -62,12 +62,12 @@
                 android:gravity="center"
                 android:layout_marginTop="12dp">
 
-                <TextView android:id="@+id/hSec0" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="دین" android:textSize="11sp" android:textColor="#D4AF37" android:background="@drawable/chip_selected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="3dp" />
-                <TextView android:id="@+id/hSec1" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="مال" android:textSize="11sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="3dp" />
-                <TextView android:id="@+id/hSec2" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="عزت" android:textSize="11sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="3dp" />
-                <TextView android:id="@+id/hSec3" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="تعلیم" android:textSize="11sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="3dp" />
-                <TextView android:id="@+id/hSec4" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="نکاح" android:textSize="11sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="3dp" />
-                <TextView android:id="@+id/hSec5" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="فقہ النساء" android:textSize="9sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="3dp" />
+                <TextView android:id="@+id/hSec0" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="دین" android:textSize="13sp" android:textColor="#D4AF37" android:background="@drawable/chip_selected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginEnd="3dp" />
+                <TextView android:id="@+id/hSec1" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="مال" android:textSize="13sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="3dp" />
+                <TextView android:id="@+id/hSec2" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="عزت" android:textSize="13sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="3dp" />
+                <TextView android:id="@+id/hSec3" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="تعلیم" android:textSize="13sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="3dp" />
+                <TextView android:id="@+id/hSec4" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="نکاح" android:textSize="13sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginHorizontal="3dp" />
+                <TextView android:id="@+id/hSec5" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:gravity="center" android:text="فقہ النساء" android:textSize="11sp" android:textColor="#8B7355" android:background="@drawable/chip_unselected" android:fontFamily="sans-serif" android:clickable="true" android:focusable="true" android:layout_marginStart="3dp" />
             </LinearLayout>
 
             <!-- Section Description -->
@@ -77,10 +77,10 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text=""
-                android:textSize="12sp"
-                android:textColor="#C9A961"
+                android:textSize="14sp"
+                android:textColor="@color/urdu_text"
                 android:gravity="center"
-                android:fontFamily="serif" />
+                android:fontFamily="@font/noto_nastaliq_urdu" />
 
             <View
                 android:id="@+id/huqooqDivider1"
@@ -110,7 +110,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="تمام مواد صحیح اور مستند ذرائع سے ماخوذ ہے"
-                    android:textSize="9sp"
+                    android:textSize="11sp"
                     android:textColor="#94A3B8"
                     android:gravity="center"
                     android:fontFamily="sans-serif" />

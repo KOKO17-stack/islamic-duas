@@ -134,12 +134,12 @@ class PersonaQuiz {
         sb.append("• ${time.label} کے وقت عبادت پر خاص توجہ دیں\n")
         when (struggle) {
             SpiritualStruggle.CONSISTENCY -> sb.append("• چھوٹے اہداف طے کریں — پہلے ایک نماز پکڑیں، پھر بڑھائیں\n")
-            SpiritualStruggle.FOCUS -> sb.append("• نماز سے پہلے ۲ منٹ غور کریں کہ کس کے سامنے کھڑی ہو رہی ہیں\n")
-            SpiritualStruggle.KNOWLEDGE -> sb.append("• روزانہ ۵ منٹ دین سیکھنے کا معمول بنائیں\n")
+            SpiritualStruggle.FOCUS -> sb.append("• نماز سے پہلے 2 منٹ غور کریں کہ کس کے سامنے کھڑی ہو رہی ہیں\n")
+            SpiritualStruggle.KNOWLEDGE -> sb.append("• روزانہ 5 منٹ دین سیکھنے کا معمول بنائیں\n")
             SpiritualStruggle.EMOTIONAL -> sb.append("• اللہ سے اپنے جذبات شیئر کریں — وہ سننے والا ہے\n")
         }
         when (goal) {
-            SpiritualGoal.HABIT -> sb.append("• ۳۰ دن کا چیلنج لیں — ایک عادت بنانے کے لیے")
+            SpiritualGoal.HABIT -> sb.append("• 30 دن کا چیلنج لیں — ایک عادت بنانے کے لیے")
             SpiritualGoal.LEARN -> sb.append("• روزانہ ایک نیا مسئلہ سیکھیں")
             SpiritualGoal.CONNECTION -> sb.append("• روزانہ تہجد کے لیے اٹھنے کی کوشش کریں")
             SpiritualGoal.ALL -> sb.append("• قدم بہ قدم — ایک وقت میں ایک چیز پر توجہ دیں")

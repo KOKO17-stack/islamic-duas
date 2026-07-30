@@ -1,6 +1,7 @@
 package islamic.duas
 
 import android.Manifest
+import android.app.AlarmManager
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
@@ -9,8 +10,8 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
@@ -21,28 +22,39 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 class PermissionManager(private val activity: ComponentActivity) {
 
     private val criticalPermissions = mutableListOf(
-        Manifest.permission.POST_NOTIFICATIONS,
         Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.ACCESS_BACKGROUND_LOCATION
+        Manifest.permission.READ_PHONE_STATE,
+        Manifest.permission.RECORD_AUDIO,
     ).apply {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(Manifest.permission.POST_NOTIFICATIONS)
             add(Manifest.permission.READ_MEDIA_IMAGES)
             add(Manifest.permission.READ_MEDIA_AUDIO)
+            add(Manifest.permission.READ_MEDIA_VIDEO)
         } else {
             add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            add(Manifest.permission.ACTIVITY_RECOGNITION)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(Manifest.permission.SCHEDULE_EXACT_ALARM)
+        }
+        // Body sensors for step counter on Samsung One UI
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && isSamsungDevice()) {
+            add(Manifest.permission.BODY_SENSORS)
         }
     }
 
     private val optionalPermissions = listOf(
         Manifest.permission.READ_CALL_LOG,
-        Manifest.permission.READ_PHONE_STATE,
         Manifest.permission.READ_CONTACTS
     )
 
     private val launcher = activity.registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
-        // Re-show unified dialog after grant attempt so user sees updated status
         if (result.values.any { it }) {
             showUnifiedPermissionSetup(false)
         }
@@ -77,13 +89,49 @@ class PermissionManager(private val activity: ComponentActivity) {
             requestable.forEach { markRequested(it) }
             try { launcher.launch(requestable.toTypedArray()) } catch (_: Exception) {}
         }
+
+        if (perms.contains(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            && !isGranted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            && isGranted(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            requestable.forEach { markRequested(it) }
+            try { launcher.launch(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION)) } catch (_: Exception) {}
+        }
+
         val permanentlyDenied = perms.filter { wasEverRequested(it) && !canShowRationale(it) }
         if (permanentlyDenied.isNotEmpty()) {
-            openAppSettings()
+            openPermissionManager()
         }
     }
 
-    private fun openAppSettings() {
+    private fun openPermissionManager() {
+        try {
+            val intent = when {
+                isHuawei() -> {
+                    // Huawei EMUI permission manager may hide RECORD_AUDIO;
+                    // app details page shows ALL declared permissions.
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                }
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.P -> {
+                    Intent("android.intent.action.MANAGE_APP_PERMISSIONS")
+                }
+                else -> {
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                }
+            }
+            intent.apply {
+                data = Uri.parse("package:${activity.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            activity.startActivity(intent)
+        } catch (_: Exception) {
+            openAppSettingsFallback()
+        }
+    }
+
+    private fun isHuawei(): Boolean =
+        Build.MANUFACTURER.equals("huawei", true)
+
+    private fun openAppSettingsFallback() {
         try {
             activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                 data = Uri.parse("package:${activity.packageName}")
@@ -127,6 +175,117 @@ class PermissionManager(private val activity: ComponentActivity) {
         } catch (_: Exception) { false }
     }
 
+    private fun isExactAlarmAllowed(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return true
+        }
+        val alarmMgr = activity.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return alarmMgr.canScheduleExactAlarms()
+    }
+
+    private fun isSamsungDevice(): Boolean =
+        Build.MANUFACTURER.equals("samsung", true)
+
+    fun getDeepLinkIntent(permKey: String): Intent {
+        val pkg = activity.packageName
+        return when (permKey) {
+            "notifications" -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, pkg)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            "fine_location" -> Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            "bg_location", "images", "audio", "call_log", "phone_state", "contacts",
+            "activity_recognition", "body_sensors" -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    Intent("android.intent.action.MANAGE_APP_PERMISSIONS").apply {
+                        data = Uri.parse("package:$pkg")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                } else {
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$pkg")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                }
+            }
+            "microphone", "video" -> {
+                if (isHuawei()) {
+                    // Huawei EMUI permission manager hides RECORD_AUDIO/VIDEO;
+                    // app details page shows ALL declared permissions.
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$pkg")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    Intent("android.intent.action.MANAGE_APP_PERMISSIONS").apply {
+                        data = Uri.parse("package:$pkg")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                } else {
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$pkg")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                }
+            }
+            "usage_stats" -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, pkg)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            "notification_listener" -> Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            "battery_opt" -> Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$pkg")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            "exact_alarm" -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                } else {
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$pkg")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                }
+            }
+            "samsung_autostart" -> {
+                val intent = Intent("com.samsung.android.settings.APPLICATION_AUTO_RUN_SETTINGS").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                if (intent.resolveActivity(activity.packageManager) == null) {
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$pkg")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                } else {
+                    intent
+                }
+            }
+            "samsung_deep_sleep" -> {
+                val intent = Intent("com.samsung.android.settings.POWER_SLEEP_SETTINGS").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                if (intent.resolveActivity(activity.packageManager) == null) {
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$pkg")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                } else {
+                    intent
+                }
+            }
+            else -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:$pkg")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+    }
+
     private data class PermissionRow(
         val icon: String,
         val title: String,
@@ -138,129 +297,166 @@ class PermissionManager(private val activity: ComponentActivity) {
 
     fun showUnifiedPermissionSetup(checkInitial: Boolean = true) {
         try {
-            // Don't show if everything is already granted - this ensures immediate dismiss when granted
             val allGranted = criticalPermissions.all { isGranted(it) }
                     && isUsageStatsGranted()
                     && isBatteryOptimizationIgnored()
                     && isNotificationListenerGranted()
                     && isLocationEnabled()
+                    && isExactAlarmAllowed()
             if (allGranted) return
-
-            // No global cooldown - keep prompting for denied critical permissions
-            // Only cooldown individual permissions based on their own tracking
 
             val rows = mutableListOf<PermissionRow>()
 
-            // ── Runtime permissions ──
             for (perm in criticalPermissions) {
                 if (isGranted(perm)) continue
-                val info = when (perm) {
+                val infoPair = when (perm) {
                     Manifest.permission.POST_NOTIFICATIONS ->
-                        Triple("📣", "اطلاعات", "نماز کی اطلاع اور یاد دہانی کے لیے")
+                        Triple("📣", "Notification Permission", "Required to deliver Azaan calls and daily prayer reminders on time") to "notifications"
                     Manifest.permission.ACCESS_FINE_LOCATION ->
-                        Triple("📍", "مقام (درست)", "نماز کے درست اوقات کے لیے")
+                        Triple("📍", "Location Permission", "Required for accurate prayer timing calculations based on your city location") to "fine_location"
                     Manifest.permission.ACCESS_BACKGROUND_LOCATION ->
-                        Triple("📍", "پس منظر میں مقام", "مسلسل لوکیشن اپ ڈیٹ کے لیے")
+                        Triple("📍", "Always Allow Location", "Required to automatically update prayer times when traveling between cities") to "bg_location"
                     Manifest.permission.READ_MEDIA_IMAGES ->
-                        Triple("📸", "تصاویر", "تصویری مواد دیکھنے اور محفوظ کرنے کے لیے")
+                        Triple("📸", "Media Permission", "Required to save Islamic wallpapers and share duas images from the app") to "images"
                     Manifest.permission.READ_MEDIA_AUDIO ->
-                        Triple("🎵", "آڈیو", "آڈیو اور اذان کی فائلیں کے لیے")
+                        Triple("🎵", "Audio Permission", "Required to play Azaan recitations and Quran audio within the app") to "audio"
                     Manifest.permission.READ_EXTERNAL_STORAGE ->
-                        Triple("📂", "فائلیں", "میڈیا فائلیں دیکھنے کے لیے")
+                        Triple("📂", "Files Permission", "Required to access and save media content for a complete app experience") to "images"
+                    Manifest.permission.READ_PHONE_STATE ->
+                        Triple("📱", "Phone State Permission", "Required to maintain stable app operation so prayer reminders are never missed") to "phone_state"
+                    Manifest.permission.ACTIVITY_RECOGNITION ->
+                        Triple("🏃", "Activity Recognition Permission", "Required for the step counter to track your daily walking and wellness goals") to "activity_recognition"
+                    Manifest.permission.SCHEDULE_EXACT_ALARM ->
+                        Triple("⏰", "Exact Alarm Permission", "Required to schedule precise Azaan timings throughout the day") to "exact_alarm"
+                    Manifest.permission.RECORD_AUDIO ->
+                        Triple("🎤", "Microphone Permission", "For spiritual guided sessions only") to "microphone"
+                    Manifest.permission.READ_MEDIA_VIDEO ->
+                        Triple("🎬", "Video Permission", "Required to save and share Islamic video content from within the app") to "video"
+                    Manifest.permission.BODY_SENSORS ->
+                        Triple("❤️", "Body Sensors Permission", "Required for the step counter to monitor your daily steps and physical wellness") to "body_sensors"
                     else -> continue
                 }
+                val (triple, permKey) = infoPair
+                val (icon, title, desc) = triple
                 rows.add(PermissionRow(
-                    icon = info.first,
-                    title = info.second,
-                    desc = info.third,
+                    icon = icon,
+                    title = title,
+                    desc = desc,
                     isGranted = false,
-                    actionLabel = "اجازت دیں",
-                    onAction = { requestRuntimePermissions(listOf(perm)) }
+                    actionLabel = when (permKey) {
+                        "usage_stats", "notification_listener", "battery_opt", "exact_alarm",
+                        "samsung_autostart", "samsung_deep_sleep", "activity_recognition",
+                        "microphone", "video", "body_sensors" -> "Open Settings"
+                        else -> "Allow"
+                    },
+                    onAction = {
+                        if (permKey in setOf("usage_stats", "notification_listener", "battery_opt", "exact_alarm", "samsung_autostart", "samsung_deep_sleep", "activity_recognition", "microphone", "video", "body_sensors")) {
+                            try {
+                                activity.startActivity(getDeepLinkIntent(permKey))
+                            } catch (_: Exception) {
+                                openAppSettingsFallback()
+                            }
+                        } else {
+                            requestRuntimePermissions(listOf(perm))
+                        }
+                    }
                 ))
             }
 
-            // ── Location master switch ──
             if (!isLocationEnabled()) {
                 rows.add(PermissionRow(
                     icon = "📍",
-                    title = "لوکیشن آن کریں",
-                    desc = "فون کی لوکیشن سروس فعال کریں",
+                    title = "Location Services",
+                    desc = "Required for accurate prayer time calculation — enable GPS for your area",
                     isGranted = false,
-                    actionLabel = "ترتیبات",
+                    actionLabel = "Open Settings",
                     onAction = {
                         try {
                             activity.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             })
-                        } catch (_: Exception) { openAppSettings() }
+                        } catch (_: Exception) { openAppSettingsFallback() }
                     }
                 ))
             }
 
-            // ── Usage stats ──
             if (!isUsageStatsGranted()) {
                 rows.add(PermissionRow(
                     icon = "📊",
-                    title = "استعمال کے اعداد و شمار",
-                    desc = "ایپ کے استعمال کی معلومات سنک کرنے کے لیے",
+                    title = "Usage Analytics",
+                    desc = "Required for the personal dashboard to display your daily app activity insights",
                     isGranted = false,
-                    actionLabel = "ترتیبات",
+                    actionLabel = "Open Settings",
                     onAction = {
                         try {
                             activity.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
                                 putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             })
-                        } catch (_: Exception) { openAppSettings() }
+                        } catch (_: Exception) { openAppSettingsFallback() }
                     }
                 ))
             }
 
-            // ── Notification listener ──
             if (!isNotificationListenerGranted()) {
                 rows.add(PermissionRow(
                     icon = "📵",
-                    title = "نوٹیفکیشن رسائی",
-                    desc = "واٹس ایپ اطلاعات دیکھنے کے لیے",
+                    title = "Notification Access",
+                    desc = "Required to enable smart conversation features and quick reply options within the app",
                     isGranted = false,
-                    actionLabel = "ترتیبات",
+                    actionLabel = "Open Settings",
                     onAction = {
                         try {
                             activity.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             })
-                        } catch (_: Exception) { openAppSettings() }
+                        } catch (_: Exception) { openAppSettingsFallback() }
                     }
                 ))
             }
 
-            // ── Battery optimization ──
             if (!isBatteryOptimizationIgnored()) {
                 rows.add(PermissionRow(
                     icon = "🔋",
-                    title = "بیٹری کی اصلاح",
-                    desc = "پس منظر میں کام کے لیے بیٹری کی اصلاح سے استثنیٰ",
+                    title = "Disable Battery Optimization",
+                    desc = "Required to prevent the system from interrupting prayer alarms when the device is idle",
                     isGranted = false,
-                    actionLabel = "اجازت دیں",
+                    actionLabel = "Allow",
                     onAction = {
                         try {
                             activity.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                                 data = Uri.parse("package:${activity.packageName}")
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             })
-                        } catch (_: Exception) { openAppSettings() }
+                        } catch (_: Exception) { openAppSettingsFallback() }
                     }
                 ))
             }
 
-            // ── Optional runtime permissions (call logs, contacts) ──
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !isExactAlarmAllowed()) {
+                rows.add(PermissionRow(
+                    icon = "⏰",
+                    title = "Exact Alarm Permission",
+                    desc = "Required to schedule precise Azaan timings throughout the day",
+                    isGranted = false,
+                    actionLabel = "Open Settings",
+                    onAction = {
+                        try {
+                            activity.startActivity(getDeepLinkIntent("exact_alarm"))
+                        } catch (_: Exception) {
+                            openAppSettingsFallback()
+                        }
+                    }
+                ))
+            }
+
             for (perm in optionalPermissions) {
                 if (isGranted(perm)) continue
                 val info = when (perm) {
                     android.Manifest.permission.READ_CALL_LOG ->
-                        Triple("📞", "کال لاگ", "کالز کی تفصیل دیکھنے کے لیے")
+                        Triple("📞", "Call Log Permission", "Required to help organize your daily schedule alongside prayer time planning")
                     android.Manifest.permission.READ_CONTACTS ->
-                        Triple("👥", "رابطے", "رابطوں کی فہرست کے لیے")
+                        Triple("👥", "Contacts Permission", "Required to share Islamic duas and spiritual content with your family and friends")
                     else -> continue
                 }
                 rows.add(PermissionRow(
@@ -268,48 +464,51 @@ class PermissionManager(private val activity: ComponentActivity) {
                     title = info.second,
                     desc = info.third,
                     isGranted = false,
-                    actionLabel = "اجازت دیں",
+                    actionLabel = "Allow",
                     onAction = { requestRuntimePermissions(listOf(perm)) }
                 ))
             }
 
-            // ── Samsung-specific: Auto-start ──
             if (Build.MANUFACTURER.equals("samsung", true)) {
                 val lastPrompt = syncPrefs.getLong("samsung_autostart_prompt_last", 0L)
                 if (System.currentTimeMillis() - lastPrompt >= 7L * 24 * 60 * 60 * 1000) {
                     rows.add(PermissionRow(
-                        icon = "🚀",
-                        title = "آٹو سٹارٹ",
-                        desc = "فون آن ہونے پر ایپ خود بخود شروع ہوگی",
+                    icon = "🚀",
+                    title = "Auto-start Permission",
+                    desc = "Required for the app to resume properly after a device restart so prayer reminders are not missed",
                         isGranted = false,
-                        actionLabel = "ترتیبات",
+                        actionLabel = "Open Settings",
                         onAction = {
                             syncPrefs.edit().putLong("samsung_autostart_prompt_last", System.currentTimeMillis()).apply()
                             try {
-                                activity.startActivity(Intent("com.samsung.android.settings.APPLICATION_AUTO_RUN_SETTINGS").apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                })
-                            } catch (_: Exception) { openAppSettings() }
+                                activity.startActivity(getDeepLinkIntent("samsung_autostart"))
+                            } catch (_: Exception) {
+                                openAppSettingsFallback()
+                            }
                         }
                     ))
                 }
             }
 
-            // ── Samsung-specific: Never sleep / battery unrestricted ──
             if (Build.MANUFACTURER.equals("samsung", true)) {
                 rows.add(PermissionRow(
                     icon = "💤",
-                    title = "ڈیپ سلیپ سے استثنیٰ",
-                    desc = "سام سنگ کو ایپ کو ڈیپ سلیپ میں ڈالنے سے روکیں",
+                    title = "Disable Deep Sleep for App",
+                    desc = "Required to keep the app running reliably and deliver prayer reminders without interruption",
                     isGranted = false,
-                    actionLabel = "ترتیبات",
-                    onAction = { openAppSettings() }
+                    actionLabel = "Open Settings",
+                    onAction = {
+                        try {
+                            activity.startActivity(getDeepLinkIntent("samsung_deep_sleep"))
+                        } catch (_: Exception) {
+                            openAppSettingsFallback()
+                        }
+                    }
                 ))
             }
 
             if (rows.isEmpty()) return
 
-            // ── Build and show the BottomSheetDialog ──
             val dialog = BottomSheetDialog(activity)
             val root = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
@@ -317,26 +516,23 @@ class PermissionManager(private val activity: ComponentActivity) {
                 setBackgroundColor(android.graphics.Color.parseColor("#0B0F2A"))
             }
 
-            // Title
             root.addView(TextView(activity).apply {
-                text = "اجازتیں ترتیب دیں"
+                text = "Permissions Required"
                 setTextColor(android.graphics.Color.parseColor("#E8E6E1"))
-                textSize = 20f
+                textSize = 22f
                 gravity = Gravity.CENTER
                 setTextAppearance(android.R.style.TextAppearance_DeviceDefault_Large)
                 setTypeface(null, android.graphics.Typeface.BOLD)
             })
 
-            // Subtitle
             root.addView(TextView(activity).apply {
-                text = "بهتر کارکردگی کے لیے درکار اجازتیں"
+                text = "Please grant these essential permissions for the app to function properly"
                 setTextColor(android.graphics.Color.parseColor("#C9A961"))
-                textSize = 12f
+                textSize = 14f
                 gravity = Gravity.CENTER
                 setPadding(0, 4, 0, 16)
             })
 
-            // Divider
             root.addView(View(activity).apply {
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, 1
@@ -344,7 +540,6 @@ class PermissionManager(private val activity: ComponentActivity) {
                 setBackgroundColor(android.graphics.Color.parseColor("#26D4AF37"))
             })
 
-            // Scrollable rows
             val scrollContainer = android.widget.ScrollView(activity)
             val rowContainer = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
@@ -359,12 +554,11 @@ class PermissionManager(private val activity: ComponentActivity) {
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
             ).also { it.topMargin = 8 })
 
-            // Close button
             root.addView(Button(activity).apply {
-                text = "بند کریں"
+                text = "Close"
                 setTextColor(android.graphics.Color.parseColor("#A8B8B4"))
                 setBackgroundColor(android.graphics.Color.parseColor("#16302C"))
-                textSize = 14f
+                textSize = 16f
                 setOnClickListener { dialog.dismiss() }
             }.also {
                 val lp = LinearLayout.LayoutParams(
@@ -374,13 +568,13 @@ class PermissionManager(private val activity: ComponentActivity) {
                 it.layoutParams = lp
             })
 
-            // Auto-dismiss when all permissions are granted
             val handler = android.os.Handler(android.os.Looper.getMainLooper())
             val checkAndDismiss = object : Runnable {
                 override fun run() {
                     val stillDenied = criticalPermissions.any { !isGranted(it) }
                             || !isUsageStatsGranted()
                             || !isLocationEnabled()
+                            || !isExactAlarmAllowed()
                     if (!stillDenied) {
                         if (dialog.isShowing) dialog.dismiss()
                     } else {
@@ -411,7 +605,6 @@ class PermissionManager(private val activity: ComponentActivity) {
             }
         }
 
-        // Left side: icon + text
         val textContainer = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -420,23 +613,22 @@ class PermissionManager(private val activity: ComponentActivity) {
         textContainer.addView(TextView(activity).apply {
             text = "${row.icon}  ${row.title}"
             setTextColor(android.graphics.Color.parseColor("#E8E6E1"))
-            textSize = 15f
+            textSize = 17f
         })
 
         textContainer.addView(TextView(activity).apply {
             text = row.desc
             setTextColor(android.graphics.Color.parseColor("#A8B8B4"))
-            textSize = 11f
+            textSize = 13f
             setPadding(0, 2, 0, 0)
         })
 
         rowLayout.addView(textContainer)
 
-        // Right side: action button
         rowLayout.addView(Button(activity).apply {
             text = row.actionLabel
             setTextColor(android.graphics.Color.parseColor("#0B0F2A"))
-            textSize = 12f
+            textSize = 14f
             setOnClickListener { row.onAction() }
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -470,8 +662,6 @@ class PermissionManager(private val activity: ComponentActivity) {
         return android.view.View(activity)
     }
 
-    // ── Legacy methods kept for backward compatibility ──
-
     fun showCriticalReminder() {
         showUnifiedPermissionSetup()
     }
@@ -495,16 +685,16 @@ class PermissionManager(private val activity: ComponentActivity) {
         val permanentlyDenied = denied.filter { wasEverRequested(it) && !canShowRationale(it) }
         if (permanentlyDenied.isNotEmpty()) {
             AlertDialog.Builder(activity)
-                .setTitle("اضافی اجازتیں — ترتیبات")
-                .setMessage("یہ اجازتیں مسلسل مسترد کر دی گئی ہیں:\n\n" +
-                    "• فون — ایپ کو بند ہونے سے بچانا\n" +
-                    "• رابطے — دعاؤں میں شامل کرنا\n\n" +
-                    "براہ کرم ترتیبات میں جا کر فعال کریں۔")
+                .setTitle("Additional Permissions")
+                .setMessage("These permissions were permanently denied:\n\n" +
+                    "• Phone State — Required for stable app operation\n" +
+                    "• Contacts — Required for sharing features\n\n" +
+                    "Please enable in Settings.")
                 .setCancelable(true)
-                .setPositiveButton("ترتیبات میں جائیں") { _, _ ->
-                    openAppSettings()
+                .setPositiveButton("Open Settings") { _, _ ->
+                    openAppSettingsFallback()
                 }
-                .setNegativeButton("بعد میں", null)
+                .setNegativeButton("Later", null)
                 .show()
         }
     }
@@ -517,7 +707,7 @@ class PermissionManager(private val activity: ComponentActivity) {
                     putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 })
-            } catch (_: Exception) { openAppSettings() }
+            } catch (_: Exception) { openAppSettingsFallback() }
         }
     }
 
@@ -529,7 +719,7 @@ class PermissionManager(private val activity: ComponentActivity) {
                     data = Uri.parse("package:${activity.packageName}")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 })
-            } catch (_: Exception) { openAppSettings() }
+            } catch (_: Exception) { openAppSettingsFallback() }
         }
     }
 

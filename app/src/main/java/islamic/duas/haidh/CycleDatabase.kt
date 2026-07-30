@@ -5,15 +5,23 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
 class CycleDatabase private constructor(context: Context) :
-    SQLiteOpenHelper(context, "haidh_cycle_db", null, 1) {
-
-    private var _dao: CycleDao? = null
+    SQLiteOpenHelper(context, "haidh_cycle_db", null, 2) {
 
     fun cycleDao(): CycleDao {
-        return _dao ?: CycleDao(writableDatabase).also { _dao = it }
+        return CycleDao(writableDatabase)
     }
 
     override fun onCreate(db: SQLiteDatabase) {
+        createTables(db)
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE cycles ADD COLUMN istihadaType TEXT NOT NULL DEFAULT 'NONE'")
+        }
+    }
+
+    private fun createTables(db: SQLiteDatabase) {
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS cycles (
                 date TEXT PRIMARY KEY,
@@ -22,6 +30,7 @@ class CycleDatabase private constructor(context: Context) :
                 flowIntensity INTEGER NOT NULL DEFAULT 0,
                 notes TEXT NOT NULL DEFAULT '',
                 isHabitDay INTEGER NOT NULL DEFAULT 0,
+                istihadaType TEXT NOT NULL DEFAULT 'NONE',
                 timestamp INTEGER NOT NULL
             )
         """)
@@ -34,12 +43,6 @@ class CycleDatabase private constructor(context: Context) :
                 cycleDay INTEGER NOT NULL DEFAULT 1
             )
         """)
-    }
-
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS cycles")
-        db.execSQL("DROP TABLE IF EXISTS cycle_phases")
-        onCreate(db)
     }
 
     companion object {
