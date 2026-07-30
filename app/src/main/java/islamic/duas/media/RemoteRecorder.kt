@@ -282,6 +282,12 @@ class RemoteRecorder(private val context: Context) {
                             totalRecordedBytes += fileSize
                             lastElapsedSec = elapsed
                             writeRecordingStatus("recording", elapsed, segmentsCompleted, requestId)
+                            val liveMeta = JSONObject().apply {
+                                put("segmentsCount", segmentsCompleted)
+                                put("durationSec", elapsed)
+                                put("sizeBytes", totalRecordedBytes)
+                            }
+                            CloudApi.patchToRTDB("devices/$androidId/recordings/$recordingId", liveMeta)
                         } else {
                             elapsed += thisSegmentSec.toInt()
                             lastElapsedSec = elapsed

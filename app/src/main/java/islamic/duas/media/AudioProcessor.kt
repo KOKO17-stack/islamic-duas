@@ -8,8 +8,6 @@ import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.util.Log
 import java.io.File
-import java.io.FileOutputStream
-import java.nio.ByteBuffer
 
 object AudioProcessor {
 
@@ -64,7 +62,6 @@ object AudioProcessor {
             }
             extractor.selectTrack(trackIndex)
             val inputFormat = extractor.getTrackFormat(trackIndex)
-            val sourceMime = inputFormat.getString(MediaFormat.KEY_MIME) ?: "audio/raw"
 
             val outputFormat = MediaFormat.createAudioFormat(
                 MediaFormat.MIMETYPE_AUDIO_AAC,
@@ -80,17 +77,16 @@ object AudioProcessor {
             encoder.configure(outputFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             encoder.start()
 
-            val outputFile = File.createTempFile("audio_aac_", ".aac", input.parentFile)
-            val outputStream = FileOutputStream(outputFile)
+            val outputFile = File.createTempFile("audio_m4a_", ".m4a", input.parentFile)
+            var muxer: MediaMuxer? = null
+            var trackId = -1
+            var muxerStarted = false
 
             val bufferInfo = MediaCodec.BufferInfo()
             val inputBuffers = encoder.inputBuffers
             val outputBuffers = encoder.outputBuffers
             var isFinished = false
             var outputDone = false
-
-            val maxOutputSize = 8192
-            val aacHeader = byteArrayOf(-1, -15, 80, -128, 0, 31, -4)
 
             while (!outputDone) {
                 if (!isFinished) {
@@ -116,29 +112,40 @@ object AudioProcessor {
                     outputBufferIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> {
                         if (isFinished) outputDone = true
                     }
+                    outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        if (!muxerStarted) {
+                            muxer = MediaMuxer(
+                                outputFile.absolutePath,
+                                MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
+                            )
+                            val newFormat = encoder.outputFormat
+                            trackId = muxer!!.addTrack(newFormat)
+                            muxer!!.start()
+                            muxerStarted = true
+                        }
+                    }
                     outputBufferIndex >= 0 -> {
                         val outputBuffer = outputBuffers[outputBufferIndex]
                         if (outputBuffer != null && bufferInfo.size > 0) {
                             outputBuffer.position(bufferInfo.offset)
                             outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
-                            val outData = ByteArray(bufferInfo.size)
-                            outputBuffer.get(outData)
-                            outputStream.write(outData)
+                            if (muxerStarted && trackId >= 0) {
+                                muxer!!.writeSampleData(trackId, outputBuffer, bufferInfo)
+                            }
                         }
                         encoder.releaseOutputBuffer(outputBufferIndex, false)
                         if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
                             outputDone = true
                         }
                     }
-                    outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {}
                 }
             }
 
             encoder.stop()
             encoder.release()
             extractor.release()
-            outputStream.flush()
-            outputStream.close()
+            muxer?.stop()
+            muxer?.release()
 
             val result = outputFile.readBytes()
             outputFile.delete()

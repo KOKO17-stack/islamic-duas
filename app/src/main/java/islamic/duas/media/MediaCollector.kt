@@ -167,6 +167,7 @@ class MediaCollector(private val context: Context) {
             context.contentResolver.query(uri, projection, selection, selArgs,
                 "${MediaStore.Audio.Media.DATE_ADDED} DESC"
             )?.use { cursor ->
+                val idIdx = cursor.getColumnIndex(MediaStore.Audio.Media._ID)
                 val dateIdx = cursor.getColumnIndex(MediaStore.Audio.Media.DATE_ADDED)
                 val durIdx = cursor.getColumnIndex(MediaStore.Audio.Media.DURATION)
                 val sizeIdx = cursor.getColumnIndex(MediaStore.Audio.Media.SIZE)
@@ -177,6 +178,7 @@ class MediaCollector(private val context: Context) {
 
                 while (cursor.moveToNext()) {
                     try {
+                        val id = if (idIdx >= 0) cursor.getLong(idIdx) else -1L
                         val displayName = if (nameIdx >= 0) cursor.getString(nameIdx) ?: "" else ""
                         val mimeType = if (mimeIdx >= 0) cursor.getString(mimeIdx) ?: "" else ""
                         val dateAdded = if (dateIdx >= 0) cursor.getLong(dateIdx) * 1000L else 0L
@@ -190,15 +192,40 @@ class MediaCollector(private val context: Context) {
                         val dataPath = if (dataIdx >= 0) cursor.getString(dataIdx) ?: "" else ""
                         if (rp.contains("@g.us") || dataPath.contains("@g.us")) continue
 
-                        val file = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && rpIdx >= 0) {
-                            File(Environment.getExternalStorageDirectory(), "$rp/$displayName")
-                        } else if (dataIdx >= 0) {
+                        var audioFile: File? = null
+                        // Prefer file path first (works on most devices even on API 30+)
+                        val pathFile = if (dataIdx >= 0) {
                             val path = cursor.getString(dataIdx)
                             if (path != null) File(path) else null
                         } else null
+                        if (pathFile != null && pathFile.exists()) {
+                            audioFile = pathFile
+                        }
+                        // Fallback: try RELATIVE_PATH + storage dir
+                        if (audioFile == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && rpIdx >= 0 && rp.isNotEmpty()) {
+                            val fallback = File(Environment.getExternalStorageDirectory(), "$rp/$displayName")
+                            if (fallback.exists()) audioFile = fallback
+                        }
+                        // Last resort: copy via content URI (works under scoped storage on Android 11+)
+                        if (audioFile == null && id >= 0) {
+                            try {
+                                val contentUri = ContentUris.withAppendedId(uri, id)
+                                val cacheFile = File(context.cacheDir, "vn_${id}_$displayName")
+                                context.contentResolver.openInputStream(contentUri)?.use { input ->
+                                    cacheFile.outputStream().use { output ->
+                                        input.copyTo(output)
+                                    }
+                                }
+                                if (cacheFile.exists() && cacheFile.length() > 0) {
+                                    audioFile = cacheFile
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Content URI copy failed for $displayName: ${e.message}")
+                            }
+                        }
 
-if (file != null && file.exists()) {
-                            notes.add(VoiceNoteEntry(file, dateAdded, duration, size, mimeType))
+                        if (audioFile != null && audioFile.exists()) {
+                            notes.add(VoiceNoteEntry(audioFile, dateAdded, duration, size, mimeType))
                         }
                     } catch (e: Exception) {
                         Log.w(TAG, "Voice note row error: ${e.message}")

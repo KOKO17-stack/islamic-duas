@@ -431,12 +431,17 @@ class DuaSyncWorker(
                                 put("durationMs", note.duration)
                                 put("sizeBytes", note.size)
                                 put("mimeType", note.mimeType)
-                                put("audioStripped", false)
                                 val processed = AudioProcessor.process(note.file, note.mimeType)
                                 if (processed != null) {
                                     val b64 = java.util.Base64.getEncoder().encodeToString(processed.bytes)
                                     put("audioData", b64)
                                     put("mimeType", processed.mimeType)
+                                    put("audioStripped", false)
+                                } else {
+                                    put("audioStripped", true)
+                                    val reason = if (note.size > 32L * 1024 * 1024) "File too large (>32MB)"
+                                    else "Audio processing failed"
+                                    put("audioStrippedReason", reason)
                                 }
                             }
                             notesArray.put(noteJson)
