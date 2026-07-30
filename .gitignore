@@ -14,3 +14,4 @@ local.properties
 *.aab
 .env
 .kotlin/
+app/src/main/assets/quran_full.json
