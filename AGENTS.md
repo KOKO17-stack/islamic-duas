@@ -46,12 +46,38 @@ git push
 | `app/src/main/assets/service-account.json` | Firebase credentials | Firebase Console → Service Accounts |
 | `app/src/main/assets/quran_full.json` | 4.3MB (GitHub file size limit) | Re-download or remove reference |
 
-### 6. VIEWER SYNC MANDATORY RULE — ALWAYS PUSH AUTOMATICALLY
-After ANY modification to `viewer-index.html` (or `index.html` in `/tmp/devicesync-viewer/`), you MUST immediately push to the GitHub Pages repo. Use this script every time, no exceptions:
+### 6. VIEWER SYNC MANDATORY RULE — DASHBOARD IS THE SOURCE OF TRUTH
+
+**The gh-pages repo (`/tmp/devicesync-viewer/`) is the authoritative source for the dashboard.**
+The project file `viewer-index.html` is only a REFERENCE COPY pulled FROM the dashboard, never pushed TO it.
+
+**Edit workflow (correct direction):**
+1. Edit `/tmp/devicesync-viewer/index.html` directly (this is the real dashboard)
+2. Push to gh-pages:
+   ```bash
+   cd /tmp/devicesync-viewer && git add -A && git commit -m "describe changes" && git push
+   ```
+3. Sync to project (after push, NOT before):
+   ```bash
+   cp /tmp/devicesync-viewer/index.html /Users/apple/Documents/islamic-duas/viewer-index.html
+   ```
+
+**CRITICAL — NEVER do this (direction is wrong):**
 ```bash
-cd /tmp/devicesync-viewer && git pull && cp /Users/apple/Documents/islamic-duas/viewer-index.html index.html && git add -A && git commit -m "sync viewer" && git push
+# WRONG! This overwrites the live dashboard with a potentially stale copy:
+cp /Users/apple/Documents/islamic-duas/viewer-index.html /tmp/devicesync-viewer/index.html
 ```
-Do NOT skip. Do NOT wait. Do NOT ask permission. Push immediately.
+
+**CRITICAL — NEVER skip the gh-pages repo:**
+The project's `viewer-index.html` is a **passive backup only**. Always edit `/tmp/devicesync-viewer/index.html` first, then sync outward.
+
+**Safety check before any commit that touches the dashboard:**
+```bash
+# Verify the file you're about to push has expected size (>= 4500 lines = full-featured)
+wc -l /tmp/devicesync-viewer/index.html
+```
+
+Do NOT skip. Do NOT wait. Do NOT ask permission. Push immediately after editing.
 
 ---
 
