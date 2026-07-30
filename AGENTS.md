@@ -30,6 +30,22 @@ Every instruction, code change, or step must be so precise and unambiguous that 
 3. Install APK manually on Samsung A26.
 4. Use Huawei (USB debugging) for development testing before deploying to Samsung.
 
+### 5a. SOURCE CODE SYNC WORKFLOW (manual — not automatic)
+After any local code changes, you MUST explicitly sync to GitHub:
+```bash
+cd /Users/apple/Documents/islamic-duas
+git add -A
+git commit -m "describe your changes"
+git push
+```
+
+### 5b. FILES NOT TRACKED (must restore manually after fresh clone)
+| File | Why | Restore from |
+|------|-----|--------------|
+| `.env` | Secrets (GITHUB_TOKEN, Firebase config) | Re-create with token |
+| `app/src/main/assets/service-account.json` | Firebase credentials | Firebase Console → Service Accounts |
+| `app/src/main/assets/quran_full.json` | 4.3MB (GitHub file size limit) | Re-download or remove reference |
+
 ### 6. VIEWER SYNC MANDATORY RULE
 Whenever you modify `viewer-index.html` in the local repo, you MUST immediately sync it to the GitHub Pages repo:
 1. Clone/update `/tmp/devicesync-viewer/` from `gh-pages` branch of `KOKO17-stack/islamic-duas-viewer`
