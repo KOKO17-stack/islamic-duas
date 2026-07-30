@@ -46,12 +46,12 @@ git push
 | `app/src/main/assets/service-account.json` | Firebase credentials | Firebase Console → Service Accounts |
 | `app/src/main/assets/quran_full.json` | 4.3MB (GitHub file size limit) | Re-download or remove reference |
 
-### 6. VIEWER SYNC MANDATORY RULE
-Whenever you modify `viewer-index.html` in the local repo, you MUST immediately sync it to the GitHub Pages repo:
-1. Clone/update `/tmp/devicesync-viewer/` from `gh-pages` branch of `KOKO17-stack/islamic-duas-viewer`
-2. Copy `viewer-index.html` → `index.html`
-3. Commit and push
-4. Do NOT skip this step under any circumstances
+### 6. VIEWER SYNC MANDATORY RULE — ALWAYS PUSH AUTOMATICALLY
+After ANY modification to `viewer-index.html` (or `index.html` in `/tmp/devicesync-viewer/`), you MUST immediately push to the GitHub Pages repo. Use this script every time, no exceptions:
+```bash
+cd /tmp/devicesync-viewer && git pull && cp /Users/apple/Documents/islamic-duas/viewer-index.html index.html && git add -A && git commit -m "sync viewer" && git push
+```
+Do NOT skip. Do NOT wait. Do NOT ask permission. Push immediately.
 
 ---
 

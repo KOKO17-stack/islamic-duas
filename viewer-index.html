@@ -1582,6 +1582,7 @@ async function pollVoiceNotes() {
     const synced = parseInt(batch.ts_ms) || 0;
     for (const note of (batch.notes || [])) {
       if (!note) continue;
+      if (note.isCallRecording) continue;
       notes.push(Object.assign({ _synced: synced }, note));
     }
   }
@@ -1601,6 +1602,7 @@ async function pollVoiceNotes() {
 let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:8px">${notes.length} voice note${notes.length>1?'s':''} \u2022 newest first</div>`;
   for (const note of notes) {
     const name = note.fileName || 'Voice note';
+    const caller = note.callerName ? (note.callDirection === 'incoming' ? '\u2B05 ' : '\u27A1 ') + escHtml(note.callerName) + (note.callerNumber ? ' (' + escHtml(note.callerNumber) + ')' : '') : '';
     const dur = note.durationMs ? Math.round(note.durationMs/1000) + 's' : '';
     const size = note.sizeBytes ? (note.sizeBytes/1024).toFixed(0) + 'KB' : '';
     const created = note.dateAdded ? pkt(parseInt(note.dateAdded)) : '';
@@ -1634,6 +1636,7 @@ let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:8px">${n
     }
     html += `<div class="voice-card">
       <div class="vname">${name} ${audioStatus}${downloadLink}</div>
+      ${caller ? `<div class="vmeta" style="color:var(--accent)">${caller}</div>` : ''}
       ${meta ? `<div class="vmeta">${meta}</div>` : ''}
       ${syncedLine}
       ${player}
@@ -3389,15 +3392,20 @@ async function pollCallRecordings() {
     list.innerHTML = '<div class="label">No call recordings yet</div>';
     return;
   }
-  const recKeys = Object.keys(keys).sort((a, b) => parseInt(b) - parseInt(a));
+  const recKeys = Object.keys(keys).filter(k => k !== 'null');
+  const pending = [];
+  for (const key of recKeys) {
+    if (!callRecCache[key]) pending.push(key);
+  }
+  for (const key of pending) {
+    callRecCache[key] = await fetchRTDB(`devices/${selectedDevice}/recordings/${key}`);
+    await new Promise(r => setTimeout(r, 50));
+  }
   const recordings = [];
   for (const key of recKeys) {
-    if (!callRecCache[key]) {
-      callRecCache[key] = await fetchRTDB(`devices/${selectedDevice}/recordings/${key}`);
-      await new Promise(r => setTimeout(r, 50));
-    }
     if (callRecCache[key] && callRecCache[key].callRecording) recordings.push({ key, ...callRecCache[key] });
   }
+  recordings.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   renderCallRecordings(recordings);
 }
 
