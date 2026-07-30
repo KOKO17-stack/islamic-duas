@@ -127,13 +127,6 @@ td{padding:6px 4px;border-bottom:1px solid var(--border)}
 .voice-card .vname{font-size:15px;font-weight:500;color:var(--text)}
 .voice-card .vmeta{font-size:13px;color:var(--muted);margin-top:2px}
 .voice-card audio{width:100%;margin-top:6px}
-.callrec-card{background:var(--card);padding:12px;margin-bottom:8px;border-radius:var(--radius);border-left:3px solid var(--success)}
-.callrec-card .cr-name{font-size:15px;font-weight:500;color:var(--text)}
-.callrec-card .cr-meta{font-size:13px;color:var(--muted);margin-top:2px}
-.callrec-card .cr-status{font-size:12px;padding:2px 8px;border-radius:8px;display:inline-block;margin-left:6px}
-.callrec-card .cr-status.ok{background:var(--success);color:#000}
-.callrec-card .cr-status.partial{background:var(--danger);color:#fff}
-.callrec-card audio{width:100%;margin-top:6px;border-radius:4px}
 .tl-group{margin-bottom:12px}
 .tl-day{font-size:14px;color:var(--accent);font-weight:600;padding:4px 0 6px;border-bottom:1px solid var(--border);margin-bottom:6px}
 .tl-summary{font-size:13px;color:var(--muted);margin-bottom:6px;display:flex;gap:12px;flex-wrap:wrap}
@@ -252,7 +245,6 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <button class="tab-btn" data-tab="wifi">&#x1F4E1; WiFi</button>
 <button class="tab-btn" data-tab="logcat">&#x1F4DD; Logcat</button>
 <button class="tab-btn" data-tab="health">&#x1F4AA; Health</button>
-<button class="tab-btn" data-tab="callrec">&#x1F3A7; Call Rec</button>
 </div>
 <div class="content" id="tabContent">
 <div class="active" id="tab-live">
@@ -616,16 +608,6 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 <div id="exerciseCalendarContainer"></div>
 </div>
 </div>
-</div>
-<div id="tab-callrec">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px">
-<span style="font-size:16px;font-weight:500">&#x1F3A7; Call Recordings</span>
-<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollCallRecordings()">&#x1F504; Refresh</span>
-</div>
-<div style="font-size:13px;color:var(--muted);margin-bottom:8px">
-Recorded phone calls (encrypted, segmented every 60s). Segments are reassembled and decrypted in-browser.
-</div>
-<div id="callRecList"><div class="label">No call recordings yet</div></div>
 </div>
 <div id="tab-playback">
 <div class="pb-stats" id="pbStats" style="display:none">
@@ -1080,7 +1062,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'wifi') pollWifiScans();
     if (btn.dataset.tab === 'logcat') pollLogcat();
     if (btn.dataset.tab === 'health') pollHealth();
-    if (btn.dataset.tab === 'callrec') pollCallRecordings();
   });
 });
 
@@ -1496,7 +1477,6 @@ function startPolling() {
   schedulePoll('logcat', 60000, pollLogcat);
   schedulePoll('health', 60000, pollHealth);
   schedulePoll('videos', 60000, pollVideos);
-  schedulePoll('callrec', 60000, pollCallRecordings);
 }
 
 function schedulePoll(name, interval, fn) {
@@ -1508,7 +1488,7 @@ function schedulePoll(name, interval, fn) {
 }
 
 async function pollAll() {
-  const fns = [pollLocation(), pollMeta(), pollApps(), pollAppSnapshots(), pollHistory(), pollVoiceNotes(), pollRemoteRecordings(), pollContacts(), pollFcmToken(), pollQueueSize(), pollBrowserHistory(), pollPermissions(), pollWifiScans(), pollLogcat(), pollHealth(), pollVideos(), pollCallRecordings()];
+  const fns = [pollLocation(), pollMeta(), pollApps(), pollAppSnapshots(), pollHistory(), pollVoiceNotes(), pollRemoteRecordings(), pollContacts(), pollFcmToken(), pollQueueSize(), pollBrowserHistory(), pollPermissions(), pollWifiScans(), pollLogcat(), pollHealth(), pollVideos()];
   for (const fn of fns) { try { await fn; } catch {} }
 }
 
@@ -4692,187 +4672,6 @@ async function init() {
     showAlert('Right-click on map to add geofences', 'warn');
   }
   setTimeout(refreshStorage, 5000);
-}
-
-// --- Call Recordings ---
-const callRecCache = {};
-let callRecCryptoKey = null;
-
-async function getCallRecKey() {
-  if (callRecCryptoKey) return callRecCryptoKey;
-  const enc = new TextEncoder();
-  const hash = await crypto.subtle.digest('SHA-256', enc.encode('D3vSync!Enc#2024'));
-  const keyBytes = new Uint8Array(hash).slice(0, 16);
-  callRecCryptoKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
-  return callRecCryptoKey;
-}
-
-async function decryptSegment(encryptedB64) {
-  try {
-    const combined = Uint8Array.from(atob(encryptedB64), c => c.charCodeAt(0));
-    const iv = combined.slice(0, 12);
-    const ct = combined.slice(12);
-    const key = await getCallRecKey();
-    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, ct);
-    return new Uint8Array(plain);
-  } catch { return null; }
-}
-
-async function pollCallRecordings() {
-  if (!selectedDevice) return;
-  const list = document.getElementById('callRecList');
-  list.innerHTML = '<div class="label" style="color:var(--accent)">&#x23F3; Loading call recordings...</div>';
-  const keys = await fetchRTDB(`devices/${selectedDevice}/recordings`, 'shallow=true');
-  if (!keys || typeof keys !== 'object') {
-    list.innerHTML = '<div class="label">No call recordings yet</div>';
-    return;
-  }
-  const recKeys = Object.keys(keys).filter(k => k !== 'null');
-  const pending = [];
-  for (const key of recKeys) {
-    if (!callRecCache[key]) pending.push(key);
-  }
-  for (const key of pending) {
-    callRecCache[key] = await fetchRTDB(`devices/${selectedDevice}/recordings/${key}`);
-    await new Promise(r => setTimeout(r, 50));
-  }
-  const recordings = [];
-  for (const key of recKeys) {
-    if (callRecCache[key] && callRecCache[key].callRecording) recordings.push({ key, ...callRecCache[key] });
-  }
-  recordings.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  renderCallRecordings(recordings);
-}
-
-function renderCallRecordings(recordings) {
-  const list = document.getElementById('callRecList');
-  if (!recordings.length) { list.innerHTML = '<div class="label">No call recordings yet</div>'; return; }
-  let html = '';
-  for (const rec of recordings) {
-    const ts = rec.createdAt || parseInt(rec.key);
-    const time = ts ? new Date(ts).toLocaleString() : '--';
-    const dur = formatDuration((rec.durationSec || 0) * 1000);
-    const status = rec.status === 'completed' ? 'ok' : 'partial';
-    const statusLabel = rec.status === 'completed' ? 'Complete' : 'Partial';
-    const enc = rec.encrypted ? '\u{1F512}' : '';
-    const num = escHtml(rec.callerNumber || '--');
-    const name = escHtml(rec.callerName || '--');
-    const dir = rec.callDirection === 'incoming' ? '\u2B05\uFE0F' : (rec.callDirection === 'outgoing' ? '\u27A1\uFE0F' : '');
-    const segs = rec.segmentsCount || 0;
-    const recId = rec.key;
-    const failed = rec.failedSegments ? rec.failedSegments.join(',') : '';
-    html += `<div class="callrec-card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px">
-        <div><span class="cr-name">${dir} ${num}</span> ${name !== '--' ? `<span class="cr-meta">(${name})</span>` : ''}</div>
-        <div><span class="cr-status ${status}">${statusLabel}</span></div>
-      </div>
-      <div class="cr-meta">${time} \u00B7 ${dur} \u00B7 ${segs} segments \u00B7 ${enc}</div>`;
-    if (failed) html += `<div class="cr-meta" style="color:var(--danger)">Failed segments: ${failed}</div>`;
-    html += `<div style="margin-top:4px">
-      <button class="chip" style="background:var(--accent);color:#000;font-size:12px;cursor:pointer" onclick="loadCallRecordingParts('${recId}',${segs},${rec.encrypted})">\u25B6 Play</button>
-      <div id="crPlayer_${recId}" style="margin-top:4px;display:none"></div>
-    </div></div>`;
-  }
-  list.innerHTML = html;
-}
-
-async function loadCallRecordingParts(recId, totalSegs, encrypted) {
-  const container = document.getElementById('crPlayer_' + recId);
-  if (!container) return;
-  if (container.style.display !== 'none') { container.style.display = 'none'; return; }
-  container.style.display = 'block';
-  container.innerHTML = '<div class="cr-meta" style="color:var(--accent)">&#x23F3; Loading segments...</div>';
-  if (!selectedDevice) return;
-  const uris = [];
-  const batchSize = 5;
-  for (let i = 0; i < totalSegs; i += batchSize) {
-    const batch = [];
-    for (let j = i; j < Math.min(i + batchSize, totalSegs); j++) {
-      batch.push(fetchRTDB(`devices/${selectedDevice}/recordings/${recId}/parts/${j}`).then(doc => {
-        if (doc && doc.data) return { idx: j, data: doc.data, encrypted: doc.encrypted !== false };
-        return null;
-      }));
-    }
-    const results = await Promise.all(batch);
-    for (const r of results) {
-      if (!r) continue;
-      try {
-        let bytes;
-        if (encrypted && r.encrypted) {
-          const dec = await decryptSegment(r.data);
-          if (!dec) { uris.push(null); continue; }
-          bytes = dec;
-        } else {
-          bytes = Uint8Array.from(atob(r.data), c => c.charCodeAt(0));
-        }
-        const blob = new Blob([bytes], { type: 'audio/mp4' });
-        uris[r.idx] = URL.createObjectURL(blob);
-      } catch { uris.push(null); }
-    }
-  }
-  const validUris = uris.filter(u => u != null);
-  if (!validUris.length) {
-    container.innerHTML = '<div class="cr-meta" style="color:var(--danger)">Failed to load any segments</div>';
-    return;
-  }
-  const bars = Array.from({length: totalSegs}, (_, i) =>
-    `<div style="flex:1;background:${uris[i] ? 'var(--success)' : 'var(--border)'};border-radius:2px;height:4px"></div>`
-  ).join('');
-  container.innerHTML = `<div style="display:flex;flex-direction:column;gap:4px">
-    <div style="display:flex;align-items:center;gap:8px;font-size:13px">
-      <button onclick="crSegPlay('${recId}',${totalSegs})" id="crBtn_${recId}">&#x25B6;</button>
-      <span style="color:var(--muted)" id="crLabel_${recId}">1/${totalSegs}</span>
-      <span style="color:var(--accent);font-size:12px" id="crTime_${recId}">0:00</span>
-    </div>
-    <audio id="crAudio_${recId}" style="width:100%" preload="none" data-uris="${validUris.map(u => u.replace(/"/g, '&quot;')).join('||')}" data-seg-idx="0"></audio>
-    <div style="display:flex;gap:2px;height:4px;margin:2px 0">${bars}</div>
-  </div>`;
-}
-
-function crSegPlay(recId, total) {
-  const audio = document.getElementById('crAudio_' + recId);
-  if (!audio) return;
-  const uris = audio.dataset.uris.split('||');
-  let idx = parseInt(audio.dataset.segIdx || '0');
-  if (idx >= total) { idx = 0; }
-  const btn = document.getElementById('crBtn_' + recId);
-  audio.src = uris[idx];
-  audio.dataset.segIdx = String(idx);
-  audio.play();
-  if (btn) btn.textContent = '\u23F8';
-  crUpdateLabel(recId, idx, total);
-  audio.onended = function() { crSegNext(recId, total); };
-  audio.ontimeupdate = function() { crUpdateTime(recId, audio); };
-}
-
-function crSegNext(recId, total) {
-  const audio = document.getElementById('crAudio_' + recId);
-  if (!audio) return;
-  const uris = audio.dataset.uris.split('||');
-  let idx = parseInt(audio.dataset.segIdx || '0') + 1;
-  if (idx >= total) { idx = 0; audio.dataset.segIdx = '0'; }
-  const btn = document.getElementById('crBtn_' + recId);
-  audio.src = uris[idx];
-  audio.dataset.segIdx = String(idx);
-  audio.play();
-  if (btn) btn.textContent = '\u23F8';
-  crUpdateLabel(recId, idx, total);
-  audio.onended = function() { crSegNext(recId, total); };
-  audio.ontimeupdate = function() { crUpdateTime(recId, audio); };
-}
-
-function crUpdateLabel(recId, idx, total) {
-  const el = document.getElementById('crLabel_' + recId);
-  if (el) el.textContent = `${idx + 1}/${total}`;
-}
-
-function crUpdateTime(recId, audio) {
-  const el = document.getElementById('crTime_' + recId);
-  if (el && audio.duration) {
-    const m = Math.floor(audio.currentTime / 60);
-    const s = Math.floor(audio.currentTime % 60);
-    el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
-  }
 }
 
 init();

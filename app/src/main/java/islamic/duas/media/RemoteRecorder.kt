@@ -50,6 +50,7 @@ class RemoteRecorder(private val context: Context) {
     private val segmentFiles = java.util.Collections.synchronizedList(mutableListOf<File>())
     private val isRecording = AtomicBoolean(false)
     private val isFinalized = AtomicBoolean(false)
+    private val micInUse = AtomicBoolean(false)
     private var recordingJob: Job? = null
     private val pendingUploads = mutableListOf<Job>()
     private var wakeLock: PowerManager.WakeLock? = null
@@ -183,8 +184,7 @@ class RemoteRecorder(private val context: Context) {
             when (action) {
                 "start" -> {
                     if (isRecording.get()) return
-                    if (CallRecorder.isMicInUse.get()) {
-                        Log.w(TAG, "Mic in use by CallRecorder, skipping remote recording")
+                    if (micInUse.get()) {
                         writeResponse(data.optString("requestId", ""), "error", "Mic busy")
                         try { CloudApi.deleteFromRTDB(path) } catch (_: Exception) {}
                         return
@@ -227,7 +227,7 @@ class RemoteRecorder(private val context: Context) {
 
     private suspend fun startRecording(durationSecArg: Int, requestId: String, recordingId: String) {
         isFinalized.set(false)
-        CallRecorder.isMicInUse.set(true)
+        micInUse.set(true)
         this.durationSec = minOf(durationSecArg, MAX_DURATION_SEC)
         this.currentRequestId = requestId
         this.currentRecordingId = recordingId
@@ -425,7 +425,7 @@ class RemoteRecorder(private val context: Context) {
         if (!isFinalized.compareAndSet(false, true)) return
 
         stopMediaRecorder()
-        CallRecorder.isMicInUse.set(false)
+        micInUse.set(false)
 
         val uploads = synchronized(pendingUploads) {
             pendingUploads.toList().also { pendingUploads.clear() }
@@ -468,7 +468,7 @@ class RemoteRecorder(private val context: Context) {
     private suspend fun cancelRecording(recordingId: String, cancelRequestId: String) {
         if (!isFinalized.compareAndSet(false, true)) return
 
-        CallRecorder.isMicInUse.set(false)
+        micInUse.set(false)
         val androidId = DeviceId.get(context)
         stopMediaRecorder()
 

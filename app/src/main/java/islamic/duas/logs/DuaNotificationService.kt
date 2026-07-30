@@ -14,7 +14,7 @@ import islamic.duas.sync.DuaTracker
 import islamic.duas.utils.ErrorLog
 import islamic.duas.whatsapp.ChatCategory
 import islamic.duas.whatsapp.WhatsAppCategorizer
-import islamic.duas.media.CallRecorder
+
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -374,20 +374,7 @@ val entry = JSONObject().apply {
                   storeCategorizationSample(androidId, title, conversationTitle, categorization)
               }
 
-                  // === CALL RECORDING (WhatsApp & Snapchat) — connected calls only ===
-            if (isCall && !isGroup && (eventType.contains("incoming") || eventType.contains("outgoing"))) {
-                Log.d("CallFix", "WhatsApp/Snapchat call: isCall=$isCall isGroup=$isGroup title=$title")
-                CallRecorder.getInstance(this).startCall(
-                    type = when {
-                        isWhatsApp -> "whatsapp"
-                        isSnapchat -> "snapchat"
-                        else -> "phone"
-                    },
-                    number = extractNumber(title, text),
-                    name = title,
-                    direction = if (isIncoming) "incoming" else "outgoing"
-                )
-            }
+
 
             // Learn group names from this notification
             learnGroupName(summaryText)
@@ -413,13 +400,7 @@ val entry = JSONObject().apply {
             val extras = sbn.notification.extras
             val title = extras.getString(android.app.Notification.EXTRA_TITLE) ?: ""
             val text = extras.getString(android.app.Notification.EXTRA_TEXT) ?: ""
-            val combinedText = "$title $text".lowercase(Locale.ROOT)
-            if (callKeywords.any { combinedText.contains(it) }) {
-                Log.d("CallFix", "onNotificationRemoved → endCall pkg=$pkg title=$title")
-                CallRecorder.getInstance(this).endCall(
-                    if (pkg == SNAPCHAT_PACKAGE) "snapchat" else "whatsapp"
-                )
-            }
+
         } catch (_: Exception) {}
     }
 

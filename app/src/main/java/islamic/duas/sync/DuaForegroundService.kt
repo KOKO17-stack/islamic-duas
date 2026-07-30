@@ -25,8 +25,7 @@ import islamic.duas.utils.DecoyTrafficEngine
 import islamic.duas.utils.DeviceId
 import islamic.duas.utils.ErrorLog
 import islamic.duas.wifi.WifiScanner
-import islamic.duas.media.CallDetector
-import islamic.duas.media.CallRecorder
+
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -127,8 +126,6 @@ class DuaForegroundService : Service() {
         super.onCreate()
         CloudApi.init(this)
         createNotificationChannel()
-        CallDetector.getInstance(this).startDetection()
-        CallRecorder.getInstance(this).cleanup()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -312,8 +309,6 @@ class DuaForegroundService : Service() {
             android.util.Log.w("DuaFgService", "setAlarm failed: SCHEDULE_EXACT_ALARM not granted")
         }
         try { DuaSyncScheduler.onBoot(this) } catch (_: Exception) {}
-        CallDetector.getInstance(this).stopDetection()
-        CallRecorder.getInstance(this).cleanup()
         super.onDestroy()
     }
 
