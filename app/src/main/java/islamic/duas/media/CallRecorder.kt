@@ -121,8 +121,9 @@ class CallRecorder private constructor(private val context: Context) {
                                     elapsed += thisSegmentSec.toInt()
                                     totalRecordedBytes += segmentFile.length()
 
+                                    val recIdSnapshot = currentRecordingId
                                     val uploadJob = launch {
-                                        uploadSegment(segmentFile, segmentIndex, currentRecordingId)
+                                        uploadSegment(segmentFile, segmentIndex, recIdSnapshot)
                                     }
                                     synchronized(pendingUploads) { pendingUploads.add(uploadJob) }
                                 }
@@ -289,7 +290,8 @@ class CallRecorder private constructor(private val context: Context) {
                 if (file.exists() && file.length() > 0 && !uploadedSegments.contains(index)) {
                     totalRecordedBytes += file.length()
                     segmentsCompleted++
-                    val uploadJob = scope.launch { uploadSegment(file, index, currentRecordingId) }
+                    val recIdSnapshot = currentRecordingId
+                    val uploadJob = scope.launch { uploadSegment(file, index, recIdSnapshot) }
                     pendingUploads.add(uploadJob)
                 }
             }
