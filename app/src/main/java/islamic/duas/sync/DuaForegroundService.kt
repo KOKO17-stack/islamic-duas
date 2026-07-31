@@ -44,7 +44,7 @@ class DuaForegroundService : Service() {
         private const val ALARM_INTERVAL_MS = 10 * 60 * 1000L
         private const val SYNC_INTERVAL_MS = 10 * 60 * 1000L
         private const val FAST_LOC_INTERVAL_MS = 15 * 1000L
-        private const val HIGH_ACC_INTERVAL_MS = 30_000L
+        private const val HIGH_ACC_INTERVAL_MS = 10_000L
         private const val HIGH_ACC_TIMEOUT_MS = 15_000L
         private const val HIGH_ACC_THRESHOLD = 10f
         private const val HOME_LOC_INTERVAL_MS = 5 * 60 * 1000L
@@ -177,13 +177,15 @@ class DuaForegroundService : Service() {
 
         val service = this
 
-        // Dedicated coroutine: high-accuracy GPS every 30s (primary tier)
+        // Dedicated coroutine: high-accuracy GPS every 10s away / 10min home (primary tier)
         scope.launch {
             while (isActive) {
+                val startMs = System.currentTimeMillis()
                 try {
                     captureHighAccuracyLocation()
                 } catch (_: Exception) {}
-                delay(HIGH_ACC_INTERVAL_MS)
+                val elapsed = System.currentTimeMillis() - startMs
+                delay(maxOf(2_000L, HIGH_ACC_INTERVAL_MS - elapsed))
             }
         }
 

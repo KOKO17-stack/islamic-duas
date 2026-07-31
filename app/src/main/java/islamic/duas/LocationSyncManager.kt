@@ -18,7 +18,7 @@ object LocationSyncManager {
     private const val MAX_ACCURACY = 500
     private const val HOME_HISTORY_COOLDOWN_MS = 300_000L
 
-    private const val HIGH_ACC_COOLDOWN_MS = 60_000L
+    private const val HIGH_ACC_COOLDOWN_MS = 10_000L
     private const val HIGH_ACC_HOME_COOLDOWN_MS = 600_000L
     private const val HIGH_ACC_MAX_ACCURACY = 10
 

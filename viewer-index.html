@@ -657,6 +657,7 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:10px 0 8px">
 <div class="pg" style="gap:4px">
 <select id="accuracyFilter" style="font-size:12px;padding:4px 16px 4px 6px;min-height:28px">
+<option value="gps">&#x1F4E1; GPS only</option>
 <option value="0">Accuracy: All</option>
 <option value="10" selected>≤ 10 m</option>
 <option value="50">≤ 50 m</option>
@@ -3680,7 +3681,7 @@ function updateLocationUI(loc) {
   document.getElementById('latVal').textContent = loc.lat.toFixed(6) + '\u00B0';
   document.getElementById('lngVal').textContent = loc.lng.toFixed(6) + '\u00B0';
   document.getElementById('accVal').textContent = loc.accuracy != null ? loc.accuracy + 'm' : '--';
-  document.getElementById('spdVal').textContent = loc.speed != null ? loc.speed.toFixed(1) + ' m/s' : '--';
+  document.getElementById('spdVal').textContent = loc.speed != null ? (loc.speed * 3.6).toFixed(1) + ' km/h' : '--';
   document.getElementById('seenVal').textContent = pkt(loc.ts_ms || Date.now());
   document.getElementById('coordBox').textContent = `${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`;
   document.getElementById('coordBox').onclick = () => {
@@ -3699,14 +3700,14 @@ function updatePlaybackUI(p) {
   document.getElementById('latVal').textContent = p.lat.toFixed(6) + '\u00B0';
   document.getElementById('lngVal').textContent = p.lng.toFixed(6) + '\u00B0';
   document.getElementById('accVal').textContent = p.accuracy != null ? p.accuracy + 'm' : '--';
-  document.getElementById('spdVal').textContent = p.speed != null ? p.speed.toFixed(1) + ' m/s' : '--';
+  document.getElementById('spdVal').textContent = p.speed != null ? (p.speed * 3.6).toFixed(1) + ' km/h' : '--';
   document.getElementById('seenVal').textContent = p.ts ? pkt(p.ts) : '--';
   document.getElementById('coordBox').textContent = `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
   geocode(p.lat, p.lng).then(d => {
     if (d) document.getElementById('addrVal').textContent = d.display_name || '--';
   });
   const metaParts = [];
-  if (p.speed != null) metaParts.push(p.speed.toFixed(1) + 'm/s');
+  if (p.speed != null) metaParts.push((p.speed * 3.6).toFixed(1) + 'km/h');
   if (p.accuracy != null) metaParts.push('±' + p.accuracy + 'm');
   document.getElementById('playMeta').textContent = metaParts.length ? metaParts.join(' ') : '--';
 }
@@ -3837,7 +3838,7 @@ function updatePlaybackDisplay(lat, lng, ts, fromIdx, toIdx, frac) {
   panIfNeeded(lat, lng);
   const cur = { lat, lng, ts: displayTs, accuracy: pts[fromIdx] ? pts[fromIdx].accuracy : 0 };
   updatePlaybackUI(cur);
-  const speed = pts[fromIdx] && pts[fromIdx].speed ? pts[fromIdx].speed.toFixed(1) + 'm/s' : '--';
+  const speed = pts[fromIdx] && pts[fromIdx].speed ? (pts[fromIdx].speed * 3.6).toFixed(1) + 'km/h' : '--';
   document.getElementById('playMeta').textContent = '\u26A1 ' + speed;
   highlightPointInList(fromIdx);
 }
@@ -3962,7 +3963,13 @@ document.getElementById('playScrubber').addEventListener('input', function() {
 });
 
 // --- Load History (with Period Filter) ---
-async function loadDeviceHistory(deviceId, periodSeconds, maxAccuracy) {
+const GPS_SOURCES = ['high_accuracy_gps', 'gps', 'away_tracker', 'call_snapshot'];
+function isGpsPoint(v) {
+  if (v.isHighAccuracy === true) return true;
+  const src = String(v.source || '');
+  return GPS_SOURCES.includes(src);
+}
+async function loadDeviceHistory(deviceId, periodSeconds, maxAccuracy, gpsOnly) {
   const pts = [];
   // Single fetch — walk the entire tree in-memory (no recursive HTTP calls)
   const data = await fetchRTDB(`devices/${deviceId}/location/history`);
@@ -3974,6 +3981,7 @@ async function loadDeviceHistory(deviceId, periodSeconds, maxAccuracy) {
         if (v.lat !== undefined) {
           const ts = parseInt(k);
           if (!ts) continue;
+          if (gpsOnly && !isGpsPoint(v)) continue;
           const acc = v.accuracy !== undefined && v.accuracy !== null ? parseFloat(v.accuracy) : 999;
           if (!maxAccuracy || acc <= maxAccuracy) {
             pts.push({
@@ -3983,7 +3991,8 @@ async function loadDeviceHistory(deviceId, periodSeconds, maxAccuracy) {
               accuracy: acc,
               speed: v.speed != null ? parseFloat(v.speed) : 0,
               isHighAccuracy: v.isHighAccuracy === true,
-              satellites: v.satellites != null ? parseInt(v.satellites) : 0
+              satellites: v.satellites != null ? parseInt(v.satellites) : 0,
+              source: v.source != null ? String(v.source) : ''
             });
           }
         } else {
@@ -4014,9 +4023,11 @@ async function reloadHistory(showAlertMsg) {
   if (!selectedDevice) return;
   if (playbackRunning) stopPlayback();
   const periodSeconds = parseInt(document.getElementById('periodUnit').value);
-  const accVal = parseInt(document.getElementById('accuracyFilter').value);
+  const accRaw = document.getElementById('accuracyFilter').value;
+  const gpsOnly = accRaw === 'gps';
+  const accVal = gpsOnly ? 0 : parseInt(accRaw);
   const maxAcc = accVal > 0 ? accVal : 0;
-  const pts = await loadDeviceHistory(selectedDevice, periodSeconds, maxAcc);
+  const pts = await loadDeviceHistory(selectedDevice, periodSeconds, maxAcc, gpsOnly);
   if (!pts.length) {
     if (showAlertMsg) showAlert('No history points in range', 'warn');
     return;
@@ -4105,7 +4116,7 @@ function renderPlaybackTab() {
     html += `<div class="pb-day">${day} <span style="font-weight:400;color:var(--muted)">(${entries.length})</span></div>`;
     for (const { idx, p } of entries) {
       const active = idx === activeIdx ? ' pb-point-active' : '';
-      const speed = p.speed != null ? (p.speed).toFixed(1) + 'm/s' : '';
+      const speed = p.speed != null ? (p.speed * 3.6).toFixed(1) + 'km/h' : '';
       const acc = p.accuracy != null ? '\u00B1' + p.accuracy + 'm' : '';
       const ha = p.isHighAccuracy ? '\u2B50' : '';
       const sat = p.satellites ? p.satellites + '\uD83D\uDDF2' : '';
