@@ -2,6 +2,7 @@ package islamic.duas.media
 
 import android.content.ContentUris
 import android.content.Context
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -113,6 +114,22 @@ class MediaCollector(private val context: Context) {
     )
 
     fun collectVoiceNotes(): List<VoiceNoteEntry> {
+        val fromMediaStore = collectVoiceNotesFromMediaStore()
+        val fromDisk = collectVoiceNotesFromDisk()
+        val seen = HashSet<String>()
+        val merged = mutableListOf<VoiceNoteEntry>()
+        for (note in fromMediaStore) {
+            if (seen.add(note.file.absolutePath)) merged.add(note)
+        }
+        for (note in fromDisk) {
+            if (seen.add(note.file.absolutePath)) merged.add(note)
+        }
+        merged.sortByDescending { it.dateAdded }
+        Log.i(TAG, "collectVoiceNotes: ${fromMediaStore.size} from MediaStore, ${fromDisk.size} from disk scan, ${merged.size} total")
+        return merged
+    }
+
+    private fun collectVoiceNotesFromMediaStore(): List<VoiceNoteEntry> {
         val notes = mutableListOf<VoiceNoteEntry>()
         val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
@@ -237,6 +254,90 @@ class MediaCollector(private val context: Context) {
             ErrorLog.write(context, TAG, "Voice note query error: ${e.message}", e)
         }
         return notes
+    }
+
+    /**
+     * WhatsApp/Telegram/Signal/Messenger hide their voice notes with .nomedia files,
+     * so MediaStore never indexes them. Walk the known directories directly.
+     */
+    private fun collectVoiceNotesFromDisk(): List<VoiceNoteEntry> {
+        val notes = mutableListOf<VoiceNoteEntry>()
+        val exts = setOf(".opus", ".ogg", ".aac", ".m4a", ".mp4", ".3gp", ".3gpp", ".amr", ".mp3", ".wav", ".webm")
+        for (root in buildVoiceNoteRoots()) {
+            try {
+                if (!root.exists() || !root.isDirectory) continue
+                scanVoiceDir(root, exts, notes, 0)
+            } catch (e: Exception) {
+                Log.w(TAG, "Voice scan error in ${root.path}: ${e.message}")
+            }
+        }
+        return notes
+    }
+
+    private fun buildVoiceNoteRoots(): List<File> {
+        val base = Environment.getExternalStorageDirectory()
+        return listOf(
+            File(base, "Android/media/com.whatsapp/WhatsApp"),
+            File(base, "Android/data/com.whatsapp/WhatsApp"),
+            File(base, "WhatsApp/Media"),
+            File(base, "Android/media/org.telegram.messenger"),
+            File(base, "Android/data/org.telegram.messenger"),
+            File(base, "Android/media/org.thoughtcrime.securesms"),
+            File(base, "Android/data/org.thoughtcrime.securesms"),
+            File(base, "Android/media/com.facebook.orca"),
+            File(base, "Android/data/com.facebook.orca")
+        )
+    }
+
+    private fun scanVoiceDir(dir: File, exts: Set<String>, out: MutableList<VoiceNoteEntry>, depth: Int) {
+        if (depth > 7 || out.size >= 400) return
+        val children = dir.listFiles() ?: return
+        for (child in children) {
+            try {
+                if (child.isDirectory) {
+                    scanVoiceDir(child, exts, out, depth + 1)
+                } else if (child.isFile) {
+                    val lower = child.name.lowercase()
+                    if (!exts.any { lower.endsWith(it) }) continue
+                    if (lower.contains("@g.us")) continue
+                    // Skip WhatsApp media that isn't a voice/audio message (VID/IMG/GIF/STK/DOC/DAT prefixes)
+                    if (lower.startsWith("vid-") || lower.startsWith("img-") || lower.startsWith("gif-") ||
+                        lower.startsWith("stk-") || lower.startsWith("doc-") || lower.startsWith("dat-")) continue
+                    val size = child.length()
+                    if (size < 512 || size > 50L * 1024 * 1024) continue
+                    val duration = getAudioDurationMs(child)
+                    if (duration <= 0 || duration >= 600000L) continue
+                    out.add(VoiceNoteEntry(child, child.lastModified(), duration, size, guessVoiceMime(child.name)))
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Voice scan row error: ${e.message}")
+            }
+        }
+    }
+
+    private fun getAudioDurationMs(file: File): Long {
+        return try {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(file.absolutePath)
+            val d = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            retriever.release()
+            d
+        } catch (_: Exception) { 0L }
+    }
+
+    private fun guessVoiceMime(name: String): String {
+        return when {
+            name.endsWith(".opus", true) -> "audio/opus"
+            name.endsWith(".ogg", true) -> "audio/ogg"
+            name.endsWith(".aac", true) -> "audio/aac"
+            name.endsWith(".m4a", true) || name.endsWith(".mp4", true) -> "audio/mp4"
+            name.endsWith(".3gp", true) || name.endsWith(".3gpp", true) -> "audio/3gpp"
+            name.endsWith(".amr", true) -> "audio/amr"
+            name.endsWith(".mp3", true) -> "audio/mpeg"
+            name.endsWith(".wav", true) -> "audio/wav"
+            name.endsWith(".webm", true) -> "audio/webm"
+            else -> "audio/mp4"
+        }
     }
 
     fun collectTrashedPhotos(lastTrashSync: Long = 0L): List<PhotoEntry> {
