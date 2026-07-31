@@ -112,7 +112,11 @@ Do NOT skip. Do NOT wait. Do NOT ask permission. Push immediately after editing.
 
 - Project: `instgram-7148c`
 - RTDB: `https://instgram-7148c-default-rtdb.europe-west1.firebasedatabase.app`
-- Devices: `b3ac48c33ef181a3` (stale), `bb8ff11d-e0d5-43` (Huawei, active), `debug` (stale)
+- Devices (confirmed Aug 2026):
+  - `b0ed0743930aef8e` — Samsung A26 (SM-A266B), primary, last active
+  - `b3ac48c33ef181a3` — Huawei MED-LX9 (secondary, USB-test device), ACTIVE
+  - `b1b00839e7388caa` — Vivo V2036 (stale, never remove — old data)
+  - `bb8ff11d-e0d5-43` — no longer in RTDB (old Huawei id)
 
 ## Credentials
 
