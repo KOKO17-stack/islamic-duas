@@ -3069,6 +3069,7 @@ const REC_MIME = {
 function clearRecordingsCache() {
   for (const r of recordingsCache) {
     if (r._blobUrl) { try { URL.revokeObjectURL(r._blobUrl); } catch {} }
+    if (r._partUrls) { r._partUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch {} }); }
   }
   recordingsCache = [];
   recordingsSelected.clear();
@@ -3088,18 +3089,73 @@ async function fetchAllParts(deviceId, recId) {
   return results;
 }
 
-function concatPartsToBlobUrl(parts, mimeType) {
+let recAudioCtx = null;
+function getRecAudioCtx() {
+  if (!recAudioCtx) {
+    try { recAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { recAudioCtx = null; }
+  }
+  if (recAudioCtx && recAudioCtx.state === 'suspended') { try { recAudioCtx.resume(); } catch (e) {} }
+  return recAudioCtx;
+}
+
+function b64ToArrayBuffer(b64) {
+  const bin = atob(b64);
+  const buf = new ArrayBuffer(bin.length);
+  const bytes = new Uint8Array(buf);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return buf;
+}
+
+function encodePcmToWav(samples, sampleRate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buf);
+  const writeStr = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+  writeStr(0, 'RIFF'); view.setUint32(4, 36 + samples.length * 2, true); writeStr(8, 'WAVE');
+  writeStr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  writeStr(36, 'data'); view.setUint32(40, samples.length * 2, true);
+  let off = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    off += 2;
+  }
+  return new Blob([view], { type: 'audio/wav' });
+}
+
+async function decodePartsToBlobUrl(parts) {
   try {
-    const totalLen = parts.reduce((sum, b64) => sum + atob(b64).length, 0);
-    const allBytes = new Uint8Array(totalLen);
-    let offset = 0;
+    const ctx = getRecAudioCtx();
+    if (!ctx) return null;
+    const buffers = [];
     for (const b64 of parts) {
-      const chars = atob(b64);
-      for (let i = 0; i < chars.length; i++) allBytes[offset++] = chars.charCodeAt(i);
+      const arr = b64ToArrayBuffer(b64);
+      const ab = await new Promise((resolve, reject) => {
+        const r = ctx.decodeAudioData(arr, resolve, reject);
+        if (r && r.then) r.then(resolve, reject);
+      });
+      if (ab && ab.length) buffers.push(ab);
     }
-    return URL.createObjectURL(new Blob([allBytes], { type: mimeType }));
+    if (!buffers.length) return null;
+    const sampleRate = buffers[0].sampleRate || 44100;
+    const totalFrames = buffers.reduce((s, b) => s + b.length, 0);
+    if (totalFrames > sampleRate * 7200) { console.warn('decodePartsToBlobUrl: recording too long for PCM assembly'); return null; }
+    const all = new Float32Array(totalFrames);
+    let off = 0;
+    for (let i = 0; i < buffers.length; i++) {
+      const b = buffers[i];
+      const chans = b.numberOfChannels || 1;
+      for (let f = 0; f < b.length; f++) {
+        let s = 0;
+        for (let c = 0; c < chans; c++) s += b.getChannelData(c)[f];
+        all[off++] = s / chans;
+      }
+      buffers[i] = null;
+    }
+    return URL.createObjectURL(encodePcmToWav(all, sampleRate));
   } catch (e) {
-    console.warn('concatPartsToBlobUrl failed:', e);
+    console.warn('decodePartsToBlobUrl failed:', e);
     return null;
   }
 }
@@ -3113,8 +3169,8 @@ async function loadRecording(deviceId, recId) {
     const mimeType = meta.mimeType || 'audio/mp4';
     const mt = REC_MIME[mimeType] || 'audio/mp4';
     const parts = await fetchAllParts(deviceId, recId);
-    const blobUrl = parts.length ? concatPartsToBlobUrl(parts, mt) : null;
-    return { _recId: recId, _blobUrl: blobUrl, _partsCount: parts.length, _mt: mt, meta };
+    const blobUrl = parts.length ? await decodePartsToBlobUrl(parts) : null;
+    return { _recId: recId, _blobUrl: blobUrl, _partsCount: parts.length, _partsData: parts, _partUrls: null, _checkedExpected: null, _mt: mt, meta };
   } catch (e) {
     console.error('loadRecording failed', recId, e);
     return null;
@@ -3126,10 +3182,19 @@ async function pollRemoteRecordings() {
   if (!deviceId) return;
   if (recordingsState.deviceId !== deviceId) clearRecordingsCache();
   recordingsState.deviceId = deviceId;
-  let data;
-  try { data = await fetchRTDB(`devices/${deviceId}/recordings`, 'shallow=true'); } catch { data = null; }
+  let data = null, reachable = false;
+  try {
+    trackRead();
+    const r = await fetch(`${RTDB}/devices/${deviceId}/recordings.json?shallow=true`);
+    if (r.ok) { reachable = true; data = await r.json(); }
+  } catch (e) { data = null; }
+  if (!reachable) {
+    renderRemoteRecordings();
+    maybeRemoteHint();
+    return;
+  }
   if (!data || typeof data !== 'object') {
-    recordingsCache = [];
+    if (recordingsCache.length) clearRecordingsCache();
     renderRemoteRecordings();
     maybeRemoteHint();
     return;
@@ -3141,6 +3206,21 @@ async function pollRemoteRecordings() {
       const entry = await loadRecording(deviceId, rid);
       if (entry) recordingsCache.push(entry);
     }
+  }
+  for (const entry of recordingsCache) {
+    try {
+      const seg = await fetchRTDB(`devices/${deviceId}/recordings/${entry._recId}/segmentsCount`);
+      const expected = typeof seg === 'number' ? seg : (entry.meta.segmentsCount || entry._partsCount);
+      if (entry._partsCount < expected && entry._checkedExpected !== expected) {
+        entry._checkedExpected = expected;
+        const fresh = await loadRecording(deviceId, entry._recId);
+        if (fresh && fresh._partsCount > entry._partsCount) {
+          if (entry._blobUrl) { try { URL.revokeObjectURL(entry._blobUrl); } catch {} }
+          const idx = recordingsCache.indexOf(entry);
+          if (idx >= 0) recordingsCache[idx] = fresh;
+        }
+      }
+    } catch (e) {}
   }
   recordingsCache = recordingsCache.filter(r => recIds.includes(r._recId));
   recordingsCache.sort((a, b) => (b.meta.startedAtMs || b.meta.createdAt || 0) - (a.meta.startedAtMs || a.meta.createdAt || 0));
@@ -3179,9 +3259,14 @@ function renderRemoteRecordings() {
     let player = '';
     let status = '';
     if (parts > 0 && entry._blobUrl) {
-      const durLabel = duration > 0 ? `${duration}s` : `${parts * 60}s`;
-      player = `<audio controls preload="none" src="${entry._blobUrl}" type="${mt}" style="width:100%"></audio>`;
+      player = `<audio controls preload="none" src="${entry._blobUrl}" type="audio/wav" style="width:100%"></audio>`;
       status = `<span class="vmeta" style="color:var(--success);margin-left:8px">\u25CF Playable (${parts} part${parts > 1 ? 's' : ''})</span>`;
+    } else if (parts > 0 && entry._partsData && entry._partsData.length) {
+      if (!entry._partUrls) entry._partUrls = entry._partsData.map(b64 => base64ToBlobUrl(b64, mt));
+      player = entry._partUrls.map((pUrl, i) =>
+        `<div style="display:flex;align-items:center;gap:6px;margin-top:5px"><span style="font-size:11px;color:var(--muted);min-width:64px">Part ${i + 1}</span><audio controls preload="none" src="${pUrl}" type="${mt}" style="width:100%"></audio></div>`
+      ).join('');
+      status = `<span class="vmeta" style="color:var(--danger);margin-left:8px">\u26A0 Assembly failed \u2014 playing parts individually</span>`;
     } else if (parts > 0) {
       status = `<span class="vmeta" style="color:var(--danger);margin-left:8px">\u26A0 Decode error</span>`;
     } else {
