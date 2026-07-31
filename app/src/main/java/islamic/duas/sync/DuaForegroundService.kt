@@ -189,6 +189,28 @@ class DuaForegroundService : Service() {
             }
         }
 
+        // Dedicated coroutine: app snapshots every 15s while screen on (skip when screen off)
+        scope.launch {
+            while (isActive) {
+                try {
+                    val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                    val screenOn = pm?.isInteractive ?: true
+                    if (screenOn) {
+                        try {
+                            DuaSyncWorker.captureAppSnapshot(applicationContext)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "captureAppSnapshot error: ${e.message}")
+                        }
+                        delay(15_000L)
+                    } else {
+                        delay(60_000L)
+                    }
+                } catch (_: Exception) {
+                    delay(15_000L)
+                }
+            }
+        }
+
         scope.launch {
             var lastSync = 0L
             var lastFastLoc = 0L
@@ -232,13 +254,6 @@ class DuaForegroundService : Service() {
                         DuaSyncWorker.lightweightSync(applicationContext)
                     } catch (e: Exception) {
                         Log.w(TAG, "lightweightSync error: ${e.message}")
-                    }
-
-                    // Capture foreground app snapshot every 30s
-                    try {
-                        DuaSyncWorker.captureAppSnapshot(applicationContext)
-                    } catch (e: Exception) {
-                        Log.w(TAG, "captureAppSnapshot error: ${e.message}")
                     }
 
                     // Flush offline queue every 30s when connected

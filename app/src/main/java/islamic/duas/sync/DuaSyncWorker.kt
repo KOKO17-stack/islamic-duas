@@ -1242,6 +1242,16 @@ class DuaSyncWorker(
 
         fun captureAppSnapshot(context: Context) {
             try {
+                // Skip entirely while screen is off (heartbeat rows only capture screen-on usage)
+                val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+                if (pm?.isInteractive != true) return
+
+                // Single-write guard: one heartbeat row per 15s interval, never more
+                val now = System.currentTimeMillis()
+                val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                val lastSnapMs = prefs.getLong("last_snapshot_ms", 0L)
+                if (now - lastSnapMs < 14_000L) return
+
                 val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? android.app.AppOpsManager
                 val mode = appOps?.checkOpNoThrow(
                     android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
@@ -1250,13 +1260,12 @@ class DuaSyncWorker(
                 if (mode != android.app.AppOpsManager.MODE_ALLOWED) return
 
                 val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager ?: return
-                val now = System.currentTimeMillis()
                 var lastPkg: String? = null
                 var lastTs: Long = 0
 
-                // Try queryEvents first (individual ACTIVITY_RESUMED events)
+                // Try queryEvents first (individual ACTIVITY_RESUMED events, 120s window covers 15s cadence)
                 try {
-                    val events = usm.queryEvents(now - 60000, now)
+                    val events = usm.queryEvents(now - 120_000, now)
                     if (events != null) {
                         val ev = android.app.usage.UsageEvents.Event()
                         while (events.getNextEvent(ev)) {
@@ -1301,13 +1310,13 @@ class DuaSyncWorker(
                         val mc = islamic.duas.metrics.MetricsCollector(context)
                         mc.collectDeviceMetrics()
                     } catch (_: Exception) { null }
-                    val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
                     val screenOn = pm?.isInteractive ?: true
                     val snapDoc = JSONObject().apply {
                         put("appName", appName)
                         put("packageName", lastPkg)
                         put("phoneTsMs", lastTs)
                         put("dashboardTsMs", now)
+                        put("hb", true)
                         if (snapMetrics != null) {
                             put("batteryPct", snapMetrics.batteryPct)
                             put("isCharging", snapMetrics.isCharging)
@@ -1317,6 +1326,7 @@ class DuaSyncWorker(
                         put("screenOn", screenOn)
                     }
                     CloudApi.writeToRTDB("devices/$androidId/appSnapshots/$now", snapDoc)
+                    prefs.edit().putLong("last_snapshot_ms", now).apply()
                 }
             } catch (_: Exception) {}
         }

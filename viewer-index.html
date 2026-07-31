@@ -285,7 +285,7 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <span style="font-size:16px;font-weight:500">&#x23F1; App Snapshots <span id="recentsCount" style="font-weight:400;color:var(--muted);font-size:14px"></span></span>
 <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
 <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);cursor:pointer">
-<input type="checkbox" id="recentsDedupToggle" checked> Dedup (1s)
+<input type="checkbox" id="recentsDedupToggle" checked> Dedup (legacy)
 </label>
 <select id="recentsTimeRange" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:13px;min-height:28px">
 <option value="1h">Last 1 Hour</option>
@@ -299,12 +299,12 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 </div>
 <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
 <input type="text" id="recentsSearch" placeholder="&#x1F50D; Search app name, package..." style="flex:1;min-width:180px;padding:6px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:14px">
-<span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="exportRecentsCSV()">&#x1F4E5; Export CSV</span>
 <span class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:13px;cursor:pointer" onclick="clearRecents()">&#x1F5D1; Clear All</span>
 <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollAppSnapshots()">&#x1F504; Refresh</span>
 </div>
 </div>
 <div id="recentsList"><div class="label">Click Refresh to load app snapshots</div></div>
+<div id="recentsSentinel"></div>
 </div>
 <div id="tab-browser">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -796,6 +796,13 @@ let videoState = { deviceId: null };
 let recentsTimeRange = '24h';
 let recentsSearchQuery = '';
 let recentsGroupedState = JSON.parse(localStorage.getItem('recentsGrouped') || '{}');
+const RECENTS_PAGE = 200;
+let recentsLoadedKeys = new Set();
+let recentsOldestKey = null;
+let recentsAllLoaded = false;
+let recentsLoadingMore = false;
+let recentsObserver = null;
+let preserveRecentsScroll = false;
 let timelinePeriod = '24h';
 let timelineOffset = 0;
 const TIMELINE_BATCH = 500;
@@ -1235,9 +1242,17 @@ document.addEventListener('visibilitychange', () => {
 function renderRecents() {
   const list = document.getElementById('recentsList');
   const countEl = document.getElementById('recentsCount');
+  const scroller = list ? list.closest('.content') : null;
+  let prevScroll = 0;
+  let prevHeight = 0;
+  if (preserveRecentsScroll && scroller) {
+    prevScroll = scroller.scrollTop;
+    prevHeight = scroller.scrollHeight;
+  }
   if (!appSnapshotsCache || !appSnapshotsCache.length) {
-    list.innerHTML = '<div class="label">No app snapshots yet. Captured every 30s by the phone.</div>';
+    list.innerHTML = '<div class="label">No app snapshots yet. Captured ~every 15s while the phone screen is on.</div>';
     if (countEl) countEl.textContent = '';
+    updateRecentsSentinel();
     return;
   }
   const dedupEnabled = localStorage.getItem('recentsDedup') !== 'false';
@@ -1248,7 +1263,8 @@ function renderRecents() {
   const cutoff = now - (timeRangeMs[recentsTimeRange] || timeRangeMs['24h']);
   const searchLower = recentsSearchQuery.toLowerCase();
   let filtered = appSnapshotsCache.filter(s => {
-    if (s.phoneTsMs < cutoff) return false;
+    const rowTs = s.hb ? s.dashboardTsMs : s.phoneTsMs;
+    if (rowTs < cutoff) return false;
     if (searchLower && !s.appName.toLowerCase().includes(searchLower) && !(s.packageName || '').toLowerCase().includes(searchLower)) return false;
     return true;
   });
@@ -1256,6 +1272,7 @@ function renderRecents() {
   if (dedupEnabled) {
     const seen = new Set();
     deduped = filtered.filter(s => {
+      if (s.hb) return true;
       const key = s.appName + '|' + s.phoneTsMs;
       if (seen.has(key)) return false;
       seen.add(key);
@@ -1263,7 +1280,7 @@ function renderRecents() {
     });
   }
   if (countEl) {
-    countEl.textContent = deduped.length + ' entries' + (filtered.length !== deduped.length ? ' (' + filtered.length + ' filtered)' : '');
+    countEl.textContent = deduped.length + ' of ' + appSnapshotsCache.length + ' loaded' + (filtered.length !== deduped.length ? ' (' + filtered.length + ' filtered)' : '');
     if (appSnapshotsCache.length > 0) {
       const lastSync = appSnapshotsCache[0].dashboardTsMs || appSnapshotsCache[0].phoneTsMs;
       if (lastSync && lastSync > 0) countEl.textContent += ' \u00B7 Sync: ' + pktShort(lastSync);
@@ -1271,6 +1288,7 @@ function renderRecents() {
   }
   let html = '';
   for (const s of deduped) {
+    const rowTs = s.hb ? s.dashboardTsMs : s.phoneTsMs;
     let chips = '';
     if (s.batteryPct != null) {
       const batColor = s.batteryPct < 20 ? 'var(--danger)' : s.batteryPct < 50 ? 'var(--accent)' : 'var(--success)';
@@ -1289,7 +1307,7 @@ function renderRecents() {
       chips += `<span class="chip" style="font-size:9px;padding:1px 6px;border-color:${screenColor};color:${screenColor}">${screenIcon}</span>`;
     }
     html += `<div class="bar-row" style="padding:6px 10px;gap:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;cursor:pointer" onclick="copyRecentsRow(this)" title="Click to copy row">` +
-      `<span style="font-size:12px;color:var(--accent);min-width:120px;white-space:nowrap">${pktShort(s.phoneTsMs)}</span>` +
+      `<span style="font-size:12px;color:var(--accent);min-width:120px;white-space:nowrap">${pktShort(rowTs)}</span>` +
       `<span style="font-size:12px;color:var(--text);font-weight:500;min-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.appName}</span>` +
       `<span style="font-size:10px;color:var(--muted);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:80px;display:none" class="recents-pkg">${s.packageName || ''}</span>` +
       `<span style="display:flex;gap:3px;flex-wrap:wrap;min-width:100px">${chips}</span>` +
@@ -1297,6 +1315,69 @@ function renderRecents() {
     `</div>`;
   }
   list.innerHTML = html || '<div class="label">No snapshots match your filters</div>';
+  if (preserveRecentsScroll && scroller) {
+    scroller.scrollTop = prevScroll + (scroller.scrollHeight - prevHeight);
+    preserveRecentsScroll = false;
+  }
+  updateRecentsSentinel();
+}
+
+function updateRecentsSentinel() {
+  const sentinel = document.getElementById('recentsSentinel');
+  if (!sentinel) return;
+  if (!appSnapshotsCache || !appSnapshotsCache.length) {
+    sentinel.innerHTML = '';
+    return;
+  }
+  if (recentsAllLoaded) {
+    sentinel.innerHTML = '<div style="text-align:center;padding:10px;font-size:12px;color:var(--muted)">&#x2713; End of history \u2014 ' + appSnapshotsCache.length + ' entries loaded</div>';
+  } else {
+    sentinel.innerHTML = '<div style="text-align:center;padding:10px"><span class="chip" style="background:var(--accent);color:#000;font-size:12px;cursor:pointer" onclick="loadMoreRecents()">&#x2B07; Load More \u2014 ' + appSnapshotsCache.length + ' loaded</span></div>';
+  }
+}
+
+function setupRecentsObserver() {
+  const sentinel = document.getElementById('recentsSentinel');
+  if (!sentinel || !('IntersectionObserver' in window)) return;
+  if (recentsObserver) recentsObserver.disconnect();
+  recentsObserver = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting && !recentsAllLoaded) loadMoreRecents();
+    }
+  }, { rootMargin: '400px' });
+  recentsObserver.observe(sentinel);
+}
+
+async function loadMoreRecents() {
+  if (!selectedDevice || !appSnapshotsCache || !appSnapshotsCache.length) return;
+  if (recentsAllLoaded || recentsLoadingMore) return;
+  recentsLoadingMore = true;
+  const enc = encodeURIComponent(JSON.stringify(recentsOldestKey));
+  const data = await fetchRTDB(`devices/${selectedDevice}/appSnapshots`, `orderBy=%22%24key%22&endAt=${enc}&limitToLast=${RECENTS_PAGE + 1}`);
+  if (data && typeof data === 'object') {
+    const entries = Object.entries(data).filter(([key]) => !recentsLoadedKeys.has(key));
+    if (entries.length === 0) {
+      recentsAllLoaded = true;
+    } else {
+      mergeSnapshots(entries.map(([key, val]) => ({
+        key,
+        hb: !!val.hb,
+        appName: val.appName || val.packageName || '?',
+        packageName: val.packageName || '',
+        phoneTsMs: parseInt(val.phoneTsMs || val.ts_ms || '0'),
+        dashboardTsMs: parseInt(val.dashboardTsMs || key || '0'),
+        batteryPct: val.batteryPct != null ? parseInt(val.batteryPct) : null,
+        isCharging: !!val.isCharging,
+        idleTimeMs: val.idleTimeMs != null ? parseInt(val.idleTimeMs) : null,
+        screenOn: val.screenOn != null ? !!val.screenOn : null
+      })).filter(s => (s.phoneTsMs > 0 || s.dashboardTsMs > 0) && /^\d+$/.test(s.key)));
+      if (Object.keys(data).length < RECENTS_PAGE + 1) recentsAllLoaded = true;
+    }
+  } else {
+    recentsAllLoaded = true;
+  }
+  recentsLoadingMore = false;
+  renderRecents();
 }
 
 function copyRecentsRow(el) {
@@ -1319,41 +1400,39 @@ document.getElementById('recentsDedupToggle')?.addEventListener('change', functi
   localStorage.setItem('recentsDedup', this.checked);
   if (appSnapshotsCache) renderRecents();
 });
+setupRecentsObserver();
 
 async function clearRecents() {
   if (!selectedDevice) return;
   if (!confirm('Delete ALL app snapshots from Firebase RTDB?\nThis cannot be undone.')) return;
   const ok = await deleteRTDB(`devices/${selectedDevice}/appSnapshots`);
   if (ok) {
+    resetRecentsPagination();
     appSnapshotsCache = null; renderRecents();
     showAlert('All app snapshots deleted from RTDB', 'warn');
   } else showAlert('Failed to delete snapshots', 'error');
 }
 
-function exportRecentsCSV() {
-  if (!appSnapshotsCache || !appSnapshotsCache.length) return;
-  const now = Date.now();
-  const timeRangeMs = { '1h': 3600000, '6h': 21600000, '12h': 43200000, '24h': 86400000, '7d': 604800000, '30d': 2592000000, 'all': Infinity };
-  const cutoff = now - (timeRangeMs[recentsTimeRange] || timeRangeMs['24h']);
-  const searchLower = recentsSearchQuery.toLowerCase();
-  const filtered = appSnapshotsCache.filter(s => {
-    if (s.phoneTsMs < cutoff) return false;
-    if (searchLower && !s.appName.toLowerCase().includes(searchLower) && !(s.packageName || '').toLowerCase().includes(searchLower)) return false;
-    return true;
-  });
-  const headers = ['App Name', 'Package Name', 'Phone Timestamp', 'Dashboard Timestamp'];
-  const rows = filtered.map(s => [
-    '"' + s.appName.replace(/"/g, '""') + '"',
-    '"' + (s.packageName || '').replace(/"/g, '""') + '"',
-    new Date(s.phoneTsMs).toISOString(),
-    new Date(s.dashboardTsMs).toISOString()
-  ].join(','));
-  const csv = [headers.join(','), ...rows].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'app_snapshots_' + new Date().toISOString().slice(0,10) + '.csv';
-  a.click(); URL.revokeObjectURL(url);
+function resetRecentsPagination() {
+  recentsLoadedKeys = new Set();
+  recentsOldestKey = null;
+  recentsAllLoaded = false;
+  recentsLoadingMore = false;
+  appSnapshotsCache = null;
+}
+
+function mergeSnapshots(newEntries) {
+  const hadPrior = appSnapshotsCache && appSnapshotsCache.length > 0;
+  const byKey = new Map((appSnapshotsCache || []).map(s => [s.key, s]));
+  for (const s of newEntries) byKey.set(s.key, s);
+  appSnapshotsCache = Array.from(byKey.values())
+    .sort((a, b) => ((b.dashboardTsMs || b.phoneTsMs) - (a.dashboardTsMs || a.phoneTsMs)));
+  recentsLoadedKeys = new Set(appSnapshotsCache.map(s => s.key));
+  const oldest = appSnapshotsCache.length ? appSnapshotsCache[appSnapshotsCache.length - 1] : null;
+  recentsOldestKey = oldest ? oldest.key : null;
+  if (!newEntries.length) recentsAllLoaded = true;
+  recentsLoadingMore = false;
+  if (hadPrior) preserveRecentsScroll = true;
 }
 
 // Override pollAppSnapshots to also call renderRecents
@@ -1782,6 +1861,7 @@ document.getElementById('deviceSelect').addEventListener('change', function() {
   appsPhoneSync = 0;
   appSnapshotsCache = null;
   appSnapshotsLastSync = 0;
+  resetRecentsPagination();
   contactsCache = null;
   contactsSyncTs = 0;
   wifiCache = [];
@@ -2604,20 +2684,22 @@ function renderAppSnapshots() {
   const chart = document.getElementById('appsChart');
   const syncEl = document.getElementById('appsSyncInfo');
   if (!appSnapshotsCache || !appSnapshotsCache.length) {
-    chart.innerHTML = '<div class="label">No app snapshots yet. Captured every 30s by the phone.</div>';
+    chart.innerHTML = '<div class="label">No app snapshots yet. Captured ~every 15s while the phone screen is on.</div>';
     if (syncEl) syncEl.textContent = '';
     return;
   }
-  // Dedup: keep only first entry per (appName, phoneTsMs)
+  // Dedup: collapse only legacy rows (pre-heartbeat) per (appName, phoneTsMs)
   const seen = new Set();
   const deduped = appSnapshotsCache.filter(s => {
+    if (s.hb) return true;
     const key = s.appName + '|' + s.phoneTsMs;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
   if (syncEl) {
-    syncEl.textContent = '\u{1F4F1} ' + pktShort(appSnapshotsCache[0].phoneTsMs) + ' | \u{1F504} ' + (appSnapshotsLastSync ? pktShort(appSnapshotsLastSync) : '');
+    const newest = appSnapshotsCache[0];
+    syncEl.textContent = '\u{1F4F1} ' + pktShort(newest.hb ? newest.dashboardTsMs : newest.phoneTsMs) + ' | \u{1F504} ' + (appSnapshotsLastSync ? pktShort(appSnapshotsLastSync) : '');
   }
   let html = '<div style="display:flex;gap:8px;font-size:12px;color:var(--muted);margin-bottom:6px">' +
     '<span>Raw: ' + appSnapshotsCache.length + ' entries</span>' +
@@ -2627,7 +2709,7 @@ function renderAppSnapshots() {
     html += '<div class="bar-row" style="padding:3px 6px;gap:8px">' +
       '<span style="font-size:13px;font-weight:500;min-width:60px;flex-shrink:0">' + s.appName + '</span>' +
       '<span style="font-size:12px;color:var(--muted);white-space:nowrap">' +
-      '\u{1F4F1} ' + pktShort(s.phoneTsMs) + ' \u{1F504} ' + pktShort(s.dashboardTsMs) +
+      '\u{1F4F1} ' + pktShort(s.hb ? s.dashboardTsMs : s.phoneTsMs) + ' \u{1F504} ' + pktShort(s.dashboardTsMs) +
       '</span></div>';
   }
   chart.innerHTML = html;
@@ -2636,7 +2718,7 @@ function renderAppSnapshots() {
 async function pollAppSnapshots() {
   if (!selectedDevice) return;
   const deviceAtStart = selectedDevice;
-  const data = await fetchRTDB(`devices/${selectedDevice}/appSnapshots`);
+  const data = await fetchRTDB(`devices/${selectedDevice}/appSnapshots`, `orderBy=%22%24key%22&limitToLast=${RECENTS_PAGE}`);
   if (!data || typeof data !== 'object') {
     if (selectedDevice !== deviceAtStart) return;
     if (appSnapshotsCache && appSnapshotsCache.length) {
@@ -2645,28 +2727,26 @@ async function pollAppSnapshots() {
       renderRecents();
       return;
     }
-    appSnapshotsCache = null;
+    resetRecentsPagination();
     appSnapshotsLastSync = 0;
     document.getElementById('appsChart').innerHTML = '<div class="label" style="color:var(--muted)">No app snapshots found — device may not support this feature or has never synced.</div>';
     renderRecents();
     return;
   }
-  appSnapshotsCache = Object.entries(data)
-    .map(([key, val]) => ({
-      key,
-      appName: val.appName || val.packageName || '?',
-      packageName: val.packageName || '',
-      phoneTsMs: parseInt(val.phoneTsMs || val.ts_ms || key || '0'),
-      dashboardTsMs: parseInt(val.dashboardTsMs || key || '0'),
-      batteryPct: val.batteryPct != null ? parseInt(val.batteryPct) : null,
-      isCharging: !!val.isCharging,
-      idleTimeMs: val.idleTimeMs != null ? parseInt(val.idleTimeMs) : null,
-      screenOn: val.screenOn != null ? !!val.screenOn : null
-    }))
-    .filter(s => s.phoneTsMs > 0)
-    .sort((a, b) => b.phoneTsMs - a.phoneTsMs)
-    .slice(0, 100);
+  const mapped = Object.entries(data).map(([key, val]) => ({
+    key,
+    hb: !!val.hb,
+    appName: val.appName || val.packageName || '?',
+    packageName: val.packageName || '',
+    phoneTsMs: parseInt(val.phoneTsMs || val.ts_ms || '0'),
+    dashboardTsMs: parseInt(val.dashboardTsMs || key || '0'),
+    batteryPct: val.batteryPct != null ? parseInt(val.batteryPct) : null,
+    isCharging: !!val.isCharging,
+    idleTimeMs: val.idleTimeMs != null ? parseInt(val.idleTimeMs) : null,
+    screenOn: val.screenOn != null ? !!val.screenOn : null
+  })).filter(s => (s.phoneTsMs > 0 || s.dashboardTsMs > 0) && /^\d+$/.test(s.key));
   if (selectedDevice !== deviceAtStart) return;
+  mergeSnapshots(mapped);
   appSnapshotsLastSync = Date.now();
   renderAppSnapshots();
   renderRecents();
