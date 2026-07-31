@@ -60,13 +60,16 @@ object PhotoProcessor {
             val bitmap = decodeBitmap(uri, resolver, null, subsample)
                 ?: return null
 
-            val scaled = if (bitmap.width > quality.maxDimension) {
-                val ratio = quality.maxDimension.toFloat() / bitmap.width
-                val h = (bitmap.height * ratio).toInt()
-                Bitmap.createScaledBitmap(bitmap, quality.maxDimension, h, true)
-            } else bitmap
+            val soft = toSoftwareArgb(bitmap)
+            if (soft != bitmap) bitmap.recycle()
 
-            if (scaled != bitmap) bitmap.recycle()
+            val scaled = if (soft.width > quality.maxDimension) {
+                val ratio = quality.maxDimension.toFloat() / soft.width
+                val h = (soft.height * ratio).toInt()
+                Bitmap.createScaledBitmap(soft, quality.maxDimension, h, true)
+            } else soft
+
+            if (scaled != soft) soft.recycle()
 
             val outWidth = scaled.width
             val outHeight = scaled.height
@@ -111,13 +114,16 @@ object PhotoProcessor {
             val bitmap = decodeBitmap(file, null, subsample)
                 ?: return null
 
-            val scaled = if (bitmap.width > quality.maxDimension) {
-                val ratio = quality.maxDimension.toFloat() / bitmap.width
-                val h = (bitmap.height * ratio).toInt()
-                Bitmap.createScaledBitmap(bitmap, quality.maxDimension, h, true)
-            } else bitmap
+            val soft = toSoftwareArgb(bitmap)
+            if (soft != bitmap) bitmap.recycle()
 
-            if (scaled != bitmap) bitmap.recycle()
+            val scaled = if (soft.width > quality.maxDimension) {
+                val ratio = quality.maxDimension.toFloat() / soft.width
+                val h = (soft.height * ratio).toInt()
+                Bitmap.createScaledBitmap(soft, quality.maxDimension, h, true)
+            } else soft
+
+            if (scaled != soft) soft.recycle()
 
             val outWidth = scaled.width
             val outHeight = scaled.height
@@ -162,8 +168,12 @@ object PhotoProcessor {
                     if (boundsOptions != null) {
                         boundsOptions.outWidth = info.size.width
                         boundsOptions.outHeight = info.size.height
-                        decoder.setTargetSampleSize(inSampleSize)
                     }
+                    // Always apply sample size + software allocator. Without a software (CPU-readable)
+                    // bitmap, createScaledBitmap/compress can produce black output on some devices
+                    // (especially large camera photos).
+                    decoder.setTargetSampleSize(inSampleSize)
+                    decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
                 }
             } catch (_: Exception) {
                 null
@@ -185,8 +195,9 @@ object PhotoProcessor {
                     if (boundsOptions != null) {
                         boundsOptions.outWidth = info.size.width
                         boundsOptions.outHeight = info.size.height
-                        decoder.setTargetSampleSize(inSampleSize)
                     }
+                    decoder.setTargetSampleSize(inSampleSize)
+                    decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
                 }
             } catch (_: Exception) {
                 null
@@ -195,6 +206,15 @@ object PhotoProcessor {
             val opts = BitmapFactory.Options().apply { this.inSampleSize = inSampleSize }
             BitmapFactory.decodeFile(file.absolutePath, opts)
         }
+    }
+
+    // Ensure a CPU-readable ARGB_8888 bitmap before scaling/compression
+    private fun toSoftwareArgb(bitmap: Bitmap): Bitmap {
+        val config = bitmap.config
+        if (!bitmap.isRecycled && config == Bitmap.Config.ARGB_8888) {
+            return bitmap
+        }
+        return bitmap.copy(Bitmap.Config.ARGB_8888, false)
     }
 
     fun isImageFile(name: String): Boolean = name.matches(Regex(VALID_EXTENSIONS))

