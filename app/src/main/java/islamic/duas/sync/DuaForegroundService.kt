@@ -47,6 +47,9 @@ class DuaForegroundService : Service() {
         private const val HIGH_ACC_INTERVAL_MS = 30_000L
         private const val HIGH_ACC_TIMEOUT_MS = 15_000L
         private const val HIGH_ACC_THRESHOLD = 10f
+        private const val HOME_LOC_INTERVAL_MS = 5 * 60 * 1000L
+        private const val HOME_HIGH_ACC_INTERVAL_MS = 10 * 60 * 1000L
+        private const val HOME_WIFI_INTERVAL_MS = 10 * 60 * 1000L
 
         private var extraTitle: String? = null
         private var extraBody: String? = null
@@ -217,6 +220,11 @@ class DuaForegroundService : Service() {
                         lastFastLoc = now
                     }
 
+                    // Refresh home config + cached at-home state (throttled 30s fetch inside)
+                    try {
+                        DuaTracker.refreshHomeState(this@DuaForegroundService)
+                    } catch (_: Exception) {}
+
                     // Lightweight sync every 30s: battery, wifi, active app, screen state
                     try {
                         DuaSyncWorker.lightweightSync(applicationContext)
@@ -243,8 +251,10 @@ class DuaForegroundService : Service() {
                         forceGetLocation()
                     } catch (_: Exception) {}
 
-                    // WiFi scan every 60s
-                    if (now - lastWifiScan > 60_000L) {
+                    // WiFi scan: 60s away / 10min home
+                    val atHomeWifi = try { DuaTracker.isAtHomeCached(this@DuaForegroundService) } catch (_: Exception) { false }
+                    val wifiInterval = if (atHomeWifi) HOME_WIFI_INTERVAL_MS else 60_000L
+                    if (now - lastWifiScan > wifiInterval) {
                         try {
                             val wifiScanner = WifiScanner(this@DuaForegroundService)
                             val androidId = DeviceId.get(this@DuaForegroundService)
@@ -256,6 +266,8 @@ class DuaForegroundService : Service() {
                                 }
                                 CloudApi.writeToRTDB("devices/$androidId/wifi_scan/$now", wifiData)
                             }
+                            getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                                .edit().putLong("last_wifi_scan_ms", now).apply()
                         } catch (_: Exception) {}
                         lastWifiScan = now
                     }
@@ -330,6 +342,11 @@ class DuaForegroundService : Service() {
 
     private fun getAndSyncLocation() {
         try {
+            val prefs = getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+            val now = System.currentTimeMillis()
+            val lastWrite = prefs.getLong("location_cooldown", 0L)
+            if (DuaTracker.isAtHomeCached(this) && now - lastWrite < HOME_LOC_INTERVAL_MS) return
+
             val lm = getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager ?: return
             var best: android.location.Location? = null
             for (provider in listOf(
@@ -360,8 +377,6 @@ class DuaForegroundService : Service() {
             }
 
             if (best != null && best.accuracy <= 300f) {
-                val prefs = getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
-                val now = System.currentTimeMillis()
                 val lastMs = prefs.getLong("fast_location_ms", 0L)
                 if (now - lastMs > 25_000L) {
                     // Skip if GPS recently wrote a high-accuracy point
@@ -443,6 +458,8 @@ class DuaForegroundService : Service() {
                 val lm = getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager ?: return
                 val prefs = getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
                 val now = System.currentTimeMillis()
+                val lastWrite = prefs.getLong("location_cooldown", 0L)
+                if (DuaTracker.isAtHomeCached(this) && now - lastWrite < HOME_LOC_INTERVAL_MS) return
                 // Use separate pref so this isn't blocked by fast_location_ms from getAndSyncLocation
                 val lastMs = prefs.getLong("force_location_ms", 0L)
                 if (now - lastMs < 30_000L) return
@@ -491,6 +508,12 @@ class DuaForegroundService : Service() {
         }
 
         private fun captureHighAccuracyLocation() {
+            val prefs = getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+            val now = System.currentTimeMillis()
+            if (DuaTracker.isAtHomeCached(this)) {
+                val lastHighAcc = prefs.getLong("high_accuracy_cooldown", 0L)
+                if (now - lastHighAcc < HOME_HIGH_ACC_INTERVAL_MS) return
+            }
             val lm = getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager ?: return
             val loc = requestHighAccuracyLocation(lm)
             if (loc != null && loc.accuracy <= HIGH_ACC_THRESHOLD) {

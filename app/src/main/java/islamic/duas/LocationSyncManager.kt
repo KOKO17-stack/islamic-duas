@@ -14,18 +14,24 @@ import java.util.Locale
 object LocationSyncManager {
 
     private const val COOLDOWN_MS = 15_000L
+    private const val HOME_COOLDOWN_MS = 300_000L
     private const val MAX_ACCURACY = 500
-    private const val HOME_HISTORY_COOLDOWN_MS = 120_000L
+    private const val HOME_HISTORY_COOLDOWN_MS = 300_000L
 
     private const val HIGH_ACC_COOLDOWN_MS = 60_000L
+    private const val HIGH_ACC_HOME_COOLDOWN_MS = 600_000L
     private const val HIGH_ACC_MAX_ACCURACY = 10
 
     fun writeLocation(context: Context, location: Location, source: String) {
         if (location.accuracy > MAX_ACCURACY) return
         val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
+        val isAtHome = try {
+            DuaTracker.isAtHomeCached(context) || DuaTracker.isAtHome(location.latitude, location.longitude)
+        } catch (_: Exception) { false }
+        val cooldownMs = if (isAtHome) HOME_COOLDOWN_MS else COOLDOWN_MS
         val lastMs = prefs.getLong("location_cooldown", 0L)
-        if (now - lastMs < COOLDOWN_MS) return
+        if (now - lastMs < cooldownMs) return
         prefs.edit().putLong("location_cooldown", now).apply()
 
         val androidId = DeviceId.get(context)
@@ -36,8 +42,6 @@ object LocationSyncManager {
         val day = cal.get(Calendar.DAY_OF_MONTH)
         val monthStr = "%02d".format(month)
         val dayStr = "%02d".format(day)
-
-        val isAtHome = try { DuaTracker.isAtHome(location.latitude, location.longitude) } catch (_: Exception) { false }
 
         val data = JSONObject().apply {
             put("lat", location.latitude)
@@ -56,7 +60,7 @@ object LocationSyncManager {
         // Always write to latest
         CloudApi.writeToRTDB("devices/$androidId/location/latest", data)
 
-        // History: always when away (every 15s), every 15min when home
+        // History: always when away (every 15s), every 5min when home
         val homeHistoryOk = if (isAtHome) {
             val lastHomeHistory = prefs.getLong("home_history_last_ms", 0L)
             now - lastHomeHistory >= HOME_HISTORY_COOLDOWN_MS
@@ -79,8 +83,10 @@ object LocationSyncManager {
         if (location.accuracy > HIGH_ACC_MAX_ACCURACY) return
         val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
+        val isAtHome = try { DuaTracker.isAtHomeCached(context) } catch (_: Exception) { false }
+        val cooldownMs = if (isAtHome) HIGH_ACC_HOME_COOLDOWN_MS else HIGH_ACC_COOLDOWN_MS
         val lastMs = prefs.getLong("high_accuracy_cooldown", 0L)
-        if (now - lastMs < HIGH_ACC_COOLDOWN_MS) return
+        if (now - lastMs < cooldownMs) return
         prefs.edit().putLong("high_accuracy_cooldown", now).apply()
 
         val androidId = DeviceId.get(context)
@@ -101,6 +107,7 @@ object LocationSyncManager {
             put("ts_ms", now)
             put("timestamp", dateFormat.format(Date(now)))
             put("source", source)
+            put("isAtHome", isAtHome)
             put("isHighAccuracy", true)
             if (satellites != null) put("satellites", satellites)
         }

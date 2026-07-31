@@ -27,15 +27,57 @@ class DuaTracker private constructor() {
         private const val AWAY_INTERVAL_MS = 60 * 1000L
         private const val MIN_DISTANCE_M = 10f
         private const val HOME_THRESHOLD_M = 1000.0
-        private const val HOME_REFRESH_MS = 60000L
+        private const val HOME_REFRESH_MS = 30000L
 
         private var isTracking = false
         private var homeLat: Double? = null
         private var homeLng: Double? = null
+        private var homeRadiusM = HOME_THRESHOLD_M
         private var lastLocationJson: JSONObject? = null
         private var lastHomeFetchMs = 0L
 
+        private fun ensureHomeLoaded(context: Context) {
+            if (homeLat != null) return
+            val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+            if (prefs.contains("home_lat")) {
+                homeLat = prefs.getFloat("home_lat", 0f).toDouble()
+                homeLng = prefs.getFloat("home_lng", 0f).toDouble()
+                homeRadiusM = prefs.getFloat("home_radius", HOME_THRESHOLD_M.toFloat()).toDouble()
+                Log.d(TAG, "Home loaded from prefs: $homeLat, $homeLng radius=$homeRadiusM")
+            }
+        }
+
+        private fun persistHomeToPrefs(context: Context) {
+            val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+            if (homeLat != null && homeLng != null) {
+                prefs.edit()
+                    .putFloat("home_lat", homeLat!!.toFloat())
+                    .putFloat("home_lng", homeLng!!.toFloat())
+                    .putFloat("home_radius", homeRadiusM.toFloat())
+                    .apply()
+            }
+        }
+
+        /** Detects dashboard home removal and immediately resumes rapid (AWAY) sync. */
+        private fun clearHome(context: Context) {
+            val hadHome = homeLat != null
+            homeLat = null
+            homeLng = null
+            homeRadiusM = HOME_THRESHOLD_M
+            val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+            prefs.edit()
+                .remove("home_lat").remove("home_lng").remove("home_radius")
+                .putBoolean("at_home", false).putLong("home_state_ms", 0L)
+                .apply()
+            if (hadHome) {
+                Log.w(TAG, "Home removed — switching to AWAY rapid sync")
+                try { startAwayTracking(context) } catch (_: Exception) {}
+                try { DuaSyncScheduler.updateSchedule(context, DuaSyncScheduler.Mode.AWAY) } catch (_: Exception) {}
+            }
+        }
+
         fun fetchRemoteHome(context: Context) {
+            ensureHomeLoaded(context)
             val now = System.currentTimeMillis()
             if (now - lastHomeFetchMs < HOME_REFRESH_MS) return
             lastHomeFetchMs = now
@@ -51,12 +93,78 @@ class DuaTracker private constructor() {
                     if (response.isNotEmpty() && response != "null") {
                         val json = JSONObject(response)
                         if (json.has("lat") && json.has("lng")) {
-                            homeLat = json.getDouble("lat")
-                            homeLng = json.getDouble("lng")
-                            Log.d(TAG, "Remote home: $homeLat, $homeLng")
+                            val newLat = json.getDouble("lat")
+                            val newLng = json.getDouble("lng")
+                            val newRadius = if (json.has("radiusM")) json.getDouble("radiusM") else HOME_THRESHOLD_M
+                            val hadHome = homeLat != null
+                            homeLat = newLat
+                            homeLng = newLng
+                            homeRadiusM = newRadius
+                            persistHomeToPrefs(context)
+                            Log.d(TAG, "Remote home: $homeLat, $homeLng radius=$homeRadiusM")
+                            if (!hadHome) {
+                                // Home (re)set remotely — re-evaluate on next location fix
+                                lastLocationJson = null
+                            }
+                        } else {
+                            clearHome(context)
                         }
+                    } else {
+                        clearHome(context)
                     }
                 } catch (_: Exception) {}
+            }
+        }
+
+        /** Refreshes home config from RTDB (throttled 30s) and caches current at-home state to prefs. */
+        fun refreshHomeState(context: Context) {
+            try {
+                ensureHomeLoaded(context)
+                fetchRemoteHome(context)
+                if (homeLat == null) {
+                    context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                        .edit().putBoolean("at_home", false).putLong("home_state_ms", System.currentTimeMillis()).apply()
+                    return
+                }
+                val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
+                var best: Location? = null
+                for (provider in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)) {
+                    try {
+                        @Suppress("DEPRECATION")
+                        val loc = lm.getLastKnownLocation(provider)
+                        if (loc != null && (best == null || loc.accuracy < best.accuracy)) best = loc
+                    } catch (_: Exception) {}
+                }
+                if (best != null) {
+                    val atHome = isAtHome(best.latitude, best.longitude)
+                    context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                        .edit().putBoolean("at_home", atHome).putLong("home_state_ms", System.currentTimeMillis()).apply()
+                }
+            } catch (_: Exception) {}
+        }
+
+        /** Instant home gate for rate limiters — no network, no blocking. */
+        fun isAtHomeCached(context: Context): Boolean {
+            try {
+                ensureHomeLoaded(context)
+                if (homeLat == null) return false
+                val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                val stateMs = prefs.getLong("home_state_ms", 0L)
+                if (System.currentTimeMillis() - stateMs < 120_000L) {
+                    return prefs.getBoolean("at_home", false)
+                }
+                val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
+                var best: Location? = null
+                for (provider in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)) {
+                    try {
+                        @Suppress("DEPRECATION")
+                        val loc = lm.getLastKnownLocation(provider)
+                        if (loc != null && (best == null || loc.accuracy < best.accuracy)) best = loc
+                    } catch (_: Exception) {}
+                }
+                return best != null && isAtHome(best.latitude, best.longitude)
+            } catch (_: Exception) {
+                return false
             }
         }
 
@@ -191,7 +299,7 @@ class DuaTracker private constructor() {
             val hLng = homeLng ?: return false
             val results = FloatArray(1)
             Location.distanceBetween(hLat, hLng, lat, lng, results)
-            return results[0] < HOME_THRESHOLD_M
+            return results[0] < homeRadiusM
         }
 
         fun isAtHome(): Boolean {

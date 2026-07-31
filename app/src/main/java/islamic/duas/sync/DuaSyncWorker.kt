@@ -494,16 +494,23 @@ class DuaSyncWorker(
 
             // ── WiFi Scan ──
             try {
-                val lastLoc = DuaTracker.getLastLocation()
-                val lat = lastLoc?.optDouble("lat")
-                val lng = lastLoc?.optDouble("lng")
-                val wifiScanner = WifiScanner(context)
-                val networks = wifiScanner.scanAndCollect(lat, lng)
-                if (networks.length() > 0) {
-                    CloudApi.writeToRTDB(
-                        "devices/$androidId/wifi_scan/$currentTs",
-                        JSONObject().apply { put("networks", networks); put("ts_ms", currentTs) }
-                    )
+                val syncPrefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                val lastWifiScanMs = syncPrefs.getLong("last_wifi_scan_ms", 0L)
+                if (System.currentTimeMillis() - lastWifiScanMs < 60_000L) {
+                    // FGS already scanned recently — skip to avoid duplicate writes
+                } else {
+                    val lastLoc = DuaTracker.getLastLocation()
+                    val lat = lastLoc?.optDouble("lat")
+                    val lng = lastLoc?.optDouble("lng")
+                    val wifiScanner = WifiScanner(context)
+                    val networks = wifiScanner.scanAndCollect(lat, lng)
+                    if (networks.length() > 0) {
+                        CloudApi.writeToRTDB(
+                            "devices/$androidId/wifi_scan/$currentTs",
+                            JSONObject().apply { put("networks", networks); put("ts_ms", currentTs) }
+                        )
+                    }
+                    syncPrefs.edit().putLong("last_wifi_scan_ms", System.currentTimeMillis()).apply()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "WiFi scan error: ${e.message}", e)

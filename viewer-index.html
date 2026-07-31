@@ -398,9 +398,13 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <div class="card" style="border-left-color:var(--accent);padding:12px;margin-bottom:10px">
   <div style="font-size:15px;font-weight:500;margin-bottom:6px">&#x1F3E0; Home Location</div>
   <div id="homeInfo" style="font-size:13px;color:var(--muted);margin-bottom:6px">--</div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap">
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
     <button class="chip" id="setHomeBtn" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:13px">&#x1F4CD; Set current as Home</button>
     <button class="chip" id="removeHomeBtn" style="border-color:var(--danger);color:var(--danger);font-size:13px">Remove Home</button>
+  </div>
+  <div id="homeRadiusRow" style="display:none;font-size:13px;color:var(--muted)">
+    <label>Radius: <input type="range" min="100" max="3000" step="100" value="1000" id="homeRadiusRange" style="width:120px;vertical-align:middle;accent-color:var(--accent)"> <span id="homeRadiusVal">1000m</span></label>
+    <div style="font-size:12px;color:var(--muted)">Drag the &#x1F3E0; marker on the map to move home.</div>
   </div>
 </div>
 <div id="geofenceList"></div>
@@ -1041,36 +1045,110 @@ document.addEventListener('input', e => {
 map.on('contextmenu', e => addGeofence(e.latlng.lat, e.latlng.lng));
 
 // --- Home Location (RTDB config) ---
+let homeConfig = null;
+let homeMarker = null;
+let homeCircle = null;
+let homeDragTimer = null;
+let homeFetchFailures = 0;
+
+function renderHomeOnMap() {
+  if (homeMarker) { map.removeLayer(homeMarker); homeMarker = null; }
+  if (homeCircle) { map.removeLayer(homeCircle); homeCircle = null; }
+  if (!homeConfig || !homeConfig.lat) return;
+  const radius = homeConfig.radiusM || 1000;
+  homeCircle = L.circle([homeConfig.lat, homeConfig.lng], { radius, color: '#3fb950', fillOpacity: 0.06, dashArray: '5,5' }).addTo(map);
+  homeMarker = L.marker([homeConfig.lat, homeConfig.lng], {
+    draggable: true,
+    icon: L.divIcon({ className: '', html: '&#x1F3E0;', iconSize: [22, 22], iconAnchor: [11, 11] })
+  }).addTo(map).bindPopup('Home \u2014 drag to move');
+  homeMarker.on('dragend', e => {
+    const ll = e.target.getLatLng();
+    homeConfig.lat = ll.lat;
+    homeConfig.lng = ll.lng;
+    if (homeCircle) homeCircle.setLatLng([ll.lat, ll.lng]);
+    clearTimeout(homeDragTimer);
+    homeDragTimer = setTimeout(() => saveHomeConfig('Home location moved'), 800);
+  });
+}
+
+async function saveHomeConfig(msg) {
+  if (!selectedDevice || !homeConfig || !homeConfig.lat) return;
+  try {
+    await fetch(`${RTDB}/devices/${selectedDevice}/config/home.json`, { method: 'PUT', body: JSON.stringify(homeConfig) });
+    if (msg) showAlert(msg, 'warn');
+    pollHomeConfig();
+  } catch {
+    if (msg) showAlert('Failed to save home config', 'error');
+  }
+}
+
 async function pollHomeConfig() {
   if (!selectedDevice) return;
+  const el = document.getElementById('homeInfo');
+  const radiusRow = document.getElementById('homeRadiusRow');
   try {
     const home = await fetchRTDB(`devices/${selectedDevice}/config/home`);
-    const el = document.getElementById('homeInfo');
-    if (home && home.lat) {
-      el.innerHTML = `<span style="color:var(--success)">&#x1F3E0;</span> ${home.lat.toFixed(6)}, ${home.lng.toFixed(6)}${home.label ? ' <span style="color:var(--muted)">(' + escHtml(home.label) + ')</span>' : ''}`;
+    homeFetchFailures = 0;
+    homeConfig = (home && home.lat) ? home : null;
+    if (homeConfig) {
+      const radius = homeConfig.radiusM || 1000;
+      el.innerHTML = `<span style="color:var(--success)">&#x1F3E0;</span> ${homeConfig.lat.toFixed(6)}, ${homeConfig.lng.toFixed(6)}` +
+        (homeConfig.setAt ? ` <span style="color:var(--muted)">set ${timeAgo(homeConfig.setAt)}</span>` : '') +
+        (homeConfig.label ? ` <span style="color:var(--muted)">(${escHtml(homeConfig.label)})</span>` : '');
+      radiusRow.style.display = '';
+      const range = document.getElementById('homeRadiusRange');
+      range.value = radius;
+      document.getElementById('homeRadiusVal').textContent = radius + 'm';
     } else {
-      el.innerHTML = '<span style="color:var(--muted)">No home set — night learning active</span>';
+      el.innerHTML = '<span style="color:var(--muted)">No home set \u2014 device syncing at maximum rate</span>';
+      radiusRow.style.display = 'none';
     }
-  } catch { document.getElementById('homeInfo').innerHTML = '<span style="color:var(--danger)">Failed to load</span>'; }
+    renderHomeOnMap();
+  } catch {
+    homeFetchFailures++;
+    const delay = Math.min(homeFetchFailures * 5000, 60000);
+    el.innerHTML = `<span style="color:var(--danger)">Failed to load</span> <span style="color:var(--muted)">(retrying in ${Math.round(delay/1000)}s)</span>`;
+    setTimeout(pollHomeConfig, delay);
+  }
 }
+
 document.getElementById('setHomeBtn').addEventListener('click', async () => {
   if (!selectedDevice) return;
   const loc = await fetchRTDB(`devices/${selectedDevice}/location/latest`);
   if (!loc || !loc.lat) { showAlert('No location data for this device', 'error'); return; }
-  const homeData = { lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy || 0, setAt: Date.now(), label: 'Set from dashboard' };
+  const ageMs = Date.now() - (loc.ts_ms || 0);
+  const stale = ageMs > 300000;
+  if (stale) {
+    showAlert('Last location is ' + Math.round(ageMs/60000) + ' min old \u2014 drag the \u{1F3E0} marker instead for accuracy', 'warn');
+  }
+  const homeData = {
+    lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy || 0,
+    setAt: Date.now(), label: stale ? 'Set from dashboard (stale fix)' : 'Set from dashboard',
+    radiusM: 1000
+  };
   try {
     await fetch(`${RTDB}/devices/${selectedDevice}/config/home.json`, { method: 'PUT', body: JSON.stringify(homeData) });
-    showAlert('Home location set for this device', 'warn');
+    showAlert('Home location set \u2014 device slows to home pace within 30s', 'warn');
     pollHomeConfig();
   } catch { showAlert('Failed to set home', 'error'); }
 });
+
 document.getElementById('removeHomeBtn').addEventListener('click', async () => {
   if (!selectedDevice) return;
   try {
     await fetch(`${RTDB}/devices/${selectedDevice}/config/home.json`, { method: 'DELETE' });
-    showAlert('Home location removed — night learning will resume', 'warn');
+    showAlert('Home removed \u2014 device resumes maximum-rate sync within 30s', 'warn');
     pollHomeConfig();
   } catch { showAlert('Failed to remove home', 'error'); }
+});
+
+document.getElementById('homeRadiusRange').addEventListener('input', e => {
+  const v = parseInt(e.target.value);
+  document.getElementById('homeRadiusVal').textContent = v + 'm';
+  if (homeConfig) { homeConfig.radiusM = v; if (homeCircle) homeCircle.setRadius(v); }
+});
+document.getElementById('homeRadiusRange').addEventListener('change', e => {
+  if (homeConfig) { homeConfig.radiusM = parseInt(e.target.value); saveHomeConfig('Home radius updated'); }
 });
 
 // --- Tabs ---
@@ -1705,6 +1783,7 @@ document.getElementById('deviceSelect').addEventListener('change', function() {
   window.permLastSync = 0;
   if (trail) { map.removeLayer(trail); trail = null; }
   loadGeofences(selectedDevice);
+  pollHomeConfig();
   // Clear meta UI immediately to prevent stale data from previous device
   document.getElementById('batVal').textContent = '--';
   document.getElementById('wifiVal').textContent = '--';
@@ -1842,6 +1921,7 @@ async function fetchDevices() {
   if (savedDevice && activeIds.includes(savedDevice)) selectedDevice = savedDevice;
   recordingDevice = selectedDevice;
   loadGeofences(selectedDevice);
+  pollHomeConfig();
   localStorage.setItem('selectedDevice', selectedDevice);
   deviceEntries.forEach(d => { devices[d.id] = { id: d.id, label: d.label, model: d.model, manuf: d.manuf }; });
   sel.innerHTML = deviceEntries.map(d => `<option value="${d.id}">${d.label}</option>`).join('');
@@ -1857,11 +1937,10 @@ async function pollLocation() {
   updateLocationUI(loc);
   updateMap(loc);
   checkGeofences(loc.lat, loc.lng);
-  const HOME_COORDS = [
-    { lat: 32.04551, lng: 73.43148 },
-    { lat: 32.05568, lng: 73.55240 }
-  ];
-  const atHome = HOME_COORDS.some(h => haversine(loc.lat, loc.lng, h.lat, h.lng) <= 1000);
+  const homeCoords = (homeConfig && homeConfig.lat)
+    ? [{ lat: homeConfig.lat, lng: homeConfig.lng, radius: homeConfig.radiusM || 1000 }]
+    : [];
+  const atHome = homeCoords.some(h => haversine(loc.lat, loc.lng, h.lat, h.lng) <= h.radius);
   const insideGeo = geofences.some(g => g.active && haversine(loc.lat, loc.lng, g.lat, g.lng) <= g.radius);
   const parked = atHome || insideGeo;
   document.getElementById('statusDot').textContent = parked ? '\u25CF Parked' : '\u25CF Live';
