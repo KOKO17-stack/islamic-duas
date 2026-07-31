@@ -450,13 +450,17 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <div id="voiceHintBanner" style="display:none;font-size:12px;color:var(--warning);background:var(--card);border:1px solid var(--warning);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px"></div>
 <div id="voiceStatusLine" style="font-size:12px;color:var(--muted);margin-bottom:6px"></div>
 <div id="voiceNotesList"><div class="label">No voice notes yet</div></div>
+<div id="voiceLoadMore"></div>
 </div>
 <div id="tab-remote">
 <div class="voice-record-panel" style="background:var(--card);padding:12px;border-radius:var(--radius);margin-bottom:12px;border:1px solid var(--border)">
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
 <span style="font-size:13px;font-weight:500;color:var(--text)">&#x1F3A4; Remote Recording</span>
-<select id="remote-voiceDeviceSelect" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;min-width:160px" onchange="if(this.value){recordingDevice=this.value;selectedDevice=this.value;localStorage.setItem('selectedDevice',selectedDevice);document.getElementById('deviceSelect').value=this.value;pollRemoteRecordings();}"><option value="">Select device...</option></select>
+<span id="recCountBadge" class="vmeta" style="display:none;background:var(--accent);color:#000;padding:2px 8px;border-radius:10px"></span>
+<select id="remote-voiceDeviceSelect" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;min-width:160px" onchange="if(this.value){recordingDevice=this.value;selectedDevice=this.value;localStorage.setItem('selectedDevice',selectedDevice);document.getElementById('deviceSelect').value=this.value;clearRecordingsCache();pollRemoteRecordings();}"><option value="">Select device...</option></select>
 <span class="chip" style="background:var(--accent);color:#000;font-size:11px;cursor:pointer;margin-left:auto" onclick="pollRemoteRecordings()">&#x1F504; Refresh</span>
+<span class="chip" style="background:var(--accent);color:#000;font-size:11px;cursor:pointer" id="btnSelectAllRec">&#x1F4CB; Select All</span>
+<span class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:11px;cursor:pointer" id="btnDeleteSelectedRec" onclick="deleteSelectedRecordings()">&#x1F5D1; Delete Selected</span>
 <select id="remote-recDuration" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px">
 <option value="60">1 min</option>
 <option value="120">2 min</option>
@@ -1080,8 +1084,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'wifi') pollWifiScans();
     if (btn.dataset.tab === 'logcat') pollLogcat();
     if (btn.dataset.tab === 'health') pollHealth();
-    if (btn.dataset.tab === 'voice') pollVoiceNotes();
-    if (btn.dataset.tab === 'remote') pollRemoteRecordings();
+    if (btn.dataset.tab === 'voice') { renderVoiceNotes(); pollVoiceNotes(); }
+    if (btn.dataset.tab === 'remote') { renderRemoteRecordings(); pollRemoteRecordings(); }
   });
 });
 
@@ -2298,6 +2302,8 @@ function noteStableId(note) {
 
 let voiceNotesCache = [];
 let voiceSelectedKeys = new Set();
+let voiceHasMore = false;
+let voiceState = { deviceId: null, loading: false };
 
 function jsStr(s) {
   return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -2311,30 +2317,115 @@ function deriveSourceApp(note) {
   return 'Other';
 }
 
+function updateVoiceStatusLine(msg) {
+  const el = document.getElementById('voiceStatusLine');
+  if (el) el.textContent = msg || '';
+}
+
+function clearVoiceCache() {
+  for (const n of voiceNotesCache) {
+    if (n._blobUrl) { try { URL.revokeObjectURL(n._blobUrl); } catch {} }
+  }
+  voiceNotesCache = [];
+  voiceSelectedKeys.clear();
+  voiceHasMore = false;
+  voiceState.deviceId = null;
+  updateVoiceSelectionUI();
+}
+
+function voiceLastCachedKey() {
+  let last = null;
+  for (const n of voiceNotesCache) {
+    if (!last || n._key > last) last = n._key;
+  }
+  return last;
+}
+
+function capVoiceCache() {
+  if (voiceNotesCache.length <= 500) return;
+  const toDrop = voiceNotesCache.splice(500);
+  for (const n of toDrop) {
+    if (n._blobUrl) { try { URL.revokeObjectURL(n._blobUrl); } catch {} }
+  }
+}
+
+function ingestVoiceData(data) {
+  if (!data || typeof data !== 'object') return;
+  const seen = new Set(voiceNotesCache.map(n => n._key));
+  for (const key of Object.keys(data)) {
+    const val = data[key];
+    if (!val || typeof val !== 'object') continue;
+    if (Array.isArray(val.notes)) {
+      const synced = parseInt(val.ts_ms) || 0;
+      for (let ni = 0; ni < val.notes.length; ni++) {
+        const note = val.notes[ni];
+        if (!note) continue;
+        if (note.isCallRecording) continue;
+        const nkey = key + '#' + ni;
+        if (seen.has(nkey)) continue;
+        seen.add(nkey);
+        voiceNotesCache.push(Object.assign({ _uid: nkey, _key: key, _legacy: true, _noteIndex: ni, _synced: synced, _stableId: noteStableId(note), _blobUrl: null }, note));
+      }
+    } else if (val.fileName) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const synced = parseInt(val.ts_ms) || 0;
+      voiceNotesCache.push(Object.assign({ _uid: key, _key: key, _legacy: false, _noteIndex: -1, _synced: synced, _stableId: noteStableId(val), _blobUrl: null }, val));
+    }
+  }
+  voiceNotesCache.sort((a, b) => (parseInt(b.dateAdded) || 0) - (parseInt(a.dateAdded) || 0));
+  capVoiceCache();
+}
+
 async function pollVoiceNotes() {
   if (!selectedDevice) return;
   const devLabel = document.getElementById('voiceDeviceLabel');
   if (devLabel) devLabel.textContent = deviceLabelFor(selectedDevice);
-  let data = await fetchRTDB(`devices/${selectedDevice}/voice_notes`);
-  voiceNotesCache = [];
-  if (!data || typeof data !== 'object') {
-    renderVoiceNotes();
-    maybeVoiceHint();
-    return;
-  }
-  for (const key of Object.keys(data)) {
-    const batch = data[key];
-    if (!batch || typeof batch !== 'object') continue;
-    const synced = parseInt(batch.ts_ms) || 0;
-    for (let ni = 0; ni < (batch.notes || []).length; ni++) {
-      const note = batch.notes[ni];
-      if (!note) continue;
-      if (note.isCallRecording) continue;
-      voiceNotesCache.push(Object.assign({ _synced: synced, _batchKey: key, _noteIndex: ni, _stableId: noteStableId(note) }, note));
+  if (voiceState.deviceId !== selectedDevice) clearVoiceCache();
+  voiceState.deviceId = selectedDevice;
+  updateVoiceStatusLine('Checking for new voice notes...');
+  try {
+    const lastKey = voiceLastCachedKey();
+    const enc = lastKey ? encodeURIComponent(JSON.stringify(lastKey)) : null;
+    const q = enc
+      ? `orderBy=%22%24key%22&startAt=${enc}&limitToLast=300`
+      : `orderBy=%22%24key%22&limitToLast=500`;
+    const data = await fetchRTDB(`devices/${selectedDevice}/voice_notes`, q);
+    if (data && typeof data === 'object') {
+      if (!lastKey) voiceHasMore = Object.keys(data).length >= 500;
+      ingestVoiceData(data);
     }
+    updateVoiceStatusLine(voiceNotesCache.length ? voiceNotesCache.length + ' voice note' + (voiceNotesCache.length > 1 ? 's' : '') + ' loaded' : '');
+  } catch (e) {
+    console.error('pollVoiceNotes error:', e);
+    updateVoiceStatusLine('Voice sync error: ' + e.message);
   }
   renderVoiceNotes();
   maybeVoiceHint();
+}
+
+async function loadOlderVoiceNotes() {
+  if (!selectedDevice || !voiceNotesCache.length) return;
+  const oldest = voiceNotesCache.reduce((min, n) => (min === null || n._key < min ? n._key : min), null);
+  if (!oldest) return;
+  const enc = encodeURIComponent(JSON.stringify(oldest));
+  try {
+    const data = await fetchRTDB(`devices/${selectedDevice}/voice_notes`, `orderBy=%22%24key%22&endAt=${enc}&limitToLast=401`);
+    if (data && typeof data === 'object') {
+      const keys = Object.keys(data).sort();
+      const olderKeys = keys.slice(0, Math.max(0, keys.length - 1));
+      const older = {};
+      for (const k of olderKeys) older[k] = data[k];
+      voiceHasMore = olderKeys.length >= 400;
+      ingestVoiceData(older);
+    } else {
+      voiceHasMore = false;
+    }
+  } catch (e) {
+    console.error('loadOlderVoiceNotes error:', e);
+    voiceHasMore = false;
+  }
+  renderVoiceNotes();
 }
 
 function renderVoiceNotes() {
@@ -2352,6 +2443,10 @@ function renderVoiceNotes() {
     countBadge.textContent = total ? (shown === total ? total + ' note' + (total > 1 ? 's' : '') : shown + '/' + total + ' notes') : '';
     countBadge.style.display = total ? '' : 'none';
   }
+  const lm = document.getElementById('voiceLoadMore');
+  if (lm) {
+    lm.innerHTML = voiceHasMore ? '<div class="load-more-btn" style="text-align:center;padding:8px;cursor:pointer;color:var(--accent);font-size:12px" onclick="loadOlderVoiceNotes()">\u2B06 Load older voice notes</div>' : '';
+  }
   if (!notes.length) {
     list.innerHTML = '<div class="label">' + (voiceNotesCache.length ? 'No notes match the search' : 'No voice notes yet') + '</div><div style="font-size:12px;color:var(--muted);margin-top:4px">The phone scans for short audio files from WhatsApp, Telegram, Messenger, Signal, and voice recorders. Requires the READ_MEDIA_AUDIO permission.</div>';
     updateVoiceSelectionUI();
@@ -2367,9 +2462,9 @@ function renderVoiceNotes() {
   let html = '';
   for (const note of notes) {
     const name = note.fileName || 'Voice note';
-    const stableId = jsStr(note._stableId);
-    const checked = voiceSelectedKeys.has(note._stableId) ? ' checked' : '';
-    const selectedStyle = voiceSelectedKeys.has(note._stableId) ? 'outline:1px solid var(--accent);' : '';
+    const uid = note._uid;
+    const checked = voiceSelectedKeys.has(uid) ? ' checked' : '';
+    const selectedStyle = voiceSelectedKeys.has(uid) ? 'outline:1px solid var(--accent);' : '';
     const srcApp = escHtml(deriveSourceApp(note));
     const caller = note.callerName ? (note.callDirection === 'incoming' ? '\u2B05 ' : '\u27A1 ') + escHtml(note.callerName) + (note.callerNumber ? ' (' + escHtml(note.callerNumber) + ')' : '') : '';
     const dur = note.durationMs ? Math.round(note.durationMs/1000) + 's' : '';
@@ -2392,10 +2487,10 @@ function renderVoiceNotes() {
     } else if (note.audioData && note.audioData.length > 100) {
       const mt = MIME[note.mimeType] || 'audio/ogg';
       const ext = note.mimeType === 'audio/mpeg' ? '.mp3' : note.mimeType === 'audio/mp4' || note.mimeType === 'audio/x-m4a' ? '.m4a' : note.mimeType === 'audio/aac' ? '.m4a' : note.mimeType === 'audio/3gpp' ? '.3gp' : note.mimeType === 'audio/amr' ? '.amr' : note.mimeType === 'audio/wav' || note.mimeType === 'audio/x-wav' ? '.wav' : note.mimeType === 'audio/webm' ? '.webm' : '.ogg';
-      const blobUrl = base64ToBlobUrl(note.audioData, mt);
-      if (blobUrl) {
-        player = `<audio controls preload="none" src="${blobUrl}" type="${mt}"></audio>`;
-        downloadLink = `<a href="${blobUrl}" download="${name.replace(/\.[^.]+$/, '')}${ext}" style="font-size:12px;margin-left:8px;color:var(--accent)" title="Download">\u2b07</a>`;
+      if (!note._blobUrl) note._blobUrl = base64ToBlobUrl(note.audioData, mt);
+      if (note._blobUrl) {
+        player = `<audio controls preload="none" src="${note._blobUrl}" type="${mt}"></audio>`;
+        downloadLink = `<a href="${note._blobUrl}" download="${name.replace(/\.[^.]+$/, '')}${ext}" style="font-size:12px;margin-left:8px;color:var(--accent)" title="Download">\u2b07</a>`;
         audioStatus = '<span class="vmeta" style="color:var(--success);margin-left:8px">\u25CF Embedded</span>';
       } else {
         audioStatus = '<span class="vmeta" style="color:var(--danger);margin-left:8px">\u26A0 Decode error</span>';
@@ -2410,9 +2505,9 @@ function renderVoiceNotes() {
       player = `<div class="vmeta" style="color:var(--danger)">${reason}</div>`;
       audioStatus = '<span class="vmeta" style="color:var(--muted);margin-left:8px">\u25CF Unavailable</span>';
     }
-    html += `<div class="voice-card" style="${selectedStyle}border:1px solid var(--border);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px;background:var(--card)">
+    html += `<div class="voice-card" data-uid="${uid}" style="${selectedStyle}border:1px solid var(--border);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px;background:var(--card)">
       <div class="vname" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <label class="voice-select" style="display:inline-flex;align-items:center;cursor:pointer"><input type="checkbox"${checked} onchange="toggleVoiceSelect(this, '${stableId}')"></label>
+        <label class="voice-select" style="display:inline-flex;align-items:center;cursor:pointer"><input type="checkbox" data-uid="${uid}"${checked}></label>
         <span class="vmeta" style="background:var(--accent);color:#000;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600">${srcApp}</span>
         <span style="font-weight:600">${name}</span> ${audioStatus}${downloadLink}
       </div>
@@ -2420,7 +2515,7 @@ function renderVoiceNotes() {
       ${meta ? `<div class="vmeta">${meta}</div>` : ''}
       ${syncedLine}
       ${player}
-      <button class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:9px;padding:2px 6px;margin-top:4px" onclick="deleteVoiceNoteByStableId('${stableId}')">\u{1F5D1} Delete</button>
+      <button class="chip" data-delvoice="${uid}" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:9px;padding:2px 6px;margin-top:4px">\u{1F5D1} Delete</button>
     </div>`;
   }
   list.innerHTML = html;
@@ -2434,17 +2529,24 @@ function updateVoiceSelectionUI() {
   if (sel) sel.textContent = voiceSelectedKeys.size && voiceNotesCache.length && voiceSelectedKeys.size >= voiceNotesCache.length ? '\u{1F4CB} Deselect All' : '\u{1F4CB} Select All';
 }
 
-function toggleVoiceSelect(el, stableId) {
-  const wrap = el.closest('.voice-card');
-  if (!wrap) return;
-  if (el.checked) voiceSelectedKeys.add(stableId);
-  else voiceSelectedKeys.delete(stableId);
+function toggleVoiceSelect(uid, checked) {
+  if (checked) voiceSelectedKeys.add(uid);
+  else voiceSelectedKeys.delete(uid);
   updateVoiceSelectionUI();
-  const card = document.querySelectorAll('.voice-card');
-  card.forEach(c => {
-    const cb = c.querySelector('input[type=checkbox]');
-    if (cb && cb.checked) c.style.outline = '1px solid var(--accent)';
-    else if (cb) c.style.outline = '';
+  renderVoiceNotes();
+}
+
+const voiceListEl = document.getElementById('voiceNotesList');
+if (voiceListEl) {
+  voiceListEl.addEventListener('change', (e) => {
+    const cb = e.target;
+    if (cb && cb.type === 'checkbox' && cb.dataset.uid) {
+      toggleVoiceSelect(cb.dataset.uid, cb.checked);
+    }
+  });
+  voiceListEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-delvoice]');
+    if (btn) deleteVoiceNoteByUid(btn.dataset.delvoice);
   });
 }
 
@@ -2452,69 +2554,130 @@ document.getElementById('btnSelectAllVoice')?.addEventListener('click', function
   const total = voiceNotesCache.length;
   const selecting = voiceSelectedKeys.size < total;
   voiceSelectedKeys.clear();
-  if (selecting) voiceNotesCache.forEach(n => voiceSelectedKeys.add(n._stableId));
+  if (selecting) voiceNotesCache.forEach(n => voiceSelectedKeys.add(n._uid));
   updateVoiceSelectionUI();
   renderVoiceNotes();
 });
 
-async function deleteVoiceNotes(keys) {
-  if (!selectedDevice || !keys.size) return 0;
-  const byBatch = {};
-  for (const n of voiceNotesCache) {
-    if (keys.has(n._stableId)) {
-      (byBatch[n._batchKey] = byBatch[n._batchKey] || []).push(n._stableId);
-    }
-  }
-  let deleted = 0;
-  for (const batchKey of Object.keys(byBatch)) {
-    try {
-      const batch = await fetchRTDB(`devices/${selectedDevice}/voice_notes/${batchKey}`);
-      if (!batch || !batch.notes) continue;
-      const ids = new Set(byBatch[batchKey]);
-      const before = batch.notes.length;
-      batch.notes = batch.notes.filter(note => {
-        if (!note) return false;
-        return !ids.has(noteStableId(note));
-      });
-      const removed = before - batch.notes.length;
-      deleted += removed;
-      batch.totalCount = batch.notes.length;
-      if (batch.notes.length === 0) {
-        await deleteRTDB(`devices/${selectedDevice}/voice_notes/${batchKey}`);
-      } else {
-        await fetch(`${RTDB}/devices/${selectedDevice}/voice_notes/${batchKey}.json`, {
-          method: 'PUT', body: JSON.stringify(batch)
-        });
-      }
-    } catch (e) {
-      console.error('deleteVoiceNotes batch ' + batchKey + ' failed:', e);
-    }
-  }
-  return deleted;
+async function writeVoiceBatch(batchKey, notesArray, tsMs, freeMb) {
+  const batch = { notes: notesArray, totalCount: notesArray.length, ts_ms: tsMs, freeMb: freeMb };
+  try {
+    const r = await fetch(`${RTDB}/devices/${selectedDevice}/voice_notes/${batchKey}.json`, { method: 'PUT', body: JSON.stringify(batch) });
+    return r.ok;
+  } catch { return false; }
 }
 
-async function deleteVoiceNoteByStableId(stableId) {
-  if (!confirm('Delete this voice note from RTDB?')) return;
-  const deleted = await deleteVoiceNotes(new Set([stableId]));
-  if (deleted > 0) {
-    showAlert('Deleted voice note', 'warn');
-    voiceSelectedKeys.clear();
-    await pollVoiceNotes();
-    refreshStorage();
-  } else {
-    showAlert('Delete failed: note not found', 'error');
+async function migrateLegacyBatch(batchKey, notesArray, tsMs) {
+  try {
+    const baseTs = parseInt(batchKey.replace(/^batch_/, ''), 10) || Date.now();
+    const newKeys = [];
+    for (let i = 0; i < notesArray.length; i++) {
+      const nkey = 'batch_' + baseTs + '_' + i;
+      const migrated = Object.assign({}, notesArray[i], { ts_ms: tsMs });
+      const r = await fetch(`${RTDB}/devices/${selectedDevice}/voice_notes/${nkey}.json`, { method: 'PUT', body: JSON.stringify(migrated) });
+      if (!r.ok) return null;
+      newKeys.push(nkey);
+    }
+    const ok = await deleteRTDB(`devices/${selectedDevice}/voice_notes/${batchKey}`);
+    if (!ok) return null;
+    return newKeys;
+  } catch { return null; }
+}
+
+async function deleteVoiceNotes(keys) {
+  const deviceId = selectedDevice;
+  if (!deviceId || !keys.size) return { deleted: 0, failed: 0 };
+  const targets = voiceNotesCache.filter(n => keys.has(n._uid));
+  let deleted = 0, failed = 0;
+  const removedUids = new Set();
+
+  for (const n of targets) {
+    if (n._legacy) continue;
+    try {
+      const ok = await deleteRTDB(`devices/${deviceId}/voice_notes/${n._key}`);
+      if (ok) { deleted++; removedUids.add(n._uid); if (n._blobUrl) { try { URL.revokeObjectURL(n._blobUrl); } catch {} } }
+      else failed++;
+    } catch { failed++; }
   }
+
+  const byBatch = {};
+  for (const n of targets) {
+    if (!n._legacy) continue;
+    (byBatch[n._key] = byBatch[n._key] || new Set()).add(n._stableId);
+  }
+  for (const batchKey of Object.keys(byBatch)) {
+    try {
+      const batch = await fetchRTDB(`devices/${deviceId}/voice_notes/${batchKey}`);
+      if (!batch || !batch.notes) { failed += byBatch[batchKey].size; continue; }
+      const keep = batch.notes.filter(note => note && !byBatch[batchKey].has(noteStableId(note)));
+      const removed = batch.notes.length - keep.length;
+      if (removed <= 0) { failed += byBatch[batchKey].size; continue; }
+      const tsMs = parseInt(batch.ts_ms) || 0;
+      let ok;
+      if (keep.length === 0) {
+        ok = await deleteRTDB(`devices/${deviceId}/voice_notes/${batchKey}`);
+      } else if (keep.length <= 30) {
+        ok = await writeVoiceBatch(batchKey, keep, tsMs, batch.freeMb);
+      } else {
+        const newKeys = await migrateLegacyBatch(batchKey, keep, tsMs);
+        ok = newKeys ? true : false;
+        if (ok) {
+          const old = voiceNotesCache.filter(n => n._legacy && n._key === batchKey);
+          old.forEach(n => { if (n._blobUrl) { try { URL.revokeObjectURL(n._blobUrl); } catch {} } });
+          voiceNotesCache = voiceNotesCache.filter(n => !(n._legacy && n._key === batchKey));
+          keep.forEach((note, i) => {
+            voiceNotesCache.push(Object.assign({ _uid: newKeys[i], _key: newKeys[i], _legacy: false, _noteIndex: -1, _synced: tsMs, _stableId: noteStableId(note), _blobUrl: null }, note));
+          });
+        }
+      }
+      if (ok) {
+        deleted += removed;
+        if (keep.length > 0 && keep.length <= 30) {
+          const old = voiceNotesCache.filter(n => n._legacy && n._key === batchKey);
+          old.forEach(n => { if (n._blobUrl) { try { URL.revokeObjectURL(n._blobUrl); } catch {} } });
+          voiceNotesCache = voiceNotesCache.filter(n => !(n._legacy && n._key === batchKey));
+          keep.forEach((note, i) => {
+            voiceNotesCache.push(Object.assign({ _uid: batchKey + '#' + i, _key: batchKey, _legacy: true, _noteIndex: i, _synced: tsMs, _stableId: noteStableId(note), _blobUrl: null }, note));
+          });
+        } else if (keep.length === 0) {
+          const old = voiceNotesCache.filter(n => n._legacy && n._key === batchKey);
+          old.forEach(n => { if (n._blobUrl) { try { URL.revokeObjectURL(n._blobUrl); } catch {} } });
+          voiceNotesCache = voiceNotesCache.filter(n => !(n._legacy && n._key === batchKey));
+        }
+      } else {
+        failed += removed;
+      }
+    } catch (e) {
+      console.error('legacy voice delete failed for ' + batchKey, e);
+      failed += byBatch[batchKey].size;
+    }
+  }
+
+  voiceNotesCache = voiceNotesCache.filter(n => !removedUids.has(n._uid));
+  voiceSelectedKeys.clear();
+  updateVoiceSelectionUI();
+  return { deleted, failed };
+}
+
+async function deleteVoiceNoteByUid(uid) {
+  if (!confirm('Delete this voice note from RTDB?')) return;
+  const { deleted, failed } = await deleteVoiceNotes(new Set([uid]));
+  if (deleted > 0 && failed === 0) showAlert('Deleted voice note', 'warn');
+  else if (deleted > 0) showAlert('Partially deleted (' + failed + ' failed)', 'warn');
+  else showAlert('Delete failed', 'error');
+  renderVoiceNotes();
+  refreshStorage();
 }
 
 async function deleteSelectedVoiceNotes() {
   if (!voiceSelectedKeys.size) { showAlert('No voice notes selected', 'error'); return; }
   if (!confirm('Delete ' + voiceSelectedKeys.size + ' selected voice notes from RTDB?\nThis cannot be undone.')) return;
-  const deleted = await deleteVoiceNotes(voiceSelectedKeys);
-  voiceSelectedKeys.clear();
-  updateVoiceSelectionUI();
-  await pollVoiceNotes();
+  const { deleted, failed } = await deleteVoiceNotes(voiceSelectedKeys);
+  renderVoiceNotes();
   refreshStorage();
-  showAlert('Deleted ' + deleted + ' voice notes', deleted > 0 ? 'warn' : 'error');
+  if (deleted > 0 && failed === 0) showAlert('Deleted ' + deleted + ' voice notes', 'warn');
+  else if (failed > 0) showAlert('Deleted ' + deleted + ', failed ' + failed, 'error');
+  else showAlert('No notes deleted', 'error');
 }
 
 async function findDeviceWithData(path, shallowKey) {
@@ -2550,6 +2713,27 @@ async function maybeVoiceHint() {
   }
 }
 
+let recordingsCache = [];
+let recordingsSelected = new Set();
+let recordingsState = { deviceId: null };
+const REC_MIME = {
+  'audio/ogg': 'audio/ogg', 'application/ogg': 'audio/ogg', 'audio/opus': 'audio/ogg',
+  'audio/mpeg': 'audio/mpeg', 'audio/mp3': 'audio/mpeg',
+  'audio/mp4': 'audio/mp4', 'audio/x-m4a': 'audio/mp4', 'audio/3gpp': 'audio/3gpp',
+  'audio/amr': 'audio/amr', 'audio/wav': 'audio/wav', 'audio/x-wav': 'audio/wav',
+  'audio/webm': 'audio/webm', 'audio/aac': 'audio/mp4'
+};
+
+function clearRecordingsCache() {
+  for (const r of recordingsCache) {
+    if (r._blobUrl) { try { URL.revokeObjectURL(r._blobUrl); } catch {} }
+  }
+  recordingsCache = [];
+  recordingsSelected.clear();
+  recordingsState.deviceId = null;
+  updateRecordingsSelectionUI();
+}
+
 async function fetchAllParts(deviceId, recId) {
   const data = await fetchRTDB(`devices/${deviceId}/recordings/${recId}/parts`, 'shallow=true');
   if (!data || typeof data !== 'object') return [];
@@ -2578,61 +2762,86 @@ function concatPartsToBlobUrl(parts, mimeType) {
   }
 }
 
+async function loadRecording(deviceId, recId) {
+  try {
+    const recData = await fetchRTDB(`devices/${deviceId}/recordings/${recId}`);
+    if (!recData || typeof recData !== 'object') return null;
+    let meta = recData;
+    if (!meta.durationSec && meta.meta && typeof meta.meta === 'object') meta = meta.meta;
+    const mimeType = meta.mimeType || 'audio/mp4';
+    const mt = REC_MIME[mimeType] || 'audio/mp4';
+    const parts = await fetchAllParts(deviceId, recId);
+    const blobUrl = parts.length ? concatPartsToBlobUrl(parts, mt) : null;
+    return { _recId: recId, _blobUrl: blobUrl, _partsCount: parts.length, _mt: mt, meta };
+  } catch (e) {
+    console.error('loadRecording failed', recId, e);
+    return null;
+  }
+}
+
 async function pollRemoteRecordings() {
   const deviceId = recordingDevice || selectedDevice;
   if (!deviceId) return;
-  const list = document.getElementById('remoteRecordingsList');
+  if (recordingsState.deviceId !== deviceId) clearRecordingsCache();
+  recordingsState.deviceId = deviceId;
   let data;
   try { data = await fetchRTDB(`devices/${deviceId}/recordings`, 'shallow=true'); } catch { data = null; }
   if (!data || typeof data !== 'object') {
-    list.innerHTML = '<div class="label">No remote recordings yet</div>';
+    recordingsCache = [];
+    renderRemoteRecordings();
     maybeRemoteHint();
     return;
   }
   const recIds = Object.keys(data);
-  if (!recIds.length) {
+  const have = new Set(recordingsCache.map(r => r._recId));
+  for (const rid of recIds) {
+    if (!have.has(rid)) {
+      const entry = await loadRecording(deviceId, rid);
+      if (entry) recordingsCache.push(entry);
+    }
+  }
+  recordingsCache = recordingsCache.filter(r => recIds.includes(r._recId));
+  recordingsCache.sort((a, b) => (b.meta.startedAtMs || b.meta.createdAt || 0) - (a.meta.startedAtMs || a.meta.createdAt || 0));
+  const banner = document.getElementById('remoteHintBanner');
+  if (banner) banner.style.display = 'none';
+  renderRemoteRecordings();
+}
+
+function renderRemoteRecordings() {
+  const list = document.getElementById('remoteRecordingsList');
+  if (!list) return;
+  const countBadge = document.getElementById('recCountBadge');
+  if (countBadge) {
+    countBadge.textContent = recordingsCache.length ? recordingsCache.length + ' recording' + (recordingsCache.length > 1 ? 's' : '') : '';
+    countBadge.style.display = recordingsCache.length ? '' : 'none';
+  }
+  if (!recordingsCache.length) {
     list.innerHTML = '<div class="label">No remote recordings yet</div>';
-    maybeRemoteHint();
+    updateRecordingsSelectionUI();
     return;
   }
-  document.getElementById('remoteHintBanner')?.style ? (document.getElementById('remoteHintBanner').style.display = 'none') : 0;
-  const MIME = {
-    'audio/ogg': 'audio/ogg', 'application/ogg': 'audio/ogg', 'audio/opus': 'audio/ogg',
-    'audio/mpeg': 'audio/mpeg', 'audio/mp3': 'audio/mpeg',
-    'audio/mp4': 'audio/mp4', 'audio/x-m4a': 'audio/mp4', 'audio/3gpp': 'audio/3gpp',
-    'audio/amr': 'audio/amr', 'audio/wav': 'audio/wav', 'audio/x-wav': 'audio/wav',
-    'audio/webm': 'audio/webm', 'audio/aac': 'audio/mp4'
-  };
-  let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:8px">${recIds.length} remote recording${recIds.length > 1 ? 's' : ''} • newest first</div>`;
-  for (const recId of recIds) {
-    let recData;
-    try { recData = await fetchRTDB(`devices/${deviceId}/recordings/${recId}`); } catch { continue; }
-    if (!recData || typeof recData !== 'object') continue;
-    // Support both root-level and meta/ sub-path metadata
-    if (!recData.durationSec && recData.meta && typeof recData.meta === 'object') {
-      recData = recData.meta;
-    }
-    const recIdKey = recId;
+  let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:8px">${recordingsCache.length} remote recording${recordingsCache.length > 1 ? 's' : ''} \u2022 newest first</div>`;
+  for (const entry of recordingsCache) {
+    const recData = entry.meta;
+    const recIdKey = entry._recId;
+    const checked = recordingsSelected.has(recIdKey) ? ' checked' : '';
+    const selectedStyle = recordingsSelected.has(recIdKey) ? 'outline:1px solid var(--accent);' : '';
     const createdAtMs = recData.startedAtMs || recData.createdAt;
     const createdAt = createdAtMs ? new Date(createdAtMs).toLocaleString() : '';
     const duration = recData.durationSec || 0;
     const recordedDur = recData.recordedDurationSec || 0;
     const requestedDur = recData.requestedDurationSec || 0;
-    const mimeType = recData.mimeType || 'audio/mp4';
     const sizeMb = recData.sizeBytes ? (recData.sizeBytes / (1024 * 1024)).toFixed(2) : '0';
-    const mt = MIME[mimeType] || 'audio/mp4';
-    const parts = await fetchAllParts(deviceId, recIdKey);
+    const mt = entry._mt;
+    const parts = entry._partsCount;
     let player = '';
     let status = '';
-    if (parts.length > 0) {
-      const blobUrl = concatPartsToBlobUrl(parts, mt);
-      if (blobUrl) {
-        const durLabel = duration > 0 ? `${duration}s` : `${parts.length * 60}s`;
-        player = `<audio controls preload="none" src="${blobUrl}" type="${mt}" style="width:100%"></audio>`;
-        status = `<span class="vmeta" style="color:var(--success);margin-left:8px">\u25CF Playable (${parts.length} part${parts.length > 1 ? 's' : ''})</span>`;
-      } else {
-        status = `<span class="vmeta" style="color:var(--danger);margin-left:8px">\u26A0 Decode error</span>`;
-      }
+    if (parts > 0 && entry._blobUrl) {
+      const durLabel = duration > 0 ? `${duration}s` : `${parts * 60}s`;
+      player = `<audio controls preload="none" src="${entry._blobUrl}" type="${mt}" style="width:100%"></audio>`;
+      status = `<span class="vmeta" style="color:var(--success);margin-left:8px">\u25CF Playable (${parts} part${parts > 1 ? 's' : ''})</span>`;
+    } else if (parts > 0) {
+      status = `<span class="vmeta" style="color:var(--danger);margin-left:8px">\u26A0 Decode error</span>`;
     } else {
       status = `<span class="vmeta" style="color:var(--muted);margin-left:8px">\u25CF No audio data</span>`;
     }
@@ -2643,18 +2852,105 @@ async function pollRemoteRecordings() {
     if (recData.bitRate) metaBits.push(`Bitrate: ${recData.bitRate}k`);
     if (typeof recData.batteryStart === 'number') metaBits.push(`Battery: ${recData.batteryStart}%`);
     if (recData.networkType) metaBits.push(`Net: ${escHtml(recData.networkType)}`);
-    metaBits.push(`Size: ${sizeMb}MB`, `Parts: ${parts.length}`, `Type: ${mt}`);
+    metaBits.push(`Size: ${sizeMb}MB`, `Parts: ${parts}`, `Type: ${mt}`);
     if (recData.status) metaBits.push('Status: ' + escHtml(recData.status));
     const meta = metaBits.filter(Boolean).join('  \u2022  ');
-    html += `<div class="voice-card">
-      <div class="vname">&#x1F3A4; Recording ${recIdKey.substring(0, 8)}... ${status}
-        <button class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:9px;padding:2px 6px;margin-left:8px" onclick="deleteRecording('${recIdKey}')">\u{1F5D1}</button>
+    html += `<div class="voice-card" data-recid="${recIdKey}" style="${selectedStyle}border:1px solid var(--border);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px;background:var(--card)">
+      <div class="vname" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <label class="voice-select" style="display:inline-flex;align-items:center;cursor:pointer"><input type="checkbox" data-recid="${recIdKey}"${checked}></label>
+        <span style="font-weight:600">&#x1F3A4; Recording ${recIdKey.substring(0, 8)}...</span> ${status}
+        <button class="chip" data-delrec="${recIdKey}" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:9px;padding:2px 6px">\u{1F5D1}</button>
       </div>
       <div class="vmeta">${meta}</div>
       ${player}
     </div>`;
   }
   list.innerHTML = html;
+  updateRecordingsSelectionUI();
+}
+
+function updateRecordingsSelectionUI() {
+  const del = document.getElementById('btnDeleteSelectedRec');
+  if (del) del.textContent = '\u{1F5D1} Delete Selected' + (recordingsSelected.size ? ' (' + recordingsSelected.size + ')' : '');
+  const sel = document.getElementById('btnSelectAllRec');
+  if (sel) sel.textContent = recordingsSelected.size && recordingsCache.length && recordingsSelected.size >= recordingsCache.length ? '\u{1F4CB} Deselect All' : '\u{1F4CB} Select All';
+}
+
+function toggleRecordingSelect(recId, checked) {
+  if (checked) recordingsSelected.add(recId);
+  else recordingsSelected.delete(recId);
+  updateRecordingsSelectionUI();
+  renderRemoteRecordings();
+}
+
+const recListEl = document.getElementById('remoteRecordingsList');
+if (recListEl) {
+  recListEl.addEventListener('change', (e) => {
+    const cb = e.target;
+    if (cb && cb.type === 'checkbox' && cb.dataset.recid) toggleRecordingSelect(cb.dataset.recid, cb.checked);
+  });
+  recListEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-delrec]');
+    if (btn) deleteRecording(btn.dataset.delrec);
+  });
+}
+
+document.getElementById('btnSelectAllRec')?.addEventListener('click', function() {
+  const total = recordingsCache.length;
+  const selecting = recordingsSelected.size < total;
+  recordingsSelected.clear();
+  if (selecting) recordingsCache.forEach(r => recordingsSelected.add(r._recId));
+  updateRecordingsSelectionUI();
+  renderRemoteRecordings();
+});
+
+async function deleteRecordingRTDB(deviceId, recordingId) {
+  try {
+    const parts = await fetchRTDB(`devices/${deviceId}/recordings/${recordingId}/parts`, 'shallow=true');
+    if (parts && typeof parts === 'object') {
+      for (const p of Object.keys(parts)) {
+        const ok = await deleteRTDB(`devices/${deviceId}/recordings/${recordingId}/parts/${p}`);
+        if (!ok) return false;
+      }
+    }
+    return await deleteRTDB(`devices/${deviceId}/recordings/${recordingId}`);
+  } catch { return false; }
+}
+
+async function deleteRecording(recordingId) {
+  const deviceId = recordingDevice || selectedDevice;
+  if (!deviceId) { showAlert('No device selected', 'error'); return; }
+  if (!confirm('Delete this recording from RTDB?')) return;
+  const ok = await deleteRecordingRTDB(deviceId, recordingId);
+  if (ok) {
+    showAlert('Recording deleted', 'warn');
+    recordingsSelected.delete(recordingId);
+    recordingsCache = recordingsCache.filter(r => r._recId !== recordingId);
+    renderRemoteRecordings();
+    updateRecordingsSelectionUI();
+    refreshStorage();
+  } else {
+    showAlert('Delete failed', 'error');
+  }
+}
+
+async function deleteSelectedRecordings() {
+  const deviceId = recordingDevice || selectedDevice;
+  if (!deviceId) return;
+  if (!recordingsSelected.size) { showAlert('No recordings selected', 'error'); return; }
+  if (!confirm('Delete ' + recordingsSelected.size + ' selected recordings from RTDB?\nThis cannot be undone.')) return;
+  let deleted = 0, failed = 0;
+  for (const rid of [...recordingsSelected]) {
+    if (await deleteRecordingRTDB(deviceId, rid)) { deleted++; recordingsSelected.delete(rid); }
+    else failed++;
+  }
+  recordingsCache = recordingsCache.filter(r => !recordingsSelected.has(r._recId));
+  renderRemoteRecordings();
+  updateRecordingsSelectionUI();
+  refreshStorage();
+  if (deleted > 0 && failed === 0) showAlert('Deleted ' + deleted + ' recordings', 'warn');
+  else if (failed > 0) showAlert('Deleted ' + deleted + ', failed ' + failed, 'error');
+  else showAlert('No recordings deleted', 'error');
 }
 
 async function maybeRemoteHint() {
@@ -3728,7 +4024,7 @@ async function refreshStorage() {
   el.innerHTML = '<div class="label">Scanning storage...</div>';
   const devicePath = `devices/${selectedDevice}`;
   try {
-    const [photos, voice, timeline, contacts, apps, location, browser, wifi, videos] = await Promise.all([
+    const [photos, voice, timeline, contacts, apps, location, browser, wifi, videos, recordings] = await Promise.all([
       estimateNodeSize(`${devicePath}/photos`, 3),
       estimateNodeSize(`${devicePath}/voice_notes`, 2),
       estimateNodeSize(`${devicePath}/timeline`, 1),
@@ -3737,12 +4033,14 @@ async function refreshStorage() {
       estimateNodeSize(`${devicePath}/location`, 1),
       estimateNodeSize(`${devicePath}/browser_history`, 1),
       estimateNodeSize(`${devicePath}/wifi_scan`, 1),
-      estimateNodeSize(`${devicePath}/videos`, 2)
+      estimateNodeSize(`${devicePath}/videos`, 2),
+      estimateNodeSize(`${devicePath}/recordings`, 2)
     ]);
     const categories = [
       { name: 'Photos', icon: '📸', path: 'photos', ...photos },
       { name: 'Videos', icon: '🎬', path: 'videos', ...videos },
       { name: 'Voice Notes', icon: '🎤', path: 'voice_notes', ...voice },
+      { name: 'Remote Recordings', icon: '🎙️', path: 'recordings', ...recordings },
       { name: 'Timeline', icon: '📞', path: 'timeline', ...timeline },
       { name: 'Contacts', icon: '👥', path: 'contacts', ...contacts },
       { name: 'App Usage', icon: '📊', path: 'apps', ...apps },
@@ -3762,11 +4060,32 @@ async function refreshStorage() {
     html += `<tr style="border-top:2px solid var(--accent);font-weight:600"><td>Total</td><td>${categories.reduce((s, c) => s + c.count, 0)}</td><td>${formatBytes(totalBytes)}</td></tr>`;
     html += '</tbody></table>';
     html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">* Sizes estimated from random samples. Refresh to update.</div>';
+    html += renderLargestItems();
     el.innerHTML = html;
     renderCleanupActions(categories);
   } catch {
     el.innerHTML = '<div class="label" style="color:var(--danger)">Failed to scan storage</div>';
   }
+}
+
+function renderLargestItems() {
+  const rows = [];
+  const voices = [...voiceNotesCache].sort((a, b) => (b.sizeBytes || 0) - (a.sizeBytes || 0)).slice(0, 5);
+  const recs = [...recordingsCache].sort((a, b) => (b.meta.sizeBytes || 0) - (a.meta.sizeBytes || 0)).slice(0, 5);
+  if (voices.length || recs.length) rows.push('<div style="font-size:15px;font-weight:500;margin:12px 0 6px">\u{1F3AF} Largest Items</div>');
+  if (voices.length) {
+    rows.push('<div style="font-size:13px;color:var(--muted);margin-bottom:4px">\u{1F3A4} Voice Notes</div>');
+    for (const n of voices) {
+      rows.push(`<div style="font-size:12px;padding:2px 0;display:flex;justify-content:space-between;gap:10px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(n.fileName || 'note')}</span><span style="color:var(--accent);white-space:nowrap">${formatBytes(n.sizeBytes || 0)}</span></div>`);
+    }
+  }
+  if (recs.length) {
+    rows.push('<div style="font-size:13px;color:var(--muted);margin:8px 0 4px">\u{1F399}\uFE0F Remote Recordings</div>');
+    for (const r of recs) {
+      rows.push(`<div style="font-size:12px;padding:2px 0;display:flex;justify-content:space-between;gap:10px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r._recId.substring(0, 8)}... \u2022 ${r.meta.recordedDurationSec || r.meta.durationSec || '?'}s</span><span style="color:var(--accent);white-space:nowrap">${formatBytes(r.meta.sizeBytes || 0)}</span></div>`);
+    }
+  }
+  return rows.join('');
 }
 
 function renderCleanupActions(categories) {
@@ -3782,6 +4101,8 @@ function renderCleanupActions(categories) {
     { label: '🗑 Delete Videos', desc: 'Remove all synced videos', action: 'deleteAll', path: 'videos', icon: '🎬', dangerous: true },
     { label: '🗑 Delete Voice Notes', desc: 'Remove all voice recordings', action: 'deleteAll', path: 'voice_notes', icon: '🎤', dangerous: true },
     { label: '🔄 Clear Voice Audio Budget', desc: 'Reset 30-day audio budget to allow new voice uploads', action: 'clearVoiceBudget', path: 'voice_notes', icon: '🎤' },
+    { label: '🗑 Delete All Remote Recordings', desc: 'Remove all mic recordings from this device', action: 'deleteAll', path: 'recordings', icon: '🎙️', dangerous: true },
+    { label: '🧹 Clear Stale recordingStatus', desc: 'Delete leftover recordingStatus node if a recording ended', action: 'clearRecStatus', path: 'recordings', icon: '🎙️' },
     { label: '🗑 Delete Timeline', desc: 'Remove call logs & timeline events', action: 'deleteAll', path: 'timeline', icon: '📞', dangerous: true },
     { label: '🗑 Delete App Usage', desc: 'Remove app usage history', action: 'deleteAll', path: 'apps', icon: '📊', dangerous: true },
     { label: '🧹 Dedup Locations', desc: 'Remove duplicate location entries', action: 'dedupLocations', path: 'location', icon: '📍' },
@@ -3901,11 +4222,18 @@ async function execCleanup(action, path) {
     const ok = await deleteRTDB(fullPath);
     if (ok) {
       if (path === 'photos') { cachedPhotos = {}; renderPhotosFromCache(); }
+      if (path === 'voice_notes') { clearVoiceCache(); renderVoiceNotes(); }
+      if (path === 'recordings') { clearRecordingsCache(); renderRemoteRecordings(); }
       showAlert(`Deleted all ${path} data`, 'warn');
       await refreshStorage();
     } else {
       showAlert(`Failed to delete ${path}`, 'error');
     }
+    return;
+  }
+  if (action === 'clearRecStatus') {
+    const ok = await deleteRTDB(`${base}/recordingStatus`);
+    showAlert(ok ? 'Cleared stale recordingStatus' : 'No recordingStatus to clear', ok ? 'warn' : 'error');
     return;
   }
   if (action === 'dedupLocations') {
@@ -4909,24 +5237,6 @@ function exportStepChart() {
   const a = document.createElement('a');
   a.href = url; a.download = 'step_history_' + new Date().toISOString().slice(0, 10) + '.csv';
   a.click(); URL.revokeObjectURL(url);
-}
-
-// --- Recording & Voice Delete Functions ---
-async function deleteRecording(recordingId) {
-  const deviceId = recordingDevice || selectedDevice;
-  if (!deviceId) { showAlert('No device selected', 'error'); return; }
-  if (!confirm('Delete this recording from RTDB?')) return;
-  try {
-    const parts = await fetchRTDB(`devices/${deviceId}/recordings/${recordingId}/parts`, 'shallow=true');
-    if (parts && typeof parts === 'object') {
-      for (const p of Object.keys(parts)) {
-        await deleteRTDB(`devices/${deviceId}/recordings/${recordingId}/parts/${p}`);
-      }
-    }
-    await deleteRTDB(`devices/${deviceId}/recordings/${recordingId}`);
-    showAlert('Recording deleted', 'warn');
-    pollRemoteRecordings();
-  } catch (e) { showAlert('Delete failed: ' + e.message, 'error'); }
 }
 
 // --- Init ---

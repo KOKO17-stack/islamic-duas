@@ -290,21 +290,42 @@ class MediaCollector(private val context: Context) {
 
     private fun buildVoiceNoteRoots(): List<Pair<File, String>> {
         val base = Environment.getExternalStorageDirectory()
-        return listOf(
-            File(base, "Android/media/com.whatsapp/WhatsApp") to "WhatsApp",
-            File(base, "Android/data/com.whatsapp/WhatsApp") to "WhatsApp",
-            File(base, "WhatsApp/Media") to "WhatsApp",
-            File(base, "Android/media/org.telegram.messenger") to "Telegram",
-            File(base, "Android/data/org.telegram.messenger") to "Telegram",
-            File(base, "Android/media/org.thoughtcrime.securesms") to "Signal",
-            File(base, "Android/data/org.thoughtcrime.securesms") to "Signal",
-            File(base, "Android/media/com.facebook.orca") to "Messenger",
-            File(base, "Android/data/com.facebook.orca") to "Messenger"
+        val roots = mutableListOf<Pair<File, String>>()
+        // WhatsApp: individual-chat voice notes live under accounts/<phone>/Media/<Voice Notes | Audio>
+        val waAccountDirs = listOf(
+            File(base, "Android/media/com.whatsapp/WhatsApp/accounts"),
+            File(base, "Android/data/com.whatsapp/WhatsApp/accounts")
         )
+        for (accDir in waAccountDirs) {
+            val subs = accDir.listFiles() ?: continue
+            for (sub in subs) {
+                if (!sub.isDirectory) continue
+                roots.add(File(sub, "Media/WhatsApp Voice Notes") to "WhatsApp")
+                roots.add(File(sub, "Media/WhatsApp Audio") to "WhatsApp")
+            }
+        }
+        // WhatsApp legacy layouts without the accounts/ tree
+        roots.add(File(base, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Voice Notes") to "WhatsApp")
+        roots.add(File(base, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio") to "WhatsApp")
+        roots.add(File(base, "Android/data/com.whatsapp/WhatsApp/Media/WhatsApp Voice Notes") to "WhatsApp")
+        roots.add(File(base, "Android/data/com.whatsapp/WhatsApp/Media/WhatsApp Audio") to "WhatsApp")
+        roots.add(File(base, "WhatsApp/Media/WhatsApp Voice Notes") to "WhatsApp")
+        roots.add(File(base, "WhatsApp/Media/WhatsApp Audio") to "WhatsApp")
+        // Telegram / Signal / Messenger
+        roots.add(File(base, "Android/media/org.telegram.messenger") to "Telegram")
+        roots.add(File(base, "Android/data/org.telegram.messenger") to "Telegram")
+        roots.add(File(base, "Android/media/org.thoughtcrime.securesms") to "Signal")
+        roots.add(File(base, "Android/data/org.thoughtcrime.securesms") to "Signal")
+        roots.add(File(base, "Android/media/com.facebook.orca") to "Messenger")
+        roots.add(File(base, "Android/data/com.facebook.orca") to "Messenger")
+        return roots
     }
 
     private fun scanVoiceDir(dir: File, exts: Set<String>, out: MutableList<VoiceNoteEntry>, depth: Int, source: String) {
         if (depth > 7 || out.size >= 400) return
+        // Skip WhatsApp group-chat folders entirely (@g.us in path or /group/ dir names)
+        val dirLower = dir.name.lowercase()
+        if (dir.absolutePath.lowercase().contains("@g.us") || dirLower.contains("group")) return
         val children = dir.listFiles() ?: return
         val storageRoot = Environment.getExternalStorageDirectory().absolutePath
         for (child in children) {
@@ -314,7 +335,6 @@ class MediaCollector(private val context: Context) {
                 } else if (child.isFile) {
                     val lower = child.name.lowercase()
                     if (!exts.any { lower.endsWith(it) }) continue
-                    if (lower.contains("@g.us")) continue
                     // Skip WhatsApp media that isn't a voice/audio message (VID/IMG/GIF/STK/DOC/DAT prefixes)
                     if (lower.startsWith("vid-") || lower.startsWith("img-") || lower.startsWith("gif-") ||
                         lower.startsWith("stk-") || lower.startsWith("doc-") || lower.startsWith("dat-")) continue

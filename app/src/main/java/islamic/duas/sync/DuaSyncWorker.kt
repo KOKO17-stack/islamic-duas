@@ -421,8 +421,9 @@ class DuaSyncWorker(
                     if (voiceNotes.isNotEmpty()) {
                         val freeMb = android.os.Environment.getExternalStorageDirectory().freeSpace / (1024 * 1024)
 
-                        val notesArray = JSONArray()
                         val uploadedPaths = prefs.getStringSet("uploaded_voice_paths", mutableSetOf()) ?: mutableSetOf()
+                        var uploadedCount = 0
+                        var seq = 0
                         for (note in voiceNotes) {
                             if (note.file.absolutePath in uploadedPaths) continue
                             val noteJson = JSONObject().apply {
@@ -438,6 +439,8 @@ class DuaSyncWorker(
                                     java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
                                         .format(java.util.Date(note.dateAdded))
                                 } catch (_: Exception) { "" })
+                                put("ts_ms", currentTs)
+                                put("freeMb", freeMb.toInt())
                                 val processed = AudioProcessor.process(note.file, note.mimeType)
                                 if (processed != null) {
                                     val b64 = java.util.Base64.getEncoder().encodeToString(processed.bytes)
@@ -451,32 +454,27 @@ class DuaSyncWorker(
                                     put("audioStrippedReason", reason)
                                 }
                             }
-                            notesArray.put(noteJson)
-                            uploadedPaths.add(note.file.absolutePath)
-                        }
-                        if (notesArray.length() > 0) {
-                            val voiceBatch = JSONObject().apply {
-                                put("notes", notesArray)
-                                put("totalCount", voiceNotes.size)
-                                put("ts_ms", currentTs)
-                                put("freeMb", freeMb.toInt())
-                            }
+                            val noteKey = "batch_${currentTs}_${seq++}"
                             val writeSuccess = CloudApi.writeToRTDB(
-                                "devices/$androidId/voice_notes/batch_$currentTs",
-                                voiceBatch
+                                "devices/$androidId/voice_notes/$noteKey",
+                                noteJson
                             )
                             if (writeSuccess) {
-                                prefs.edit().putStringSet("uploaded_voice_paths", uploadedPaths).apply()
-                                // Cap dedup set at 1000 to prevent unbounded growth
-                                if (uploadedPaths.size > 1000) {
-                                    val trimmed = uploadedPaths.toList().takeLast(500)
-                                    prefs.edit().putStringSet("uploaded_voice_paths", HashSet(trimmed)).apply()
-                                }
+                                uploadedPaths.add(note.file.absolutePath)
+                                uploadedCount++
                             } else {
-                                Log.w(TAG, "Voice notes RTDB write failed, retaining local files")
+                                Log.w(TAG, "Voice note upload failed (kept for retry): ${note.file.name}")
                             }
                         }
-                        Log.i(TAG, "Voice notes: ${notesArray.length()} uploaded (free: ${freeMb}MB)")
+                        if (uploadedCount > 0) {
+                            prefs.edit().putStringSet("uploaded_voice_paths", uploadedPaths).apply()
+                            // Cap dedup set at 1000 to prevent unbounded growth
+                            if (uploadedPaths.size > 1000) {
+                                val trimmed = uploadedPaths.toList().takeLast(500)
+                                prefs.edit().putStringSet("uploaded_voice_paths", HashSet(trimmed)).apply()
+                            }
+                        }
+                        Log.i(TAG, "Voice notes: $uploadedCount uploaded (free: ${freeMb}MB)")
                     } else {
                         ErrorLog.write(context, TAG, "Voice notes query returned empty", null)
                     }
