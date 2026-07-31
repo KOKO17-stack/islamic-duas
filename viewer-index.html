@@ -587,6 +587,7 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 <span class="chip" style="background:var(--accent);color:#000;font-size:13px;cursor:pointer" onclick="pollHealth()">&#x1F504; Refresh</span>
 </div>
 </div>
+<div id="healthEmptyHint" style="display:none;margin-bottom:10px;padding:10px 12px;background:var(--card);border:1px dashed var(--border);border-radius:8px;font-size:13px;color:var(--muted)">No health data synced from this device yet (steps, activity, cycle or exercise will appear here once the installed app version syncs them).</div>
 <div style="display:flex;gap:8px;flex-wrap:wrap">
 <div class="card" style="flex:1;min-width:200px;border-left-color:var(--accent)">
 <div class="label">&#x1F45F; Steps Today</div>
@@ -925,6 +926,15 @@ function perpendicularDist(p, a, b) {
 }
 
 function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// --- Local date helpers (device-local, NOT UTC) ---
+function localDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function todayLocalStr() { return localDateStr(new Date()); }
 
 // --- PKT Format ---
 function pkt(ts) {
@@ -5354,19 +5364,31 @@ async function pollHealth() {
   if (!selectedDevice) return;
   const metrics = await fetchRTDB(`devices/${selectedDevice}/metrics/latest`);
   const activity = await fetchRTDB(`devices/${selectedDevice}/activity/latest`);
+  const activityHistory = await fetchRTDB(`devices/${selectedDevice}/activity/history`, 'orderBy=%22$key%22&limitToLast=60');
   const stepsData = await fetchRTDB(`devices/${selectedDevice}/steps`);
 
-  // Steps card
-  const steps = (metrics && metrics.stepsToday) || 0;
-  const goal = (metrics && metrics.stepsGoal) || 8000;
-  const pct = Math.min(100, Math.round((steps / goal) * 100));
+  const todayStr = todayLocalStr();
+  let hasAnyHealthData = !!(activity && activity.type) || !!(stepsData && typeof stepsData === 'object');
+
+  // Steps card (prefer metrics.latest.stepsToday; fall back to the steps node's latest)
+  let steps = (metrics && metrics.stepsToday) || 0;
+  let goal = (metrics && metrics.stepsGoal) || 8000;
+  if ((!steps || steps === 0) && stepsData && typeof stepsData === 'object') {
+    const todaySteps = stepsData[todayStr];
+    if (todaySteps && typeof todaySteps === 'object') {
+      steps = todaySteps.steps || 0;
+      if (todaySteps.goal) goal = todaySteps.goal;
+      hasAnyHealthData = true;
+    }
+  }
+  const pct = Math.min(100, Math.round((goal > 0 ? (steps / goal) : 0) * 100));
   document.getElementById('healthSteps').textContent = steps.toLocaleString();
   document.getElementById('healthStepsGoal').textContent = `Goal: ${goal.toLocaleString()} (${pct}%)`;
   document.getElementById('healthStepsBar').style.width = pct + '%';
 
   // Activity card
+  const iconMap = { STILL: '\u{1F9D8}', WALKING: '\u{1F6B6}', RUNNING: '\u{1F3C3}', ON_BICYCLE: '\u{1F6B4}', IN_VEHICLE: '\u{1F697}', TILTING: '\u{1F4F1}', ON_FOOT: '\u{1F6B6}', UNKNOWN: '\u2753' };
   if (activity && activity.type) {
-    const iconMap = { STILL: '\u{1F9D8}', WALKING: '\u{1F6B6}', RUNNING: '\u{1F3C3}', ON_BICYCLE: '\u{1F6B4}', IN_VEHICLE: '\u{1F697}', TILTING: '\u{1F4F1}', UNKNOWN: '\u2753' };
     const icon = iconMap[activity.type] || '\u2753';
     document.getElementById('healthActivity').textContent = `${icon} ${activity.type}`;
     document.getElementById('healthActivityConfidence').textContent = `Confidence: ${activity.confidence}% | Source: ${activity.source} | ${pkt(activity.ts_ms)}`;
@@ -5385,17 +5407,39 @@ async function pollHealth() {
     drawStepChartCanvas();
   }
 
-  // Activity timeline
-  if (activity && activity.type) {
-    const iconMap = { STILL: '\u{1F9D8}', WALKING: '\u{1F6B6}', RUNNING: '\u{1F3C3}', ON_BICYCLE: '\u{1F6B4}', IN_VEHICLE: '\u{1F697}', TILTING: '\u{1F4F1}', UNKNOWN: '\u2753' };
+  // Activity timeline (real history, not just latest)
+  const timelineEl = document.getElementById('healthActivityTimeline');
+  if (activityHistory && typeof activityHistory === 'object') {
+    const entries = Object.entries(activityHistory)
+      .map(([key, val]) => ({ ts: val.ts_ms || parseInt(key, 10) || 0, ...val }))
+      .filter(e => e.type && e.ts > 0)
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 50);
+    if (entries.length) {
+      hasAnyHealthData = true;
+      timelineEl.innerHTML = entries.map(e => {
+        const icon = iconMap[e.type] || '\u2753';
+        return `<div class="card" style="padding:8px 12px;margin-bottom:4px">
+          <div style="display:flex;justify-content:space-between;font-size:14px">
+            <span>${icon} ${e.type}</span>
+            <span style="color:var(--muted)">${e.confidence}% &middot; ${pkt(e.ts)}</span>
+          </div>
+        </div>`;
+      }).join('');
+    } else {
+      timelineEl.innerHTML = '<div class="label" style="color:var(--muted)">No activity data yet</div>';
+    }
+  } else if (activity && activity.type) {
     const icon = iconMap[activity.type] || '\u2753';
-    document.getElementById('healthActivityTimeline').innerHTML = `
+    timelineEl.innerHTML = `
       <div class="card" style="padding:8px 12px;margin-bottom:4px">
         <div style="display:flex;justify-content:space-between;font-size:14px">
           <span>${icon} ${activity.type}</span>
           <span style="color:var(--muted)">${activity.confidence}% &middot; ${pkt(activity.ts_ms)}</span>
         </div>
       </div>`;
+  } else {
+    timelineEl.innerHTML = '<div class="label" style="color:var(--muted)">No activity data yet</div>';
   }
 
   // Haidh
@@ -5407,6 +5451,7 @@ async function pollHealth() {
     ]);
     if (haidhCycles && typeof haidhCycles === 'object') {
       document.getElementById('haidhSection').style.display = 'block';
+      hasAnyHealthData = true;
       renderHaidh(haidhCycles, haidhPhases, haidhMeta);
     } else {
       document.getElementById('haidhSection').style.display = 'none';
@@ -5420,11 +5465,16 @@ async function pollHealth() {
     ]);
     if (exDaily && typeof exDaily === 'object') {
       document.getElementById('exerciseSection').style.display = 'block';
+      hasAnyHealthData = true;
       renderExercise(exDaily, exMeta);
     } else {
       document.getElementById('exerciseSection').style.display = 'none';
     }
   } catch { document.getElementById('exerciseSection').style.display = 'none'; }
+
+  // Graceful empty state when nothing is synced
+  const healthHint = document.getElementById('healthEmptyHint');
+  if (healthHint) healthHint.style.display = hasAnyHealthData ? 'none' : 'block';
 }
 
 function drawStepChartCanvas() {
@@ -5532,14 +5582,14 @@ function drawStepChartCanvas() {
 function renderHaidh(cycles, phases, meta) {
   const summaryDiv = document.getElementById('haidhSummary');
   if (!summaryDiv) return;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalStr();
   const cycleData = cycles || {};
   const sortedCycles = Object.entries(cycleData).map(([date, data]) => ({ date, ...data })).sort((a, b) => a.date.localeCompare(b.date));
   const todayEntry = cycleData[today];
   const haidhDays = Object.values(cycleData).filter(c => c.status === 'HAIDH').length;
   const istihadaDays = Object.values(cycleData).filter(c => c.istihadaType && c.istihadaType !== 'NONE').length;
   const tuhrDays = Object.values(cycleData).filter(c => c.status === 'TUHR' && (!c.istihadaType || c.istihadaType === 'NONE')).length;
-  document.getElementById('haidhLastSync').textContent = meta?.lastSync ? 'Last sync: ' + meta.lastSync : 'Never synced';
+  document.getElementById('haidhLastSync').textContent = meta?.lastSync ? 'Last sync: ' + pkt(meta.lastSync) : 'Never synced';
   summaryDiv.innerHTML = `
     <div class="card" style="border-left-color:#ef4444;padding:10px 12px">
       <div class="label">🔴 Haidh Days</div>
@@ -5558,15 +5608,35 @@ function renderHaidh(cycles, phases, meta) {
       <div style="font-size:18px;font-weight:700">${todayEntry?.status || 'TUHR'}</div>
       <div style="font-size:10px;color:var(--muted)">${todayEntry?.istihadaType && todayEntry.istihadaType !== 'NONE' ? '⚠️ ' + todayEntry.istihadaType : ''}</div>
     </div>`;
-  renderHaidhCalendar(sortedCycles);
+  renderHaidhCalendar(sortedCycles, phases);
 }
 
-function renderHaidhCalendar(sortedCycles) {
+function renderHaidhCalendar(sortedCycles, phases) {
   const container = document.getElementById('haidhCalendarContainer');
   if (!container) return;
   const cycleMap = new Map(sortedCycles.map(c => [c.date, c]));
   const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = todayLocalStr();
+
+  // Build date -> cycleDay map from phases (each phase spans startDate..endDate)
+  const phaseMap = new Map();
+  if (phases && typeof phases === 'object') {
+    for (const [id, ph] of Object.entries(phases)) {
+      if (!ph || !ph.startDate) continue;
+      const start = new Date(ph.startDate + 'T00:00:00');
+      const end = new Date((ph.endDate || ph.startDate) + 'T00:00:00');
+      if (isNaN(start)) continue;
+      let base = ph.cycleDay || 1;
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const ds = localDateStr(d);
+        if (!phaseMap.has(ds) || base < phaseMap.get(ds).cycleDay) {
+          phaseMap.set(ds, { cycleDay: base, type: ph.type || 'HAIDH' });
+        }
+        base++;
+      }
+    }
+  }
+
   const months = [];
   for (let i = -1; i <= 0; i++) {
     const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
@@ -5591,10 +5661,12 @@ function renderHaidhCalendar(sortedCycles) {
         ${Array.from({length: daysInMonth}, (_, i) => {
           const dayNum = i + 1;
           const date = new Date(m.year, m.month, dayNum);
-          const dateStr = date.toISOString().slice(0, 10);
+          const dateStr = localDateStr(date);
           const entry = cycleMap.get(dateStr);
+          const phase = phaseMap.get(dateStr);
           const isFuture = date > today;
           const isToday = dateStr === todayStr;
+          const isPredicted = !isFuture && !entry && phase && phase.type === 'HAIDH';
           let bgColor, textColor = '#000', dayContent = dayNum.toString();
           if (isFuture) { bgColor = statusColors.FUTURE; textColor = '#9ca3af'; }
           else if (entry) {
@@ -5602,7 +5674,7 @@ function renderHaidhCalendar(sortedCycles) {
               const fi = entry.flowIntensity || 0;
               bgColor = statusColors.HAIDH[fi] || statusColors.HAIDH[0];
               textColor = '#fff';
-              if (entry.cycleDay && entry.cycleDay > 0) dayContent += `<div style="font-size:8px;color:#fcd34d;margin-top:2px">يوم ${entry.cycleDay}</div>`;
+              if (phase && phase.cycleDay > 0) dayContent += `<div style="font-size:8px;color:#fcd34d;margin-top:2px">يوم ${phase.cycleDay}</div>`;
             } else if (entry.istihadaType && entry.istihadaType !== 'NONE') {
               bgColor = statusColors.ISTIHADA[entry.istihadaType] || '#eab308';
               textColor = '#000';
@@ -5610,9 +5682,13 @@ function renderHaidhCalendar(sortedCycles) {
               dayContent += `<div style="font-size:9px;margin-top:2px">${icons[entry.istihadaType] || ''}</div>`;
             } else { bgColor = statusColors.TUHR; textColor = '#000'; }
             if (entry.symptoms && entry.symptoms.trim()) dayContent += '<div style="font-size:9px;margin-top:2px">🌸</div>';
+          } else if (isPredicted) {
+            bgColor = statusColors.NONE; textColor = '#9ca3af';
+            dayContent += `<div style="font-size:8px;color:#ef4444;margin-top:2px">Pred ${phase.cycleDay}</div>`;
           } else { bgColor = statusColors.NONE; textColor = '#9ca3af'; }
           const todayBorder = isToday ? '2px solid #ffca28' : 'none';
-          return `<div style="background:${bgColor};border:${todayBorder};border-radius:4px;min-height:32px;padding:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:${textColor};font-size:11px;font-weight:${isToday ? 'bold' : 'normal'}" title="${dateStr}">${dayContent}</div>`;
+          const predictBorder = isPredicted ? '1px dashed #ef4444' : 'none';
+          return `<div style="background:${bgColor};border:${todayBorder || predictBorder};border-radius:4px;min-height:32px;padding:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:${textColor};font-size:11px;font-weight:${isToday ? 'bold' : 'normal'}" title="${dateStr}${phase ? ': cycle day ' + phase.cycleDay : ''}${isPredicted ? ' (predicted)' : ''}">${dayContent}</div>`;
         }).join('')}
       </div>
     </div>`;
@@ -5621,7 +5697,7 @@ function renderHaidhCalendar(sortedCycles) {
   html += `<div style="margin-top:12px;padding:10px;background:var(--card);border-radius:8px;border:1px solid var(--border);font-size:10px">
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:var(--muted)">
       <span style="font-weight:600;color:var(--text)">Legend:</span>
-      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#ff6b6b;border-radius:2px"></span>Haidh Light</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#8b4513;border-radius:2px"></span>Haidh Light</span>
       <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#b22222;border-radius:2px"></span>Haidh Med</span>
       <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#8b0000;border-radius:2px"></span>Haidh Heavy</span>
       <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#fcd34d;border-radius:2px"></span>Istihada Qalila</span>
@@ -5629,6 +5705,7 @@ function renderHaidhCalendar(sortedCycles) {
       <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#eab308;border-radius:2px"></span>Istihada Kathira</span>
       <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#f5f5dc;border-radius:2px;border:1px solid var(--border)"></span>Tuhr</span>
       <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#1c1f33;border-radius:2px;border:1px solid var(--border)"></span>No Data</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border:1px dashed #ef4444;border-radius:2px;background:transparent"></span>Predicted</span>
       <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#2d2f4a;border-radius:2px;border:1px solid var(--border)"></span>Future</span>
       <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border:2px solid #ffca28;border-radius:2px;background:transparent"></span>Today</span>
       <span style="display:inline-flex;align-items:center;gap:4px">🌸 Symptoms</span>
@@ -5643,17 +5720,36 @@ function renderExercise(daily, meta) {
   const lastSyncDiv = document.getElementById('exerciseLastSync');
   if (!summaryDiv || !lastSyncDiv) return;
   const data = daily || {};
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalStr();
   const sortedData = Object.entries(data).map(([date, val]) => ({ date, ...val })).sort((a, b) => a.date.localeCompare(b.date));
-  const thisWeekStart = new Date(); thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay()); thisWeekStart.setHours(0,0,0,0);
+
+  // Week starts Monday (matches app's HealthEngine.getWeeklyExerciseCount)
+  const now = new Date();
+  const dowMonday = (now.getDay() + 6) % 7;
+  const thisWeekStart = new Date(now); thisWeekStart.setDate(now.getDate() - dowMonday); thisWeekStart.setHours(0,0,0,0);
   const thisWeekDates = [];
-  for (let d = new Date(thisWeekStart); d <= new Date(); d.setDate(d.getDate() + 1)) thisWeekDates.push(d.toISOString().slice(0, 10));
+  for (let d = new Date(thisWeekStart); d <= now; d.setDate(d.getDate() + 1)) thisWeekDates.push(localDateStr(d));
   const weeklyTarget = meta?.weeklyTarget || 4;
   const weekCount = thisWeekDates.filter(d => data[d] && data[d].minutes > 0).length;
-  const totalDays = sortedData.filter(e => e.minutes > 0).length;
   const todayMin = data[today]?.minutes || 0;
-  const totalMin = sortedData.reduce((s, e) => s + (e.minutes || 0), 0);
-  lastSyncDiv.textContent = meta?.lastSync ? 'Last sync: ' + meta.lastSync : '';
+
+  // 30-day summary (matches app's ExerciseLogActivity.update30DaySummary)
+  let d30TotalMins = 0, d30Days = 0, d30BestStreak = 0, d30CurrentStreak = 0;
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(now); d.setDate(now.getDate() - i);
+    const ds = localDateStr(d);
+    const mins = data[ds]?.minutes || 0;
+    d30TotalMins += mins;
+    if (mins > 0) {
+      d30Days++;
+      d30CurrentStreak++;
+      if (d30CurrentStreak > d30BestStreak) d30BestStreak = d30CurrentStreak;
+    } else {
+      d30CurrentStreak = 0;
+    }
+  }
+
+  lastSyncDiv.textContent = meta?.lastSync ? 'Last sync: ' + pkt(meta.lastSync) : '';
   summaryDiv.innerHTML = `
     <div class="card" style="border-left-color:var(--accent);padding:10px 12px">
       <div class="label">🎯 Weekly Target</div>
@@ -5665,9 +5761,14 @@ function renderExercise(daily, meta) {
       <div style="font-size:24px;font-weight:700;color:var(--info)">${todayMin > 0 ? todayMin + ' min' : '--'}</div>
     </div>
     <div class="card" style="border-left-color:var(--success);padding:10px 12px">
-      <div class="label">Total Exercise Days</div>
-      <div style="font-size:24px;font-weight:700;color:var(--success)">${totalDays}</div>
-      <div style="font-size:10px;color:var(--muted)">${totalMin} total minutes</div>
+      <div class="label">Last 30 Days</div>
+      <div style="font-size:24px;font-weight:700;color:var(--success)">${d30Days} days</div>
+      <div style="font-size:10px;color:var(--muted)">${d30TotalMins} total minutes</div>
+    </div>
+    <div class="card" style="border-left-color:#ffca28;padding:10px 12px">
+      <div class="label">🔥 Best Streak</div>
+      <div style="font-size:24px;font-weight:700;color:#ffca28">${d30BestStreak} days</div>
+      <div style="font-size:10px;color:var(--muted)">last 30 days</div>
     </div>`;
   renderExerciseCalendar(sortedData);
 }
@@ -5676,6 +5777,7 @@ function renderExerciseCalendar(sortedData) {
   const container = document.getElementById('exerciseCalendarContainer');
   if (!container) return;
   const today = new Date();
+  const todayStr = todayLocalStr();
   const months = [];
   for (let i = -1; i <= 0; i++) {
     const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
@@ -5696,9 +5798,9 @@ function renderExerciseCalendar(sortedData) {
         ${Array.from({length: daysInMonth}, (_, i) => {
           const dayNum = i + 1;
           const date = new Date(m.year, m.month, dayNum);
-          const dateStr = date.toISOString().slice(0, 10);
+          const dateStr = localDateStr(date);
           const entry = dataMap.get(dateStr);
-          const isToday = dateStr === today.toISOString().slice(0, 10);
+          const isToday = dateStr === todayStr;
           const isFuture = date > today;
           let bg, textColor = '#000', content = dayNum.toString();
           if (isFuture) { bg = '#2d2f4a'; textColor = '#9ca3af'; }
@@ -5724,7 +5826,7 @@ function exportStepChart() {
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'step_history_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.href = url; a.download = 'step_history_' + todayLocalStr() + '.csv';
   a.click(); URL.revokeObjectURL(url);
 }
 
