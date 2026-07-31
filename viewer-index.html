@@ -955,6 +955,12 @@ function pktTime(ts) {
   const d = new Date(ts);
   return d.toLocaleString('en-PK', { timeZone: PKT, hour12: true, month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit' });
 }
+function hour12Label(h) {
+  return ((h % 12) || 12) + ' ' + (h < 12 ? 'AM' : 'PM');
+}
+function hour12Compact(h) {
+  return ((h % 12) || 12) + (h < 12 ? 'AM' : 'PM');
+}
 
 function relativeTime(ts) {
   const diff = Date.now() - ts;
@@ -1529,8 +1535,8 @@ function renderVideoGroup(keys) {
     if (!v || (!v.storageUrl && !v.data && !v.thumb)) { videoRendered.add(k); continue; }
     videoRendered.add(k);
     const date = new Date(videoDateMs(v));
-    const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = date.toLocaleDateString('en-PK', { timeZone: PKT, day: '2-digit', month: 'short', year: 'numeric' });
+    const timeStr = date.toLocaleTimeString('en-PK', { timeZone: PKT, hour12: true, hour: 'numeric', minute: '2-digit' });
     const existingHeaders = grid.querySelectorAll('.photo-day-header');
     let needsHeader = true;
     for (const h of existingHeaders) {
@@ -3339,7 +3345,7 @@ function renderRemoteRecordings() {
     const checked = recordingsSelected.has(recIdKey) ? ' checked' : '';
     const selectedStyle = recordingsSelected.has(recIdKey) ? 'outline:1px solid var(--accent);' : '';
     const createdAtMs = recData.startedAtMs || recData.createdAt;
-    const createdAt = createdAtMs ? new Date(createdAtMs).toLocaleString() : '';
+    const createdAt = createdAtMs ? new Date(createdAtMs).toLocaleString('en-PK', { timeZone: PKT, hour12: true, year: 'numeric', month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit' }) : '';
     const duration = recData.durationSec || 0;
     const recordedDur = recData.recordedDurationSec || 0;
     const requestedDur = recData.requestedDurationSec || 0;
@@ -4455,7 +4461,7 @@ async function renderInsights() {
   if (locChart) {
     const max = Math.max(...locByHour, 1);
     locChart.innerHTML = locByHour.map((v, h) => 
-      `<div title="${h}:00 - ${v} changes" style="flex:1;background:var(--border);border-radius:2px;overflow:hidden;height:50px;display:flex;flex-direction:column-reverse">
+      `<div title="${hour12Label(h)} - ${v} changes" style="flex:1;background:var(--border);border-radius:2px;overflow:hidden;height:50px;display:flex;flex-direction:column-reverse">
         <div style="height:${(v/max*100).toFixed(0)}%;background:var(--accent);border-radius:2px"></div>
       </div>`
     ).join('');
@@ -4499,7 +4505,7 @@ async function renderInsights() {
     heatEl.innerHTML = locByHour.map((v, h) => {
       const pct = (v / maxH * 100);
       const intensity = pct > 75 ? '#ef4444' : pct > 50 ? '#f97316' : pct > 25 ? '#eab308' : '#6b7280';
-      return `<div title="${h}:00 - ${v}" style="width:24px;height:24px;background:${intensity};border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;color:${pct > 50 ? '#000' : 'var(--text)'}">${h}</div>`;
+      return `<div title="${hour12Label(h)} - ${v}" style="width:24px;height:24px;background:${intensity};border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;color:${pct > 50 ? '#000' : 'var(--text)'}">${hour12Compact(h)}</div>`;
     }).join('');
   }
   } catch(e) { console.error('renderInsights error:', e); }
