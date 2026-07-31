@@ -431,6 +431,13 @@ class DuaSyncWorker(
                                 put("durationMs", note.duration)
                                 put("sizeBytes", note.size)
                                 put("mimeType", note.mimeType)
+                                put("sourceApp", note.source)
+                                put("folderPath", note.folderPath)
+                                put("isGroup", note.isGroup)
+                                put("dateAddedIso", try {
+                                    java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+                                        .format(java.util.Date(note.dateAdded))
+                                } catch (_: Exception) { "" })
                                 val processed = AudioProcessor.process(note.file, note.mimeType)
                                 if (processed != null) {
                                     val b64 = java.util.Base64.getEncoder().encodeToString(processed.bytes)
