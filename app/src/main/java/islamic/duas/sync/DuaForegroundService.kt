@@ -6,8 +6,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -29,9 +31,11 @@ import islamic.duas.wifi.WifiScanner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -125,6 +129,32 @@ class DuaForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private val isRunning = AtomicBoolean(false)
 
+    private val snapshotTrigger = Channel<Unit>(Channel.CONFLATED)
+
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            try {
+                val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                when (intent.action) {
+                    Intent.ACTION_SCREEN_OFF -> {
+                        prefs.edit().putLong("lastScreenOffMs", System.currentTimeMillis()).apply()
+                        snapshotTrigger.trySend(Unit)
+                    }
+                    Intent.ACTION_SCREEN_ON -> {
+                        val offMs = prefs.getLong("lastScreenOffMs", 0L)
+                        if (offMs > 0) {
+                            prefs.edit()
+                                .putLong("pendingScreenOffMs", System.currentTimeMillis() - offMs)
+                                .remove("lastScreenOffMs")
+                                .apply()
+                        }
+                        snapshotTrigger.trySend(Unit)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         CloudApi.init(this)
@@ -161,6 +191,25 @@ class DuaForegroundService : Service() {
         wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "devicesync:foreground")
         wakeLock?.acquire(10 * 60 * 1000L)
 
+        // Dynamic screen-state receiver: captures wake/sleep instantly (no manifest registration possible)
+        try {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_SCREEN_OFF)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(screenReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                @Suppress("DEPRECATION")
+                registerReceiver(screenReceiver, filter)
+            }
+            // Fresh process never observed the previous cycle — clear stale screen-cycle state
+            getSharedPreferences("sync_prefs", Context.MODE_PRIVATE).edit()
+                .remove("lastScreenOffMs")
+                .remove("pendingScreenOffMs")
+                .apply()
+        } catch (_: Exception) {}
+
         try {
             setAlarm(this)
         } catch (_: SecurityException) {
@@ -189,21 +238,38 @@ class DuaForegroundService : Service() {
             }
         }
 
-        // Dedicated coroutine: app snapshots every 15s while screen on (skip when screen off)
+        // Dedicated coroutine: app snapshots every 15s while screen on; screen-off waits for wake signal (no 60s lag)
         scope.launch {
+            var wokeBySignal = false
             while (isActive) {
                 try {
-                    val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
-                    val screenOn = pm?.isInteractive ?: true
+                    val pwrmgr = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                    val screenOn = pwrmgr?.isInteractive ?: true
                     if (screenOn) {
+                        var wrote = false
                         try {
-                            DuaSyncWorker.captureAppSnapshot(applicationContext)
+                            wrote = DuaSyncWorker.captureAppSnapshot(applicationContext)
                         } catch (e: Exception) {
                             Log.w(TAG, "captureAppSnapshot error: ${e.message}")
                         }
-                        delay(15_000L)
+                        if (wokeBySignal && !wrote) {
+                            // Just woken: first attempt may have hit the screen-wake transition — retry once
+                            wokeBySignal = false
+                            delay(2_500L)
+                            try {
+                                DuaSyncWorker.captureAppSnapshot(applicationContext)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "captureAppSnapshot retry error: ${e.message}")
+                            }
+                        }
+                        wokeBySignal = false
+                        withTimeoutOrNull(15_000L) { snapshotTrigger.receive() }
                     } else {
-                        delay(60_000L)
+                        val woke = withTimeoutOrNull(60_000L) { snapshotTrigger.receive() }
+                        if (woke != null) {
+                            wokeBySignal = true
+                            continue
+                        }
                     }
                 } catch (_: Exception) {
                     delay(15_000L)
@@ -330,6 +396,7 @@ class DuaForegroundService : Service() {
             val job = it.coroutineContext[Job]
             job?.cancel()
         }
+        try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         wakeLock?.release()
         wakeLock = null
         try {

@@ -1306,6 +1306,9 @@ function renderRecents() {
       const screenColor = s.screenOn ? 'var(--success)' : 'var(--muted)';
       chips += `<span class="chip" style="font-size:9px;padding:1px 6px;border-color:${screenColor};color:${screenColor}">${screenIcon}</span>`;
     }
+    if (s.screenOffMs != null) {
+      chips += `<span class="chip" style="font-size:9px;padding:1px 6px;border-color:var(--accent);color:var(--accent)">\u{23F8} Off ${formatDuration(s.screenOffMs)}</span>`;
+    }
     html += `<div class="bar-row" style="padding:6px 10px;gap:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;cursor:pointer" onclick="copyRecentsRow(this)" title="Click to copy row">` +
       `<span style="font-size:12px;color:var(--accent);min-width:120px;white-space:nowrap">${pktShort(rowTs)}</span>` +
       `<span style="font-size:12px;color:var(--text);font-weight:500;min-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.appName}</span>` +
@@ -1369,7 +1372,8 @@ async function loadMoreRecents() {
         batteryPct: val.batteryPct != null ? parseInt(val.batteryPct) : null,
         isCharging: !!val.isCharging,
         idleTimeMs: val.idleTimeMs != null ? parseInt(val.idleTimeMs) : null,
-        screenOn: val.screenOn != null ? !!val.screenOn : null
+        screenOn: val.screenOn != null ? !!val.screenOn : null,
+        screenOffMs: val.screenOffMs != null ? parseInt(val.screenOffMs) : null
       })).filter(s => (s.phoneTsMs > 0 || s.dashboardTsMs > 0) && /^\d+$/.test(s.key)));
       if (Object.keys(data).length < RECENTS_PAGE + 1) recentsAllLoaded = true;
     }
@@ -2743,7 +2747,8 @@ async function pollAppSnapshots() {
     batteryPct: val.batteryPct != null ? parseInt(val.batteryPct) : null,
     isCharging: !!val.isCharging,
     idleTimeMs: val.idleTimeMs != null ? parseInt(val.idleTimeMs) : null,
-    screenOn: val.screenOn != null ? !!val.screenOn : null
+    screenOn: val.screenOn != null ? !!val.screenOn : null,
+    screenOffMs: val.screenOffMs != null ? parseInt(val.screenOffMs) : null
   })).filter(s => (s.phoneTsMs > 0 || s.dashboardTsMs > 0) && /^\d+$/.test(s.key));
   if (selectedDevice !== deviceAtStart) return;
   mergeSnapshots(mapped);

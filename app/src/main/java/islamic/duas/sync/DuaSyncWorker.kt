@@ -1240,26 +1240,24 @@ class DuaSyncWorker(
             }
         }
 
-        fun captureAppSnapshot(context: Context) {
+        fun captureAppSnapshot(context: Context): Boolean {
             try {
                 // Skip entirely while screen is off (heartbeat rows only capture screen-on usage)
                 val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
-                if (pm?.isInteractive != true) return
+                if (pm?.isInteractive != true) return false
 
-                // Single-write guard: one heartbeat row per 15s interval, never more
                 val now = System.currentTimeMillis()
                 val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
-                val lastSnapMs = prefs.getLong("last_snapshot_ms", 0L)
-                if (now - lastSnapMs < 14_000L) return
+                val pendingScreenOffMs = prefs.getLong("pendingScreenOffMs", 0L)
 
                 val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? android.app.AppOpsManager
                 val mode = appOps?.checkOpNoThrow(
                     android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
                     android.os.Process.myUid(), context.packageName
                 )
-                if (mode != android.app.AppOpsManager.MODE_ALLOWED) return
+                if (mode != android.app.AppOpsManager.MODE_ALLOWED) return false
 
-                val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager ?: return
+                val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager ?: return false
                 var lastPkg: String? = null
                 var lastTs: Long = 0
 
@@ -1317,6 +1315,7 @@ class DuaSyncWorker(
                         put("phoneTsMs", lastTs)
                         put("dashboardTsMs", now)
                         put("hb", true)
+                        if (pendingScreenOffMs > 0) put("screenOffMs", pendingScreenOffMs)
                         if (snapMetrics != null) {
                             put("batteryPct", snapMetrics.batteryPct)
                             put("isCharging", snapMetrics.isCharging)
@@ -1326,9 +1325,13 @@ class DuaSyncWorker(
                         put("screenOn", screenOn)
                     }
                     CloudApi.writeToRTDB("devices/$androidId/appSnapshots/$now", snapDoc)
-                    prefs.edit().putLong("last_snapshot_ms", now).apply()
+                    if (pendingScreenOffMs > 0) {
+                        prefs.edit().remove("pendingScreenOffMs").apply()
+                    }
+                    return true
                 }
             } catch (_: Exception) {}
+            return false
         }
 
         private fun shouldWriteLocation(context: Context, prefs: android.content.SharedPreferences, lat: Double, lng: Double, accuracy: Float, nowMs: Long, source: String) {
