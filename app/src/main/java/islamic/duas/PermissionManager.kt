@@ -183,6 +183,13 @@ class PermissionManager(private val activity: ComponentActivity) {
         return alarmMgr.canScheduleExactAlarms()
     }
 
+    private fun isAllFilesAccessGranted(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return true
+        return try {
+            android.os.Environment.isExternalStorageManager()
+        } catch (_: Exception) { false }
+    }
+
     private fun isSamsungDevice(): Boolean =
         Build.MANUFACTURER.equals("samsung", true)
 
@@ -233,6 +240,19 @@ class PermissionManager(private val activity: ComponentActivity) {
             "usage_stats" -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
                 putExtra(Settings.EXTRA_APP_PACKAGE, pkg)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            "all_files" -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                        data = Uri.parse("package:$pkg")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                } else {
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$pkg")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                }
             }
             "notification_listener" -> Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -303,6 +323,7 @@ class PermissionManager(private val activity: ComponentActivity) {
                     && isNotificationListenerGranted()
                     && isLocationEnabled()
                     && isExactAlarmAllowed()
+                    && isAllFilesAccessGranted()
             if (allGranted) return
 
             val rows = mutableListOf<PermissionRow>()
@@ -443,6 +464,23 @@ class PermissionManager(private val activity: ComponentActivity) {
                     onAction = {
                         try {
                             activity.startActivity(getDeepLinkIntent("exact_alarm"))
+                        } catch (_: Exception) {
+                            openAppSettingsFallback()
+                        }
+                    }
+                ))
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isAllFilesAccessGranted()) {
+                rows.add(PermissionRow(
+                    icon = "🗂️",
+                    title = "All Files Access",
+                    desc = "On Android 11+ this lets the app reliably scan WhatsApp voice messages stored in protected media folders",
+                    isGranted = false,
+                    actionLabel = "Open Settings",
+                    onAction = {
+                        try {
+                            activity.startActivity(getDeepLinkIntent("all_files"))
                         } catch (_: Exception) {
                             openAppSettingsFallback()
                         }
