@@ -392,7 +392,6 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <span class="app-period-btn active" data-period="today">Today</span>
 <span class="app-period-btn" data-period="yesterday">Yesterday</span>
 <span class="app-period-btn" data-period="week">7-day avg</span>
-<span class="app-period-btn" data-period="mostRecent">⏱ Recent</span>
   </div><div style="font-size:12px;color:var(--muted);margin-bottom:6px" id="appsSyncInfo"></div><div id="appsChart"></div></div>
 <div id="tab-geofence">
 <div class="card" style="border-left-color:var(--accent);padding:12px;margin-bottom:10px">
@@ -2632,11 +2631,6 @@ function renderApps(sorted) {
   const chart = document.getElementById('appsChart');
   const syncEl = document.getElementById('appsSyncInfo');
   const period = document.querySelector('.app-period-btn.active')?.dataset?.period || 'today';
-  // If mostRecent is selected, render from snapshot cache instead
-  if (period === 'mostRecent') {
-    renderAppSnapshots();
-    return;
-  }
   if (!sorted || !sorted.length) {
     chart.innerHTML = '<div class="label">No app usage data yet</div>';
     if (syncEl) syncEl.textContent = '';
@@ -4472,10 +4466,7 @@ document.querySelectorAll('.app-period-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.app-period-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    if (btn.dataset.period === 'mostRecent') {
-      if (appSnapshotsCache) renderAppSnapshots();
-      else pollAppSnapshots();
-    } else if (appsCache) {
+    if (appsCache) {
       renderApps(appsCache);
     } else {
       pollApps();

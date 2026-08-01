@@ -1185,6 +1185,8 @@
             <TextView android:id="@+id/forbiddenIstiwa" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="☀️ زوال — مکروہ وقت" android:textSize="12sp" android:textColor="#94A3B8" android:fontFamily="sans-serif" android:visibility="gone" />
             <TextView android:id="@+id/forbiddenSunset" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="🌇 غروب — مکروہ وقت" android:textSize="12sp" android:textColor="#94A3B8" android:fontFamily="sans-serif" android:visibility="gone" />
             <TextView android:id="@+id/goldenHourBanner" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="" android:textSize="13sp" android:textColor="#10B981" android:gravity="center" android:fontFamily="sans-serif" android:visibility="gone" />
+            <TextView android:id="@+id/prayerAdjustHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="👆 کسی بھی وقت پر تھپکائیں — منٹوں کے ساتھ ایڈجسٹ کریں" android:textSize="11sp" android:textColor="#8B7355" android:gravity="center" android:fontFamily="sans-serif" />
+            <TextView android:id="@+id/prayerAdjustBtn" android:layout_width="match_parent" android:layout_height="36dp" android:layout_marginTop="4dp" android:text="✏️ اوقات ایڈجسٹ کریں" android:textSize="14sp" android:textColor="#D4AF37" android:textStyle="bold" android:gravity="center" android:clickable="true" android:focusable="true" android:background="?attr/selectableItemBackground" android:fontFamily="sans-serif" />
         </LinearLayout>
 
         <!-- Daily Tafsir & Hadith -->

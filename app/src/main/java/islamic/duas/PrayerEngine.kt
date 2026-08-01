@@ -46,6 +46,8 @@ class PrayerEngine(private val context: Context) {
         // Process-level cache so ALL PrayerEngine instances share the same computed result.
         @Volatile
         private var cachedTimes: PrayerTimes? = null
+        @Volatile
+        private var cachedDateKey: String? = null
         private val timesLock = Any()
         @Volatile
         private var staticScheduleJson: JSONObject? = null
@@ -53,7 +55,7 @@ class PrayerEngine(private val context: Context) {
     }
 
     fun invalidateTimesCache() {
-        synchronized(timesLock) { cachedTimes = null; }
+        synchronized(timesLock) { cachedTimes = null; cachedDateKey = null; }
     }
 
     private fun loadSchedule(): JSONObject? {
@@ -84,6 +86,7 @@ class PrayerEngine(private val context: Context) {
             .putFloat(KEY_LAT, lat.toFloat())
             .putFloat(KEY_LNG, lng.toFloat())
             .apply()
+        invalidateTimesCache()
     }
 
     fun getLatitude(): Double = prefs.getFloat(KEY_LAT, 32.06594f).toDouble()
@@ -127,6 +130,7 @@ class PrayerEngine(private val context: Context) {
 
     fun setPrayerOffset(prayerKey: String, minutes: Int) {
         prefs.edit().putInt("${KEY_PREFIX_OFFSET}$prayerKey", minutes).apply()
+        invalidateTimesCache()
     }
 
     // --- Active Prayer Detection ---
@@ -174,12 +178,14 @@ class PrayerEngine(private val context: Context) {
     }
 
     fun calculatePrayerTimes(date: Calendar = Calendar.getInstance(), method: AsrMethod = AsrMethod.SHAFII): PrayerTimes {
-        // Return cached result if available (avoids repeated file I/O + parsing + math).
-        cachedTimes?.let { return it }
+        // Return cached result if available and for the same date (avoids repeated file I/O + parsing + math).
+        val dateKey = jsonDateFormat.format(date.time)
+        cachedTimes?.let { if (cachedDateKey == dateKey) return it }
         synchronized(timesLock) {
-            cachedTimes?.let { return it }
+            cachedTimes?.let { if (cachedDateKey == dateKey) return it }
             val computed = computePrayerTimes(date, method)
             cachedTimes = computed
+            cachedDateKey = dateKey
             return computed
         }
     }

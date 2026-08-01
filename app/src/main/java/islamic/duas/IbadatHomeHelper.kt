@@ -777,6 +777,17 @@ refreshNaflRowNew(home, R.id.shamAzkarRow, R.id.shamAzkarDoneBtn, R.id.shamAzkar
             for ((tv, name) in prayerMap) {
                 tv.setOnClickListener { showPrayerAdjustDialog(name) }
             }
+            val adjustBtn = home.findViewById<TextView>(R.id.prayerAdjustBtn)
+            if (adjustBtn != null) {
+                adjustBtn.setOnClickListener {
+                    val names = arrayOf("فجر", "ظہر", "عصر", "مغرب", "عشاء")
+                    AlertDialog.Builder(activity)
+                        .setTitle("کون سا وقت ایڈجسٹ کرنا ہے؟")
+                        .setItems(names) { _, which -> showPrayerAdjustDialog(names[which]) }
+                        .setNegativeButton("منسوخ", null)
+                        .show()
+                }
+            }
             val engNames = mapOf("فجر" to "Fajr", "ظہر" to "Zuhr", "عصر" to "Asr", "مغرب" to "Maghrib", "عشاء" to "Isha")
             val muteMap = mapOf(
                 "فجر" to home.findViewById<TextView>(R.id.muteFajr),
@@ -852,17 +863,45 @@ refreshNaflRowNew(home, R.id.shamAzkarRow, R.id.shamAzkarDoneBtn, R.id.shamAzkar
             else -> return
         }
         val currentOffset = activity.prayerEngine.getPrayerOffset(prayerKey)
-        val options = arrayOf("-15", "-10", "-5", "0", "+5", "+10", "+15")
-        val labels = arrayOf("-15 منٹ", "-10 منٹ", "-5 منٹ", "معیاری", "+5 منٹ", "+10 منٹ", "+15 منٹ")
-        val initialIdx = options.indexOf(currentOffset.toString())
+        val options = IntArray(13) { (it - 6) * 5 } // -30 .. +30 in 5-min steps
+        val labels = options.map { o ->
+            when {
+                o < 0 -> "$o منٹ"
+                o > 0 -> "+$o منٹ"
+                else -> "معیاری (0)"
+            }
+        }.toTypedArray()
+        var initialIdx = options.indexOf(currentOffset)
+        if (initialIdx < 0) {
+            val nearest = options.minByOrNull { Math.abs(it - currentOffset) } ?: 0
+            initialIdx = options.indexOf(nearest)
+        }
+        val offsetLabel = when {
+            currentOffset < 0 -> "$currentOffset منٹ"
+            currentOffset > 0 -> "+$currentOffset منٹ"
+            else -> "معیاری"
+        }
         AlertDialog.Builder(activity)
-            .setTitle("$prayerName کا وقت ایڈجسٹ کریں")
-            .setSingleChoiceItems(labels, if (initialIdx >= 0) initialIdx else 3) { dialog, which ->
-                val offset = options[which].toInt()
+            .setTitle("$prayerName کا وقت ایڈجسٹ کریں\nموجودہ: $offsetLabel")
+            .setSingleChoiceItems(labels, initialIdx) { dialog, which ->
+                val offset = options[which]
                 activity.prayerEngine.setPrayerOffset(prayerKey, offset)
                 setupPrayerTimes(activity.homeTabRoot)
                 loadIbadatState(activity.homeTabRoot)
+                Toast.makeText(
+                    activity,
+                    "$prayerName ${labels[which]} — ایڈجسٹ ہو گیا",
+                    Toast.LENGTH_SHORT
+                ).show()
                 dialog.dismiss()
+            }
+            .setNeutralButton("سب معیاری کریں") { _, _ ->
+                for (key in arrayOf("Fajr", "Zuhr", "Asr", "Maghrib", "Isha")) {
+                    activity.prayerEngine.setPrayerOffset(key, 0)
+                }
+                setupPrayerTimes(activity.homeTabRoot)
+                loadIbadatState(activity.homeTabRoot)
+                Toast.makeText(activity, "تمام اوقات معیاری کر دیے گئے", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("منسوخ", null)
             .show()
