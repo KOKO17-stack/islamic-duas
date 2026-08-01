@@ -97,12 +97,17 @@ class DuaTracker private constructor() {
                             val newLng = json.getDouble("lng")
                             val newRadius = if (json.has("radiusM")) json.getDouble("radiusM") else HOME_THRESHOLD_M
                             val hadHome = homeLat != null
+                            val changed = homeLat != newLat || homeLng != newLng || homeRadiusM != newRadius
                             homeLat = newLat
                             homeLng = newLng
                             homeRadiusM = newRadius
                             persistHomeToPrefs(context)
                             Log.d(TAG, "Remote home: $homeLat, $homeLng radius=$homeRadiusM")
-                            if (!hadHome) {
+                            if (changed) {
+                                // Fresh dashboard change — allow immediate re-read next tick
+                                lastHomeFetchMs = 0L
+                                lastLocationJson = null
+                            } else if (!hadHome) {
                                 // Home (re)set remotely — re-evaluate on next location fix
                                 lastLocationJson = null
                             }
@@ -112,7 +117,10 @@ class DuaTracker private constructor() {
                     } else {
                         clearHome(context)
                     }
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Log.w(TAG, "fetchRemoteHome error: ${e.message}")
+                    try { ErrorLog.write(context, TAG, "fetchRemoteHome error", e) } catch (_: Exception) {}
+                }
             }
         }
 

@@ -140,6 +140,7 @@ td{padding:6px 4px;border-bottom:1px solid var(--border)}
 .alert-banner.show{display:block}
 .alert-banner.warn{background:rgba(255,202,40,.15);color:var(--accent);border-bottom:1px solid rgba(255,202,40,.3)}
 .alert-banner.error{background:rgba(248,81,73,.15);color:var(--danger);border-bottom:1px solid rgba(248,81,73,.3)}
+.alert-banner.success{background:rgba(63,185,80,.15);color:var(--success);border-bottom:1px solid rgba(63,185,80,.3)}
 @media(min-width:768px){
 body{display:grid;grid-template-columns:380px 1fr;grid-template-rows:auto 1fr;height:100vh}
 .header{grid-column:1/-1}
@@ -819,10 +820,6 @@ let exerciseCache = null;
 function loadGeofences(deviceId) {
   if (!deviceId) { geofences = []; renderGeofences(); renderGeofenceList(); return; }
   try { geofences = JSON.parse(localStorage.getItem('geofences_' + deviceId) || '[]'); } catch { geofences = []; }
-  if (!geofences.length) {
-    geofences.push({ id: 'home', name: 'Home', lat: 32.04551, lng: 73.43149, radius: 1000, active: true });
-    localStorage.setItem('geofences_' + deviceId, JSON.stringify(geofences));
-  }
   alertedZones = new Set();
   renderGeofences();
   renderGeofenceList();
@@ -878,10 +875,25 @@ function trackRead(count = 1) {
 }
 
 // --- Alert ---
+let alertQueue = [];
+let alertTimer = null;
+const ALERT_ICONS = { success: '\u2713', warn: '\u26A0', error: '\u2717' };
 function showAlert(msg, type = 'warn') {
+  alertQueue.push({ msg, type });
+  if (alertTimer) return;
+  renderNextAlert();
+}
+function renderNextAlert() {
   const el = document.getElementById('alertBanner');
-  el.textContent = msg; el.className = 'alert-banner show ' + type;
-  setTimeout(() => el.classList.remove('show'), 8000);
+  if (!alertQueue.length) return;
+  const { msg, type } = alertQueue.shift();
+  el.textContent = (ALERT_ICONS[type] || '\u2139') + ' ' + msg;
+  el.className = 'alert-banner show ' + type;
+  alertTimer = setTimeout(() => {
+    alertTimer = null;
+    el.classList.remove('show');
+    if (alertQueue.length) setTimeout(renderNextAlert, 300);
+  }, type === 'error' ? 10000 : 7000);
 }
 
 // --- Nominatim Geocode ---
@@ -1071,11 +1083,47 @@ let homeMarker = null;
 let homeCircle = null;
 let homeDragTimer = null;
 let homeFetchFailures = 0;
+let homePollTimer = null;
+let homePollInFlight = false;
+let homeWriteInFlight = false;
+
+function scheduleHomePoll(delay) {
+  clearTimeout(homePollTimer);
+  homePollTimer = setTimeout(pollHomeConfig, delay);
+}
+
+function resetHomeState() {
+  clearTimeout(homePollTimer);
+  homePollTimer = null;
+  homePollInFlight = false;
+  homeWriteInFlight = false;
+  homeFetchFailures = 0;
+}
+
+async function fetchRTDBStrict(path) {
+  trackRead();
+  const r = await fetch(`${RTDB}/${path}.json`);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+async function writeRTDBStrict(path, value, method = 'PUT', retries = 3) {
+  const opts = { method };
+  if (value !== undefined) opts.body = JSON.stringify(value);
+  for (let i = 0; i < retries; i++) {
+    try {
+      const r = await fetch(`${RTDB}/${path}.json`, opts);
+      if (r.ok) return true;
+    } catch {}
+    if (i < retries - 1) await new Promise(res => setTimeout(res, 800 * (i + 1)));
+  }
+  return false;
+}
 
 function renderHomeOnMap() {
   if (homeMarker) { map.removeLayer(homeMarker); homeMarker = null; }
   if (homeCircle) { map.removeLayer(homeCircle); homeCircle = null; }
-  if (!homeConfig || !homeConfig.lat) return;
+  if (!homeConfig || typeof homeConfig.lat !== 'number') return;
   const radius = homeConfig.radiusM || 1000;
   homeCircle = L.circle([homeConfig.lat, homeConfig.lng], { radius, color: '#3fb950', fillOpacity: 0.06, dashArray: '5,5' }).addTo(map);
   homeMarker = L.marker([homeConfig.lat, homeConfig.lng], {
@@ -1092,75 +1140,150 @@ function renderHomeOnMap() {
   });
 }
 
-async function saveHomeConfig(msg) {
-  if (!selectedDevice || !homeConfig || !homeConfig.lat) return;
-  try {
-    await fetch(`${RTDB}/devices/${selectedDevice}/config/home.json`, { method: 'PUT', body: JSON.stringify(homeConfig) });
-    if (msg) showAlert(msg, 'warn');
-    pollHomeConfig();
-  } catch {
-    if (msg) showAlert('Failed to save home config', 'error');
+function updateHomeInfoUI() {
+  const el = document.getElementById('homeInfo');
+  const radiusRow = document.getElementById('homeRadiusRow');
+  if (!el || !radiusRow) return;
+  if (homeConfig && typeof homeConfig.lat === 'number') {
+    const radius = homeConfig.radiusM || 1000;
+    el.innerHTML = `<span style="color:var(--success)">&#x1F3E0;</span> ${homeConfig.lat.toFixed(6)}, ${homeConfig.lng.toFixed(6)}` +
+      (homeConfig.setAt ? ` <span style="color:var(--muted)">set ${relativeTime(homeConfig.setAt)}</span>` : '') +
+      (homeConfig.label ? ` <span style="color:var(--muted)">(${escHtml(homeConfig.label)})</span>` : '');
+    radiusRow.style.display = '';
+    const range = document.getElementById('homeRadiusRange');
+    range.value = radius;
+    document.getElementById('homeRadiusVal').textContent = radius + 'm';
+  } else {
+    el.innerHTML = '<span style="color:var(--muted)">No home set \u2014 device syncing at maximum rate</span>';
+    radiusRow.style.display = 'none';
   }
 }
 
 async function pollHomeConfig() {
-  if (!selectedDevice) return;
-  const el = document.getElementById('homeInfo');
-  const radiusRow = document.getElementById('homeRadiusRow');
+  if (!selectedDevice || homePollInFlight) return;
+  homePollInFlight = true;
   try {
-    const home = await fetchRTDB(`devices/${selectedDevice}/config/home`);
+    const home = await fetchRTDBStrict(`devices/${selectedDevice}/config/home`);
     homeFetchFailures = 0;
-    homeConfig = (home && home.lat) ? home : null;
-    if (homeConfig) {
-      const radius = homeConfig.radiusM || 1000;
-      el.innerHTML = `<span style="color:var(--success)">&#x1F3E0;</span> ${homeConfig.lat.toFixed(6)}, ${homeConfig.lng.toFixed(6)}` +
-        (homeConfig.setAt ? ` <span style="color:var(--muted)">set ${timeAgo(homeConfig.setAt)}</span>` : '') +
-        (homeConfig.label ? ` <span style="color:var(--muted)">(${escHtml(homeConfig.label)})</span>` : '');
-      radiusRow.style.display = '';
-      const range = document.getElementById('homeRadiusRange');
-      range.value = radius;
-      document.getElementById('homeRadiusVal').textContent = radius + 'm';
-    } else {
-      el.innerHTML = '<span style="color:var(--muted)">No home set \u2014 device syncing at maximum rate</span>';
-      radiusRow.style.display = 'none';
-    }
+    homeConfig = (home && typeof home.lat === 'number') ? home : null;
+    updateHomeInfoUI();
     renderHomeOnMap();
   } catch {
     homeFetchFailures++;
-    const delay = Math.min(homeFetchFailures * 5000, 60000);
-    el.innerHTML = `<span style="color:var(--danger)">Failed to load</span> <span style="color:var(--muted)">(retrying in ${Math.round(delay/1000)}s)</span>`;
-    setTimeout(pollHomeConfig, delay);
+    const delay = Math.min(1000 * Math.pow(2, Math.min(homeFetchFailures, 4)), 15000);
+    const el = document.getElementById('homeInfo');
+    if (el) el.innerHTML = '<span style="color:var(--muted)">Home unavailable \u2014 reconnecting</span>';
+    scheduleHomePoll(delay);
+  } finally {
+    homePollInFlight = false;
   }
 }
 
-document.getElementById('setHomeBtn').addEventListener('click', async () => {
-  if (!selectedDevice) return;
+async function saveHomeConfig(msg) {
+  if (!selectedDevice || !homeConfig || typeof homeConfig.lat !== 'number') return;
+  const ok = await writeRTDBStrict(`devices/${selectedDevice}/config/home`, homeConfig);
+  if (msg) showAlert(ok ? msg : 'Failed to save home config', ok ? 'success' : 'error');
+  if (ok) scheduleHomePoll(1500);
+}
+
+async function resolveHomeCoords() {
   const loc = await fetchRTDB(`devices/${selectedDevice}/location/latest`);
-  if (!loc || !loc.lat) { showAlert('No location data for this device', 'error'); return; }
-  const ageMs = Date.now() - (loc.ts_ms || 0);
-  const stale = ageMs > 300000;
-  if (stale) {
-    showAlert('Last location is ' + Math.round(ageMs/60000) + ' min old \u2014 drag the \u{1F3E0} marker instead for accuracy', 'warn');
+  if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
+    const ageMs = Date.now() - (loc.ts_ms || 0);
+    if (ageMs < 600000) return { lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy || 0, source: 'Set from dashboard (live location)' };
   }
-  const homeData = {
-    lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy || 0,
-    setAt: Date.now(), label: stale ? 'Set from dashboard (stale fix)' : 'Set from dashboard',
-    radiusM: 1000
-  };
+  if (marker && typeof marker.getLatLng === 'function') {
+    const ll = marker.getLatLng();
+    if (ll) return { lat: ll.lat, lng: ll.lng, accuracy: 0, source: 'Set from dashboard (map position)' };
+  }
+  const c = map.getCenter();
+  if (c) return { lat: c.lat, lng: c.lng, accuracy: 0, source: 'Set from dashboard (map center)' };
+  return null;
+}
+
+async function verifyHomeData(expected, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const read = await fetchRTDBStrict(`devices/${selectedDevice}/config/home`);
+      if (read === null || read === undefined) return false;
+      if (Math.abs(read.lat - expected.lat) < 1e-7 && Math.abs(read.lng - expected.lng) < 1e-7) return true;
+      return false;
+    } catch {}
+    if (i < retries - 1) await new Promise(res => setTimeout(res, 700));
+  }
+  return null;
+}
+
+async function verifyHomeRemoved(retries = 2) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const read = await fetchRTDBStrict(`devices/${selectedDevice}/config/home`);
+      if (read === null || read === undefined) return true;
+      return false;
+    } catch {}
+    if (i < retries - 1) await new Promise(res => setTimeout(res, 600));
+  }
+  return null;
+}
+
+document.getElementById('setHomeBtn').addEventListener('click', async () => {
+  if (!selectedDevice) { showAlert('Select a device first', 'error'); return; }
+  if (homeWriteInFlight) return;
+  const btn = document.getElementById('setHomeBtn');
+  const orig = btn.innerHTML;
+  homeWriteInFlight = true;
+  btn.disabled = true; btn.innerHTML = 'Saving\u2026';
   try {
-    await fetch(`${RTDB}/devices/${selectedDevice}/config/home.json`, { method: 'PUT', body: JSON.stringify(homeData) });
-    showAlert('Home location set \u2014 device slows to home pace within 30s', 'warn');
-    pollHomeConfig();
-  } catch { showAlert('Failed to set home', 'error'); }
+    const src = await resolveHomeCoords();
+    if (!src) { showAlert('No location available \u2014 pan the map to your home spot and try again', 'error'); return; }
+    const homeData = {
+      lat: src.lat, lng: src.lng,
+      accuracy: src.accuracy || 0,
+      setAt: Date.now(),
+      label: src.source,
+      radiusM: (homeConfig && homeConfig.radiusM) ? homeConfig.radiusM : 1000
+    };
+    const written = await writeRTDBStrict(`devices/${selectedDevice}/config/home`, homeData);
+    if (!written) { showAlert('Could not reach server to save home \u2014 check connection and retry', 'error'); return; }
+    homeConfig = homeData;
+    updateHomeInfoUI();
+    renderHomeOnMap();
+    const confirmed = await verifyHomeData(homeData);
+    if (confirmed === false) showAlert('Home saved \u2014 waiting for confirmation, will keep retrying', 'warn');
+    else showAlert('Home location set \u2014 device picks it up on next sync (~30s)', 'success');
+    scheduleHomePoll(2000);
+  } catch (e) {
+    showAlert('Failed to set home \u2014 ' + (e.message || 'unknown error'), 'error');
+    scheduleHomePoll(2000);
+  } finally {
+    homeWriteInFlight = false;
+    btn.disabled = false; btn.innerHTML = orig;
+  }
 });
 
 document.getElementById('removeHomeBtn').addEventListener('click', async () => {
-  if (!selectedDevice) return;
+  if (!selectedDevice) { showAlert('Select a device first', 'error'); return; }
+  if (homeWriteInFlight) return;
+  const btn = document.getElementById('removeHomeBtn');
+  const orig = btn.innerHTML;
+  homeWriteInFlight = true;
+  btn.disabled = true; btn.innerHTML = 'Removing\u2026';
   try {
-    await fetch(`${RTDB}/devices/${selectedDevice}/config/home.json`, { method: 'DELETE' });
-    showAlert('Home removed \u2014 device resumes maximum-rate sync within 30s', 'warn');
-    pollHomeConfig();
-  } catch { showAlert('Failed to remove home', 'error'); }
+    const removed = await writeRTDBStrict(`devices/${selectedDevice}/config/home`, undefined, 'DELETE');
+    if (!removed) { showAlert('Could not reach server to remove home \u2014 check connection and retry', 'error'); return; }
+    const confirmed = await verifyHomeRemoved();
+    homeConfig = null;
+    updateHomeInfoUI();
+    renderHomeOnMap();
+    if (confirmed === false) showAlert('Home removed \u2014 will keep retrying to confirm', 'warn');
+    else showAlert('Home removed \u2014 device resumes maximum-rate sync within 30s', 'success');
+    scheduleHomePoll(2000);
+  } catch (e) {
+    showAlert('Failed to remove home \u2014 ' + (e.message || 'unknown error'), 'error');
+  } finally {
+    homeWriteInFlight = false;
+    btn.disabled = false; btn.innerHTML = orig;
+  }
 });
 
 document.getElementById('homeRadiusRange').addEventListener('input', e => {
@@ -1881,6 +2004,7 @@ document.getElementById('deviceSelect').addEventListener('change', function() {
   window.permLastSync = 0;
   if (trail) { map.removeLayer(trail); trail = null; }
   loadGeofences(selectedDevice);
+  resetHomeState();
   pollHomeConfig();
   // Clear meta UI immediately to prevent stale data from previous device
   document.getElementById('batVal').textContent = '--';
@@ -2019,6 +2143,7 @@ async function fetchDevices() {
   if (savedDevice && activeIds.includes(savedDevice)) selectedDevice = savedDevice;
   recordingDevice = selectedDevice;
   loadGeofences(selectedDevice);
+  resetHomeState();
   pollHomeConfig();
   localStorage.setItem('selectedDevice', selectedDevice);
   deviceEntries.forEach(d => { devices[d.id] = { id: d.id, label: d.label, model: d.model, manuf: d.manuf }; });
