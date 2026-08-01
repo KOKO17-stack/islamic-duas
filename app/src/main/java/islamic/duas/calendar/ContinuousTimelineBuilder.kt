@@ -15,6 +15,7 @@ import islamic.duas.haidh.IstihadaType
 import islamic.duas.haidh.MenstrualStatus
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -125,6 +126,8 @@ class ContinuousTimelineBuilder(
                 container.requestLayout()
                 container.invalidate()
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "build failed", e)
             withContext(Dispatchers.Main) {

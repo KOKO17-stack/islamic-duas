@@ -9,6 +9,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import islamic.duas.haidh.HealthEngine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -143,6 +144,8 @@ class ExerciseTimelineBuilder(
                 container.requestLayout()
                 container.invalidate()
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Toast.makeText(context, "کیلنڈر بنانے میں مسئلہ: ${e.message}", Toast.LENGTH_LONG).show()
         }
