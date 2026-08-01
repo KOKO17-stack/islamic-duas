@@ -91,8 +91,8 @@ class IbadatHomeHelper(private val activity: MainActivity) {
         activity.binding.menuToggle.setOnClickListener {
             activity.findViewById<androidx.drawerlayout.widget.DrawerLayout>(R.id.drawerLayout).openDrawer(GravityCompat.START)
         }
-        setupIbadatDashboardWithCache(home, cachedTimes)
         if (cachedTimes != null) setupPrayerTimesFromCache(home, cachedTimes) else setupPrayerTimes(home)
+        setupIbadatDashboardWithCache(home, cachedTimes)
         setupDailyTafsir(home)
         setupDuas(home)
         setupQuraAndazi(home)
