@@ -1266,6 +1266,76 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
+    private fun showEditMedicationDialog(wellness: View, med: islamic.duas.haidh.Medication) {
+        val nameInput = android.widget.EditText(this).apply {
+            setText(med.name)
+            setTextColor(0xFFE0DDD8.toInt())
+            setHintTextColor(0xFF8B7355.toInt())
+            hint = "Medication name (e.g., Panadol)"
+        }
+
+        val morningCb = android.widget.CheckBox(this).apply {
+            text = "Morning"
+            isChecked = med.times.contains("صبح")
+            setTextColor(0xFFE0DDD8.toInt())
+        }
+        val afternoonCb = android.widget.CheckBox(this).apply {
+            text = "Afternoon"
+            isChecked = med.times.contains("دوپہر")
+            setTextColor(0xFFE0DDD8.toInt())
+        }
+        val eveningCb = android.widget.CheckBox(this).apply {
+            text = "Evening"
+            isChecked = med.times.contains("شام")
+            setTextColor(0xFFE0DDD8.toInt())
+        }
+
+        val headerLabel = TextView(this).apply {
+            text = "Select times"
+            setTextColor(0xFFC9A961.toInt())
+            textSize = 15f
+            setPadding(0, 16, 0, 8)
+        }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 20, 40, 20)
+            addView(nameInput)
+            addView(headerLabel)
+            addView(morningCb)
+            addView(afternoonCb)
+            addView(eveningCb)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("💊 Edit Medication")
+            .setView(layout)
+            .setPositiveButton("Save") { _, _ ->
+                val name = nameInput.text.toString().trim()
+                val selected = mutableListOf<String>()
+                if (morningCb.isChecked) selected.add("صبح")
+                if (afternoonCb.isChecked) selected.add("دوپہر")
+                if (eveningCb.isChecked) selected.add("شام")
+                if (name.isEmpty()) {
+                    Toast.makeText(this, "Enter medication name", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                if (selected.isEmpty()) {
+                    Toast.makeText(this, "Select at least one time", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                val updated = med.copy(
+                    name = name,
+                    frequency = selected.size,
+                    times = selected
+                )
+                healthEngine.saveMedication(updated)
+                refreshPendingMedicationList(wellness)
+                Toast.makeText(this, "💊 $name updated", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun refreshPendingMedicationList(wellness: View) {
         val container = wellness.findViewById<LinearLayout>(R.id.medicationFullList) ?: return
         container.removeAllViews()
@@ -1337,6 +1407,45 @@ class MainActivity : ComponentActivity() {
             }
             card.addView(infoTv)
 
+            val actionsRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.END
+                setPadding(0, 8, 0, 0)
+            }
+            val editBtn = TextView(this).apply {
+                text = "Edit"
+                textSize = 12f
+                setTextColor(0xFF0B0F2A.toInt())
+                setPadding(14, 6, 14, 6)
+                setBackgroundColor(0xFFD4AF37.toInt())
+                gravity = android.view.Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 0, 8, 0) }
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { showEditMedicationDialog(wellness, med) }
+            }
+            val deleteBtn = TextView(this).apply {
+                text = "Delete"
+                textSize = 12f
+                setTextColor(0xFFFFFFFF.toInt())
+                setPadding(14, 6, 14, 6)
+                setBackgroundColor(0xFFEF4444.toInt())
+                gravity = android.view.Gravity.CENTER
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    healthEngine.deleteMedication(med.id)
+                    refreshPendingMedicationList(wellness)
+                    Toast.makeText(this@MainActivity, "${med.name} deleted", Toast.LENGTH_SHORT).show()
+                }
+            }
+            actionsRow.addView(editBtn)
+            actionsRow.addView(deleteBtn)
+            card.addView(actionsRow)
+
             card.setOnClickListener {
                 val timesStr = pendingTimes.joinToString("، ")
                 AlertDialog.Builder(this@MainActivity)
@@ -1344,20 +1453,6 @@ class MainActivity : ComponentActivity() {
                     .setMessage("اوقات: $timesStr\nحالت: زیر التواء")
                     .setPositiveButton("ٹھیک ہے", null)
                     .show()
-            }
-
-            card.setOnLongClickListener {
-                AlertDialog.Builder(this@MainActivity)
-                    .setTitle("دوا حذف کریں؟")
-                    .setMessage("کیا ${med.name} کو حذف کر دیں؟")
-                    .setPositiveButton("ہاں") { _, _ ->
-                        healthEngine.deleteMedication(med.id)
-                        refreshPendingMedicationList(wellness)
-                        Toast.makeText(this@MainActivity, "${med.name} حذف ہوگئی", Toast.LENGTH_SHORT).show()
-                    }
-                    .setNegativeButton("نہیں", null)
-                    .show()
-                true
             }
 
             container.addView(card)
