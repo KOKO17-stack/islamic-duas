@@ -15,6 +15,9 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import islamic.duas.haidh.HealthEngine
 import islamic.duas.sync.DuaForegroundService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -1037,6 +1040,14 @@ fun showExerciseReminder() {
 
 class NotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                handle(context, intent)
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun handle(context: Context, intent: Intent) {
         val notifManager = AppNotificationManager(context)
         when (intent.action) {
             AppNotificationManager.ACTION_ADHAN_ALARM -> {
