@@ -3,6 +3,8 @@ package islamic.duas.quran
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
 import java.io.File
@@ -11,11 +13,12 @@ class QuranAudioManager(private val context: Context) {
 
     private var mediaPlayer: MediaPlayer? = null
     private var currentSurahNumber: Int = -1
-    private var currentReciter: String = RECITER_SUDAIS
+    private var currentReciter: String = RECITER_AFASY
     private var isPrepared = false
     private val handler = Handler(Looper.getMainLooper())
     private var progressCallback: ((Int, Int) -> Unit)? = null
     private var completionCallback: (() -> Unit)? = null
+    private var prepareTimeout: Runnable? = null
 
     companion object {
         const val RECITER_SUDAIS = "sudais"
@@ -38,7 +41,7 @@ class QuranAudioManager(private val context: Context) {
         )
     }
 
-    fun getReciterName(): String = reciters.find { it.id == currentReciter }?.name ?: "السدیس"
+    fun getReciterName(): String = reciters.find { it.id == currentReciter }?.name ?: "العفاسی"
 
     fun getReciterIndex(): Int {
         val idx = reciters.indexOfFirst { it.id == currentReciter }
@@ -74,7 +77,15 @@ class QuranAudioManager(private val context: Context) {
         completionCallback = onComplete
         isPrepared = false
 
-        val path = reciterPaths[currentReciter] ?: reciterPaths[RECITER_SUDAIS] ?: "abdurrahmaan_as_sudais/murattal"
+        if (!isOnline()) {
+            currentSurahNumber = -1
+            progressCallback = null
+            completionCallback = null
+            onError?.invoke("کوئی انٹرنیٹ نہیں ہے")
+            return
+        }
+
+        val path = reciterPaths[currentReciter] ?: reciterPaths[RECITER_AFASY] ?: "mishari_al_afasy/murattal"
         val url = "$AUDIO_BASE/$path/$surahNumber.mp3"
         try {
             mediaPlayer = MediaPlayer().apply {
@@ -83,6 +94,7 @@ class QuranAudioManager(private val context: Context) {
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .build())
                 setOnPreparedListener { mp ->
+                    cancelPrepareTimeout()
                     isPrepared = true
                     mp.start()
                     startProgressUpdates()
@@ -93,17 +105,43 @@ class QuranAudioManager(private val context: Context) {
                     cb?.invoke()
                 }
                 setOnErrorListener { _, what, extra ->
+                    cancelPrepareTimeout()
                     stop()
-                    onError?.invoke("MediaPlayer error: what=$what extra=$extra")
+                    onError?.invoke("آڈیو پلے کرنے میں مسئلہ (خطا: $what/$extra)")
                     true
                 }
                 setDataSource(url)
                 prepareAsync()
             }
+            startPrepareTimeout { onError?.invoke("انٹرنیٹ سست ہے یا آڈیو لوڈ نہیں ہو سکا") }
         } catch (e: Exception) {
             stop()
-            onError?.invoke("Failed to start playback: ${e.message}")
+            onError?.invoke("پلے شروع نہیں ہو سکا: ${e.message}")
         }
+    }
+
+    private fun startPrepareTimeout(onTimeout: () -> Unit) {
+        cancelPrepareTimeout()
+        val runnable = Runnable {
+            if (!isPrepared) {
+                stop()
+                onTimeout()
+            }
+        }
+        prepareTimeout = runnable
+        handler.postDelayed(runnable, 20000)
+    }
+
+    private fun cancelPrepareTimeout() {
+        prepareTimeout?.let { handler.removeCallbacks(it) }
+        prepareTimeout = null
+    }
+
+    fun isOnline(): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return true
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     fun pause() {
@@ -125,22 +163,26 @@ class QuranAudioManager(private val context: Context) {
     }
 
     fun stop() {
+        cancelPrepareTimeout()
         stopProgressUpdates()
-        mediaPlayer?.apply {
-            try {
-                if (isPlaying) stop()
-                reset()
-                release()
-            } catch (_: Exception) {}
-        }
+        val mp = mediaPlayer
         mediaPlayer = null
         isPrepared = false
         currentSurahNumber = -1
         progressCallback = null
         completionCallback = null
+        if (mp != null) {
+            Thread {
+                try { mp.stop() } catch (_: Exception) {}
+                try { mp.reset() } catch (_: Exception) {}
+                try { mp.release() } catch (_: Exception) {}
+            }.start()
+        }
     }
 
     fun isPlaying(): Boolean = mediaPlayer?.isPlaying == true
+
+    fun isStarting(): Boolean = mediaPlayer != null && !isPrepared && !mediaPlayer!!.isPlaying
 
     fun isPaused(): Boolean = mediaPlayer != null && !mediaPlayer!!.isPlaying && isPrepared
 

@@ -1,6 +1,7 @@
 package islamic.duas.quran
 
 import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -293,13 +294,12 @@ class SurahContentView(
         }
 
         audioPlayBtn.setOnClickListener {
-            if (audioManager.getCurrentSurah() == surah.number && audioManager.isPlaying()) {
-                audioManager.pause()
+            if (audioManager.getCurrentSurah() == surah.number && (audioManager.isPlaying() || audioManager.isStarting())) {
+                audioManager.stop()
                 audioPlayBtn.text = "▶ چلائیں"
-            } else if (audioManager.isPaused() && audioManager.getCurrentSurah() == surah.number) {
-                audioManager.resume()
-                audioPlayBtn.text = "⏸ روکیں"
+                audioProgress.text = "--:-- / --:--"
             } else {
+                audioPlayBtn.text = "⏺ شروع"
                 audioManager.playSurah(surah.number,
                     onProgress = { pos, dur ->
                         audioProgress.text = "${pos / 60000}:${String.format("%02d", (pos % 60000) / 1000)} / ${dur / 60000}:${String.format("%02d", (dur % 60000) / 1000)}"
@@ -309,12 +309,11 @@ class SurahContentView(
                         audioPlayBtn.text = "▶ چلائیں"
                         audioProgress.text = "--:-- / --:--"
                     },
-                    onError = {
+                    onError = { msg ->
                         audioPlayBtn.text = "▶ چلائیں"
-                        audioProgress.text = "خطا"
+                        audioProgress.text = msg
                     }
                 )
-                audioPlayBtn.text = "⏺ شروع"
             }
         }
 
@@ -326,9 +325,31 @@ class SurahContentView(
         tafsirText.text = surah.tafsirBrief
     }
 
+    private fun createColoredAdapter(labels: List<String>, selectedIndex: () -> Int): ArrayAdapter<String> {
+        return object : ArrayAdapter<String>(container.context, android.R.layout.simple_spinner_dropdown_item, labels) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val v = super.getView(position, convertView, parent)
+                if (v is TextView) v.setTextColor(0xFFD4AF37.toInt())
+                return v
+            }
+
+            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val v = super.getDropDownView(position, convertView, parent)
+                if (v is TextView) {
+                    val selected = position == selectedIndex()
+                    v.setBackgroundResource(if (selected) R.drawable.spinner_item_selected else R.drawable.spinner_item_unselected)
+                    v.setTextColor(if (selected) 0xFF0B0F2A.toInt() else 0xFFE8C547.toInt())
+                    v.setPadding(v.paddingLeft, v.paddingTop + 8, v.paddingRight, v.paddingBottom + 8)
+                }
+                return v
+            }
+        }
+    }
+
     private fun setupTafsirSpinner(spinner: Spinner, onSourceChanged: (TafsirSource) -> Unit) {
         val labels = TafsirSource.values().map { it.label }
-        spinner.adapter = ArrayAdapter(container.context, android.R.layout.simple_spinner_dropdown_item, labels)
+        spinner.adapter = createColoredAdapter(labels) { currentTafsirSource.ordinal }
+        spinner.setPopupBackgroundDrawable(ColorDrawable(0xFF0B0F2A.toInt()))
         spinner.setSelection(currentTafsirSource.ordinal)
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
@@ -346,7 +367,8 @@ class SurahContentView(
 
     private fun setupReciterSpinner(spinner: Spinner, label: TextView) {
         val names = QuranAudioManager.reciters.map { it.name }
-        spinner.adapter = ArrayAdapter(container.context, android.R.layout.simple_spinner_dropdown_item, names)
+        spinner.adapter = createColoredAdapter(names) { audioManager.getReciterIndex() }
+        spinner.setPopupBackgroundDrawable(ColorDrawable(0xFF0B0F2A.toInt()))
         spinner.setSelection(audioManager.getReciterIndex())
         label.text = "قاری: ${QuranAudioManager.reciters[audioManager.getReciterIndex()].name}"
 
