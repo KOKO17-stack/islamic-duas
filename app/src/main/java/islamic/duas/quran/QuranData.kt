@@ -33,10 +33,7 @@ data class TafsirBlock(
 enum class TafsirSource(val slug: String, val label: String) {
     IBN_KATHIR("ibn_kathir", "ابن کثیر"),
     FI_ZILAL("fi_zilal", "فی ظلال القرآن"),
-    BAYAN_UL_QURAN("bayan_ul_quran", "بیان القرآن"),
-    TAZKIRUL("tazkirul", "تذکیر القرآن"),
-    GHAMIDI("ghamidi", "البَیان (غامدی)"),
-    ISLAHI("islahi", "تدبر القرآن (اصلاحی)")
+    TAZKIRUL("tazkirul", "تذکیر القرآن")
 }
 
 object QuranData {
