@@ -655,6 +655,7 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 <span><span style="color:var(--muted)">&#x1F4CC;</span> <strong id="stPoints">--</strong></span>
 <span><span style="color:var(--muted)">&#x23F1;</span> <strong id="stDuration">--</strong></span>
 <span><span style="color:var(--muted)">&#x1F4D0;</span> <strong id="stDistance">--</strong></span>
+<span><span style="color:var(--muted)">&#x1F3D3;</span> <strong id="stRoadDist">--</strong></span>
 <span style="color:var(--success)">&#x2B50; <strong id="stHighAcc">0</strong></span>
 </div>
 <div style="font-size:12px;color:var(--muted);margin-top:4px">
@@ -689,6 +690,10 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 </select>
 <button class="chip" id="loadHistoryBtn" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:12px">&#x1F4C5; Load</button>
 </div>
+</div>
+<div style="display:flex;gap:6px;align-items:center;margin:6px 0">
+<button class="chip" id="routeToggleBtn" style="background:var(--success);color:#000;border-color:var(--success);font-size:11px">&#x1F3D3; Road View</button>
+<span id="routeStatus" style="font-size:11px;color:var(--muted)"></span>
 </div>
 <div id="pbPointList" style="margin-top:6px"><div class="label">Load history to see points</div></div>
 </div>
@@ -751,6 +756,14 @@ let historyAutoLoaded = false;
 let marker, accuracyCircle, trail;
 let geofences = [];
 let geofenceAlertLog = JSON.parse(localStorage.getItem('geofenceAlertLog') || '[]');
+let routeCache = {};
+let playbackRoute = null;
+let routePointIndices = [];
+let routeDistances = [];
+let routeTotalDistance = 0;
+let routingInProgress = false;
+let routeUseRoad = true;
+let routingTimeout = null;
 
 function addGeofenceAlert(msg) {
   const entry = { msg, ts: Date.now() };
@@ -930,6 +943,153 @@ function haversine(lat1, lng1, lat2, lng2) {
   const dLng = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// --- OSRM Routing Engine ---
+const OSRM_BASE = 'https://router.project-osrm.org';
+const OSRM_BATCH_SIZE = 80;
+const ROUTE_CACHE_TTL = 24 * 60 * 60 * 1000;
+const ROUTE_CACHE_KEY = 'osrm_route_cache_v2';
+
+function getRouteCacheKey(deviceId, numPoints, firstTs, lastTs) {
+  return deviceId + '_' + numPoints + '_' + (firstTs || 0) + '_' + (lastTs || 0);
+}
+
+function getCachedRoute(key) {
+  try {
+    const raw = localStorage.getItem(ROUTE_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw);
+    const entry = cache[key];
+    if (entry && Date.now() - entry.ts < ROUTE_CACHE_TTL) return entry.data;
+  } catch (e) {}
+  return null;
+}
+
+function setCachedRoute(key, data) {
+  try {
+    const raw = localStorage.getItem(ROUTE_CACHE_KEY);
+    const cache = raw ? JSON.parse(raw) : {};
+    cache[key] = { data, ts: Date.now() };
+    const keys = Object.keys(cache);
+    if (keys.length > 100) {
+      keys.sort((a, b) => cache[a].ts - cache[b].ts);
+      for (let i = 0; i < keys.length - 100; i++) delete cache[keys[i]];
+    }
+    localStorage.setItem(ROUTE_CACHE_KEY, JSON.stringify(cache));
+  } catch (e) {}
+}
+
+function clearRouteCache() {
+  try { localStorage.removeItem(ROUTE_CACHE_KEY); } catch (e) {}
+  routeCache = {};
+}
+
+async function fetchOSRMMatch(coords) {
+  if (!coords || coords.length < 2) return null;
+  const coordStr = coords.map(c => c.lng + ',' + c.lat).join(';');
+  const url = OSRM_BASE + '/match/v1/driving/' + encodeURIComponent(coordStr) + '?geometries=geojson&overview=full&steps=false';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  try {
+    const resp = await fetch(url, { signal: controller.signal, headers: { 'Accept': 'application/json' } });
+    clearTimeout(timeoutId);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (!data || !data.matchings || !data.matchings.length) return null;
+    const m = data.matchings[0];
+    return { geometry: m.geometry.coordinates, distance: m.distance, duration: m.duration };
+  } catch (e) {
+    clearTimeout(timeoutId);
+    return null;
+  }
+}
+
+async function fetchOSRMRouteBatched(pts) {
+  if (pts.length < 2) return null;
+  if (pts.length === 2) return fetchOSRMMatch(pts);
+  const batches = [];
+  for (let i = 0; i < pts.length; i += OSRM_BATCH_SIZE - 1) {
+    const batch = pts.slice(i, Math.min(i + OSRM_BATCH_SIZE, pts.length));
+    if (batch.length < 2) continue;
+    batches.push(batch);
+  }
+  if (batches.length === 0) return null;
+  const results = [];
+  for (let i = 0; i < batches.length; i++) {
+    const result = await fetchOSRMMatch(batches[i]);
+    if (!result) return null;
+    results.push(result);
+    if (i < batches.length - 1) {
+      await new Promise(r => setTimeout(r, 250));
+    }
+  }
+  if (results.length === 1) return results[0];
+  const merged = [];
+  for (const r of results) {
+    const start = merged.length > 0 ? 1 : 0;
+    for (let i = start; i < r.geometry.length; i++) {
+      merged.push(r.geometry[i]);
+    }
+  }
+  let totalDist = 0;
+  for (let i = 1; i < merged.length; i++) {
+    totalDist += haversine(merged[i-1][1], merged[i-1][0], merged[i][1], merged[i][0]);
+  }
+  let totalDur = 0;
+  for (const r of results) totalDur += (r.duration || 0);
+  return { geometry: merged, distance: totalDist, duration: totalDur };
+}
+
+function geometryToLatLngs(geometry) {
+  if (!geometry) return [];
+  return geometry.map(c => [c[1], c[0]]);
+}
+
+function computeRouteDistances(geometry) {
+  const dists = [0];
+  for (let i = 1; i < geometry.length; i++) {
+    dists.push(dists[i-1] + haversine(geometry[i-1][1], geometry[i-1][0], geometry[i][1], geometry[i][0]));
+  }
+  return dists;
+}
+
+function findNearestRouteIndex(lat, lng, geometry) {
+  let minDist = Infinity, minIdx = 0;
+  for (let i = 0; i < geometry.length; i++) {
+    const d = haversine(lat, lng, geometry[i][1], geometry[i][0]);
+    if (d < minDist) { minDist = d; minIdx = i; }
+  }
+  return minIdx;
+}
+
+function buildRoutePointIndices(pts, geometry) {
+  const indices = [];
+  for (let i = 0; i < pts.length; i++) {
+    indices.push(findNearestRouteIndex(pts[i].lat, pts[i].lng, geometry));
+  }
+  return indices;
+}
+
+function positionOnRoute(geometry, distances, targetDist) {
+  if (!geometry.length) return null;
+  if (targetDist <= 0) return { lat: geometry[0][1], lng: geometry[0][0] };
+  if (targetDist >= distances[distances.length - 1]) {
+    const last = geometry[geometry.length - 1];
+    return { lat: last[1], lng: last[0] };
+  }
+  for (let i = 1; i < distances.length; i++) {
+    if (distances[i] >= targetDist) {
+      const segDist = distances[i] - distances[i-1];
+      const t = segDist > 0 ? (targetDist - distances[i-1]) / segDist : 0;
+      return {
+        lat: geometry[i-1][1] + (geometry[i][1] - geometry[i-1][1]) * t,
+        lng: geometry[i-1][0] + (geometry[i][0] - geometry[i-1][0]) * t
+      };
+    }
+  }
+  const last = geometry[geometry.length - 1];
+  return { lat: last[1], lng: last[0] };
 }
 
 // --- Douglas-Peucker (object-based) ---
@@ -1988,6 +2148,7 @@ document.getElementById('deviceSelect').addEventListener('change', function() {
   clearPhotoCache();
   clearVideoCache();
   playbackPoints = [];
+  clearRouteCache();
   timelineCache = null;
   appsCache = null;
   appsFullCache = null;
@@ -3952,16 +4113,43 @@ function updateMap(loc) {
   }
   locationHistory.push({ lat: loc.lat, lng: loc.lng, ts: loc.ts_ms || Date.now(), speed: loc.speed, accuracy: loc.accuracy, isHighAccuracy: loc.isHighAccuracy === true, satellites: loc.satellites || 0 });
   if (locationHistory.length > 500) locationHistory.shift();
-  updateTrail();
+  updateTrail(true);
   if (locationHistory.length === 1) map.setView(latlng, 15);
 }
 
 // --- Gradient Trail ---
 const TRAIL_COLORS = ['#1a3a5c', '#2a5a7c', '#3a7a9c', '#4a9abc', '#5ababc', '#7acc7a', '#aadd55', '#ddee44', '#ffca28', '#ff8c00'];
 
-function buildGradientTrail(pts) {
+function buildGradientTrail(pts, routedGeometry) {
   if (pts.length < 2) return null;
   const group = L.layerGroup();
+  if (routedGeometry && routedGeometry.length > 1) {
+    const indices = routePointIndices;
+    if (indices.length === pts.length) {
+      for (let i = 0; i < pts.length - 1; i++) {
+        const fi = indices[i] !== undefined ? indices[i] : 0;
+        const ti = indices[i + 1] !== undefined ? indices[i + 1] : routedGeometry.length - 1;
+        const si = Math.min(fi, ti);
+        const ei = Math.max(fi, ti) + 1;
+        const chunk = routedGeometry.slice(si, ei).map(p => [p[1], p[0]]);
+        if (chunk.length < 2) continue;
+        const ci = Math.min(Math.floor(i / Math.max(1, Math.floor(pts.length / TRAIL_COLORS.length))), TRAIL_COLORS.length - 1);
+        const opacity = 0.3 + 0.6 * (i / pts.length);
+        const segPts = pts.slice(i, Math.min(i + Math.ceil(pts.length / TRAIL_COLORS.length) + 1, pts.length));
+        const hasHighAccuracy = segPts.some(p => p.isHighAccuracy);
+        const weight = hasHighAccuracy ? 4.5 : 2.5;
+        const color = hasHighAccuracy ? '#3fb950' : TRAIL_COLORS[ci];
+        L.polyline(chunk, { color, weight, opacity }).addTo(group);
+        if (hasHighAccuracy) {
+          L.polyline(chunk, { color: '#3fb950', weight: 8, opacity: 0.15 }).addTo(group);
+        }
+      }
+    } else {
+      const chunk = routedGeometry.map(p => [p[1], p[0]]);
+      L.polyline(chunk, { color: '#5ababc', weight: 3, opacity: 0.7 }).addTo(group);
+    }
+    return group;
+  }
   const segs = Math.min(TRAIL_COLORS.length, pts.length);
   const chunkSize = Math.max(1, Math.floor(pts.length / segs));
   for (let i = 0; i < pts.length - 1; i += chunkSize) {
@@ -3970,28 +4158,60 @@ function buildGradientTrail(pts) {
     if (chunk.length < 2) continue;
     const ci = Math.min(Math.floor(i / chunkSize), TRAIL_COLORS.length - 1);
     const opacity = 0.3 + 0.6 * (i / pts.length);
-    // Check if this segment contains high-accuracy points
     const segPts = pts.slice(i, end);
     const hasHighAccuracy = segPts.some(p => p.isHighAccuracy);
     const weight = hasHighAccuracy ? 4.5 : 2.5;
     const color = hasHighAccuracy ? '#3fb950' : TRAIL_COLORS[ci];
     L.polyline(chunk, { color, weight, opacity }).addTo(group);
     if (hasHighAccuracy) {
-      // Glow effect for high-accuracy segments
       L.polyline(chunk, { color: '#3fb950', weight: 8, opacity: 0.15 }).addTo(group);
     }
   }
   return group;
 }
 
-function updateTrail() {
+async function updateTrail(skipRouting) {
   if (trail) { map.removeLayer(trail); trail = null; }
   if (locationHistory.length < 2) {
     document.getElementById('playbackBar').style.display = 'none';
+    playbackRoute = null;
+    routePointIndices = [];
+    routeDistances = [];
+    routeTotalDistance = 0;
     return;
   }
   let pts = locationHistory;
-  trail = buildGradientTrail(pts);
+  playbackRoute = null;
+  routePointIndices = [];
+  routeDistances = [];
+  routeTotalDistance = 0;
+  if (routeUseRoad && !skipRouting) {
+    document.getElementById('routeStatus').textContent = 'Routing...';
+    routingInProgress = true;
+    const cacheKey = getRouteCacheKey(selectedDevice || 'unknown', pts.length, pts[0]?.ts || 0, pts[pts.length-1]?.ts || 0);
+    const cached = getCachedRoute(cacheKey);
+    let routed = null;
+    if (cached) {
+      routed = cached;
+    } else {
+      routed = await fetchOSRMRouteBatched(pts);
+      if (routed) setCachedRoute(cacheKey, routed);
+    }
+    routingInProgress = false;
+    if (routed && routed.geometry && routed.geometry.length > 1) {
+      playbackRoute = routed.geometry;
+      routeDistances = computeRouteDistances(routed.geometry);
+      routeTotalDistance = routeDistances[routeDistances.length - 1] || 0;
+      routePointIndices = buildRoutePointIndices(pts, routed.geometry);
+      document.getElementById('routeStatus').textContent = 'Road route loaded';
+    } else {
+      document.getElementById('routeStatus').textContent = 'Using straight lines (routing unavailable)';
+      showAlert('Road routing unavailable \u2014 showing straight lines', 'warn');
+    }
+  } else if (skipRouting) {
+    document.getElementById('routeStatus').textContent = '';
+  }
+  trail = buildGradientTrail(pts, playbackRoute);
   if (trail) trail.addTo(map);
   document.getElementById('playbackBar').style.display = 'flex';
   document.getElementById('playCount').textContent = `0/${pts.length}`;
@@ -4042,6 +4262,20 @@ function panIfNeeded(lat, lng) {
       lng < sw.lng + lngRange * margin || lng > ne.lng - lngRange * margin) {
     map.panTo([lat, lng], { animate: true, duration: 0.15 });
   }
+}
+
+function getRoutedPosition(segFrom, segTo, frac) {
+  if (!playbackRoute || playbackRoute.length < 2 || routePointIndices.length === 0) return null;
+  const fi = routePointIndices[segFrom];
+  const ti = routePointIndices[segTo];
+  if (fi === undefined || ti === undefined) return null;
+  const si = Math.min(fi, ti);
+  const ei = Math.max(fi, ti);
+  if (si === ei) return { lat: playbackRoute[si][1], lng: playbackRoute[si][0] };
+  const segDist = routeDistances[ei] - routeDistances[si];
+  if (segDist <= 0) return { lat: playbackRoute[si][1], lng: playbackRoute[si][0] };
+  const targetDist = routeDistances[si] + segDist * frac;
+  return positionOnRoute(playbackRoute, routeDistances, targetDist);
 }
 
 function updatePlaybackDisplay(lat, lng, ts, fromIdx, toIdx, frac) {
@@ -4096,14 +4330,20 @@ function animatePlayback() {
   let t = elapsed / segRealGap;
   if (t >= 1) {
     const fromP = pts[segFrom], toP = pts[segTo];
-    updatePlaybackDisplay(toP.lat, toP.lng, toP.ts, segFrom, segTo, 1);
+    let lat, lng;
+    const routed = getRoutedPosition(segFrom, segTo, 1);
+    if (routed) { lat = routed.lat; lng = routed.lng; }
+    else { lat = toP.lat; lng = toP.lng; }
+    updatePlaybackDisplay(lat, lng, toP.ts, segFrom, segTo, 1);
     if (!advanceSegment()) return;
     t = 0;
     segStartTime = performance.now();
   }
   const fromP = pts[segFrom], toP = pts[segTo];
-  const lat = lerp(fromP.lat, toP.lat, t);
-  const lng = lerp(fromP.lng, toP.lng, t);
+  let lat, lng;
+  const routed = getRoutedPosition(segFrom, segTo, t);
+  if (routed) { lat = routed.lat; lng = routed.lng; }
+  else { lat = lerp(fromP.lat, toP.lat, t); lng = lerp(fromP.lng, toP.lng, t); }
   const ts = lerp(fromP.ts, toP.ts, t);
   updatePlaybackDisplay(lat, lng, ts, segFrom, segTo, t);
   animFrameId = requestAnimationFrame(animatePlayback);
@@ -4160,6 +4400,25 @@ document.getElementById('loopBtn').addEventListener('click', function() {
   playbackLoop = !playbackLoop;
   this.classList.toggle('pb-on', playbackLoop);
   this.title = 'Loop: ' + (playbackLoop ? 'On' : 'Off');
+});
+
+document.getElementById('routeToggleBtn').addEventListener('click', async function() {
+  routeUseRoad = !routeUseRoad;
+  this.textContent = routeUseRoad ? '\uD83C\uDFD3 Road View' : '\u27F6 Direct View';
+  this.style.background = routeUseRoad ? 'var(--success)' : 'var(--accent)';
+  this.style.borderColor = routeUseRoad ? 'var(--success)' : 'var(--accent)';
+  if (locationHistory.length >= 2) {
+    if (routeUseRoad) {
+      document.getElementById('routeStatus').textContent = 'Routing...';
+    } else {
+      document.getElementById('routeStatus').textContent = 'Straight lines';
+      playbackRoute = null;
+      routePointIndices = [];
+      routeDistances = [];
+      routeTotalDistance = 0;
+    }
+    await updateTrail();
+  }
 });
 
 // --- Scrubber ---
@@ -4251,7 +4510,7 @@ async function reloadHistory(showAlertMsg) {
     return;
   }
   locationHistory = pts;
-  updateTrail();
+  await updateTrail();
   renderPlaybackTab();
   if (pts.length) map.fitBounds(pts.map(p => [p.lat, p.lng]));
   if (showAlertMsg) {
@@ -4278,6 +4537,13 @@ function calcTrailDistance(pts) {
     total += haversine(pts[i-1].lat, pts[i-1].lng, pts[i].lat, pts[i].lng);
   }
   return total;
+}
+
+function calcRoutedDistance() {
+  if (playbackRoute && playbackRoute.length > 1 && routeDistances.length === playbackRoute.length) {
+    return routeTotalDistance;
+  }
+  return null;
 }
 
 function formatDuration(ms) {
@@ -4317,6 +4583,12 @@ function renderPlaybackTab() {
   document.getElementById('stDuration').textContent = formatDuration(dur);
   const dist = calcTrailDistance(pts);
   document.getElementById('stDistance').textContent = formatDistance(dist);
+  const roadDist = calcRoutedDistance();
+  if (roadDist !== null && roadDist > dist) {
+    document.getElementById('stRoadDist').textContent = formatDistance(roadDist) + ' (road)';
+  } else {
+    document.getElementById('stRoadDist').textContent = formatDistance(dist);
+  }
   const haCount = pts.filter(p => p.isHighAccuracy).length;
   document.getElementById('stHighAcc').textContent = haCount;
   const first = pts[0], last = pts[pts.length-1];
