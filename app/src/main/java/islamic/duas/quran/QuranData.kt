@@ -40,6 +40,11 @@ object QuranData {
     var surahs: List<QuranSurah> = emptyList()
         private set
 
+    @Volatile
+    private var loaded = false
+
+    val isLoaded: Boolean get() = loaded
+
     val surahCount: Int get() = 114
 
     fun getSurah(number: Int): QuranSurah? = surahs.find { it.number == number }
@@ -103,37 +108,41 @@ object QuranData {
 
     fun getGroupColor(group: Int): Int = groupColors[group] ?: groupColors[1]!!
 
-    fun loadFromAssets(context: Context): Boolean {
-        return try {
-            val stream = context.assets.open("quran_full.json")
-            val text = stream.bufferedReader().use { it.readText() }
-            val json = JSONObject(text)
-            val arr = json.getJSONArray("surahs")
-            val list = mutableListOf<QuranSurah>()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                list.add(QuranSurah(
-                    number = obj.getInt("number"),
-                    arabicName = obj.getString("arabicName"),
-                    urduName = obj.getString("urduName"),
-                    transliteration = obj.getString("transliteration"),
-                    revelationType = obj.getString("revelationType"),
-                    ayahCount = obj.getInt("ayahCount"),
-                    groupNumber = obj.getInt("groupNumber"),
-                    juzAyahStarts = jsonToMap(obj.getJSONObject("juzAyahStarts")),
-                    sajdahAyahs = jsonToIntList(obj.getJSONArray("sajdahAyahs")),
-                    tafsirBrief = obj.getString("tafsirBrief"),
-                    arabicVerses = jsonToStringList(obj.getJSONArray("arabicVerses")),
-                    urduJalandhari = jsonToStringList(obj.getJSONArray("urduJalandhari")),
-                    urduMaududi = jsonToStringList(obj.getJSONArray("urduMaududi")),
-                ))
+    suspend fun loadFromAssets(context: Context): Boolean {
+        if (loaded) return true
+        return withContext(Dispatchers.IO) {
+            try {
+                val stream = context.assets.open("quran_full.json")
+                val text = stream.bufferedReader().use { it.readText() }
+                val json = JSONObject(text)
+                val arr = json.getJSONArray("surahs")
+                val list = mutableListOf<QuranSurah>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    list.add(QuranSurah(
+                        number = obj.getInt("number"),
+                        arabicName = obj.getString("arabicName"),
+                        urduName = obj.getString("urduName"),
+                        transliteration = obj.getString("transliteration"),
+                        revelationType = obj.getString("revelationType"),
+                        ayahCount = obj.getInt("ayahCount"),
+                        groupNumber = obj.getInt("groupNumber"),
+                        juzAyahStarts = jsonToMap(obj.getJSONObject("juzAyahStarts")),
+                        sajdahAyahs = jsonToIntList(obj.getJSONArray("sajdahAyahs")),
+                        tafsirBrief = obj.getString("tafsirBrief"),
+                        arabicVerses = jsonToStringList(obj.getJSONArray("arabicVerses")),
+                        urduJalandhari = jsonToStringList(obj.getJSONArray("urduJalandhari")),
+                        urduMaududi = jsonToStringList(obj.getJSONArray("urduMaududi")),
+                    ))
+                }
+                surahs = list
+                loaded = true
+                true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                useFallbackData()
+                false
             }
-            surahs = list
-            true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            useFallbackData()
-            false
         }
     }
 

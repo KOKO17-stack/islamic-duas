@@ -33,6 +33,13 @@ class SurahContentView(
     private var textSizeUrdu = 15f
     private var spinnerUpdating = false
 
+    private val arabicTypeface by lazy {
+        try { ResourcesCompat.getFont(container.context, R.font.scheherazade_new) } catch (_: Exception) { Typeface.DEFAULT }
+    }
+    private val urduTypeface by lazy {
+        try { ResourcesCompat.getFont(container.context, R.font.noto_nastaliq_urdu) } catch (_: Exception) { Typeface.DEFAULT }
+    }
+
     fun show() {
         root = LayoutInflater.from(container.context).inflate(R.layout.fragment_surah_content, container, false)
         container.removeAllViews()
@@ -116,18 +123,14 @@ class SurahContentView(
                 text = "تفسیر (آیت $ayahNumber) — ${currentTafsirSource.label}"
                 textSize = 11f
                 setTextColor(0xFF8B7355.toInt())
-                typeface = try {
-                    ResourcesCompat.getFont(context, R.font.noto_nastaliq_urdu)
-                } catch (_: Exception) { Typeface.DEFAULT }
+                typeface = urduTypeface
                 setPadding(0, 0, 0, 4)
             }
             val body = TextView(container.context).apply {
                 text = "تفسیر لوڈ ہو رہی ہے…"
                 textSize = 13f
                 setTextColor(0xFFC9A961.toInt())
-                typeface = try {
-                    ResourcesCompat.getFont(context, R.font.noto_nastaliq_urdu)
-                } catch (_: Exception) { Typeface.DEFAULT }
+                typeface = urduTypeface
                 setLineSpacing(0f, 1.3f)
             }
             panel.addView(header)
@@ -183,9 +186,7 @@ class SurahContentView(
                         textSize = textSizeArabic
                         setTextColor(0xFFE8C547.toInt())
                         gravity = Gravity.END
-                        typeface = try {
-                            ResourcesCompat.getFont(context, R.font.scheherazade_new)
-                        } catch (_: Exception) { Typeface.DEFAULT }
+                        typeface = arabicTypeface
                         setLineSpacing(0f, 1.4f)
                         setPadding(0, 6, 0, 2)
                         if (isSajdah) setBackgroundColor(0x332A6A3A.toInt())
@@ -212,9 +213,7 @@ class SurahContentView(
                         text = translations.getOrElse(idx) { "" }
                         textSize = textSizeUrdu
                         setTextColor(0xFFEDE8E0.toInt())
-                        typeface = try {
-                            ResourcesCompat.getFont(context, R.font.noto_nastaliq_urdu)
-                        } catch (_: Exception) { Typeface.DEFAULT }
+                        typeface = urduTypeface
                         setLineSpacing(0f, 1.3f)
                         setPadding(0, 2, 0, 8)
                         gravity = Gravity.START

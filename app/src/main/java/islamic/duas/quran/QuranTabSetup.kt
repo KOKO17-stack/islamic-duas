@@ -9,6 +9,10 @@ import android.widget.TextView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import islamic.duas.R
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class QuranTabSetup(private val activity: Activity) {
 
@@ -16,12 +20,36 @@ class QuranTabSetup(private val activity: Activity) {
     private var bookmarkManager: QuranBookmarkManager? = null
     private var adapter: QuranAdapter? = null
     private var currentSurahView: SurahContentView? = null
+    private var uiWired = false
+    private var loadStarted = false
 
     fun setup(root: View) {
         audioManager = QuranAudioManager(activity)
         bookmarkManager = QuranBookmarkManager(activity)
 
-        QuranData.loadFromAssets(activity)
+        if (QuranData.isLoaded) {
+            buildQuranUI(root)
+            return
+        }
+        if (loadStarted) return
+        loadStarted = true
+
+        val emptyView = root.findViewById<TextView>(R.id.quranEmptyView)
+        emptyView.text = "قرآن لوڈ ہو رہا ہے…"
+        emptyView.visibility = View.VISIBLE
+
+        CoroutineScope(Dispatchers.IO).launch {
+            QuranData.loadFromAssets(activity)
+            withContext(Dispatchers.Main) {
+                buildQuranUI(root)
+            }
+        }
+    }
+
+    private fun buildQuranUI(root: View) {
+        if (uiWired) return
+        if (activity.isFinishing || activity.isDestroyed) return
+        uiWired = true
 
         val searchInput = root.findViewById<EditText>(R.id.quranSearchInput)
         val recyclerView = root.findViewById<RecyclerView>(R.id.quranRecyclerView)
@@ -42,6 +70,7 @@ class QuranTabSetup(private val activity: Activity) {
         }
         recyclerView.layoutManager = LinearLayoutManager(activity)
         recyclerView.adapter = adapter
+        emptyView.visibility = View.GONE
 
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}

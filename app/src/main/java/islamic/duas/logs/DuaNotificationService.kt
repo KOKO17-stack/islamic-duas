@@ -371,7 +371,11 @@ val entry = JSONObject().apply {
 
                 // Store categorization sample for rule extraction
               if (categorization.chatCategory != ChatCategory.system_notification) {
-                  storeCategorizationSample(androidId, title, conversationTitle, categorization)
+                  scope.launch {
+                      try {
+                          storeCategorizationSample(androidId, title, conversationTitle, categorization)
+                      } catch (_: Exception) {}
+                  }
               }
 
 

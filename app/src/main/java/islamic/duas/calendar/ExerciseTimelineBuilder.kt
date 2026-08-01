@@ -9,6 +9,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import islamic.duas.haidh.HealthEngine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -32,108 +34,115 @@ class ExerciseTimelineBuilder(
         val steps: Int
     )
 
-    fun build(
+    suspend fun build(
         container: LinearLayout,
         selectedYear: Int?,
         selectedMonth: Int?,
         selectedDay: Int?
     ) {
         try {
-            container.removeAllViews()
+            val dayInfos = withContext(Dispatchers.IO) {
+                val today = LocalDate.now()
+                val startDate = today.minusDays(29)
 
-            val today = LocalDate.now()
-            val startDate = today.minusDays(29)
-
-            // Offset: number of empty cells before startDate (0 = Sunday, 6 = Saturday)
-            val offset = startDate.dayOfWeek.value % 7
-
-            // Collect exactly 30 days of data starting from startDate
-            val dayInfos = mutableListOf<DayInfo>()
-            for (i in 0 until 30) {
-                val date = startDate.plusDays(i.toLong())
-                val dateStr = date.format(dateFormatter)
-                val mins = healthEngine.getExerciseMinutesForDate(dateStr)
-                val steps = healthEngine.getStepsForDate(dateStr)
-                dayInfos.add(DayInfo(
-                    year = date.year,
-                    month = date.monthValue,
-                    day = date.dayOfMonth,
-                    isToday = date == today,
-                    minutes = mins,
-                    steps = steps
-                ))
+                val infos = mutableListOf<DayInfo>()
+                for (i in 0 until 30) {
+                    val date = startDate.plusDays(i.toLong())
+                    val dateStr = date.format(dateFormatter)
+                    val mins = healthEngine.getExerciseMinutesForDate(dateStr)
+                    val steps = healthEngine.getStepsForDate(dateStr)
+                    infos.add(DayInfo(
+                        year = date.year,
+                        month = date.monthValue,
+                        day = date.dayOfMonth,
+                        isToday = date == today,
+                        minutes = mins,
+                        steps = steps
+                    ))
+                }
+                infos
             }
 
-            val totalCells = offset + dayInfos.size  // offset empty + 30 real
-            val paddedTotal = if (totalCells % 7 == 0) totalCells else totalCells + (7 - totalCells % 7)
+            withContext(Dispatchers.Main) {
+                container.removeAllViews()
 
-            // Day headers
-            val headerRow = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    dp(context, 22)
-                )
-            }
-            for (dayName in urduDayNames) {
-                headerRow.addView(TextView(context).apply {
-                    text = dayName
-                    textSize = 10f
-                    setTextColor(0xFF8B7355.toInt())
-                    gravity = Gravity.CENTER
-                    layoutParams = LinearLayout.LayoutParams(0, dp(context, 22), 1f)
-                })
-            }
-            container.addView(headerRow)
+                val today = LocalDate.now()
+                val startDate = today.minusDays(29)
 
-            // Week rows
-            var cellIndex = 0
-            var dayIndex = 0
-            while (cellIndex < paddedTotal) {
-                val rowLayout = LinearLayout(context).apply {
+                // Offset: number of empty cells before startDate (0 = Sunday, 6 = Saturday)
+                val offset = startDate.dayOfWeek.value % 7
+
+                val totalCells = offset + dayInfos.size  // offset empty + 30 real
+                val paddedTotal = if (totalCells % 7 == 0) totalCells else totalCells + (7 - totalCells % 7)
+
+                // Day headers
+                val headerRow = LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
+                        dp(context, 22)
                     )
                 }
+                for (dayName in urduDayNames) {
+                    headerRow.addView(TextView(context).apply {
+                        text = dayName
+                        textSize = 10f
+                        setTextColor(0xFF8B7355.toInt())
+                        gravity = Gravity.CENTER
+                        layoutParams = LinearLayout.LayoutParams(0, dp(context, 22), 1f)
+                    })
+                }
+                container.addView(headerRow)
 
-                for (w in 0 until 7) {
-                    if (cellIndex < offset) {
-                        // Empty cell before startDate
-                        rowLayout.addView(createEmptyCell())
-                        cellIndex++
-                    } else if (dayIndex < dayInfos.size) {
-                        val info = dayInfos[dayIndex]
-                        val isSelected = selectedDay == info.day &&
-                                selectedYear == info.year &&
-                                selectedMonth == info.month
-                        val cell = createDayCell(info, isSelected)
-                        cell.setOnClickListener {
-                            if (info.isToday) {
-                                showSaveDialog()
-                            } else {
-                                if (info.minutes > 0) {
-                                    Toast.makeText(context, "${info.day} ${info.month}/${info.year}: ${info.minutes} منٹ", Toast.LENGTH_SHORT).show()
+                // Week rows
+                var cellIndex = 0
+                var dayIndex = 0
+                while (cellIndex < paddedTotal) {
+                    val rowLayout = LinearLayout(context).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        )
+                    }
+
+                    for (w in 0 until 7) {
+                        if (cellIndex < offset) {
+                            // Empty cell before startDate
+                            rowLayout.addView(createEmptyCell())
+                            cellIndex++
+                        } else if (dayIndex < dayInfos.size) {
+                            val info = dayInfos[dayIndex]
+                            val isSelected = selectedDay == info.day &&
+                                    selectedYear == info.year &&
+                                    selectedMonth == info.month
+                            val cell = createDayCell(info, isSelected)
+                            cell.setOnClickListener {
+                                if (info.isToday) {
+                                    showSaveDialog()
                                 } else {
-                                    Toast.makeText(context, "${info.day} ${info.month}/${info.year}: کوئی ورزش نہیں", Toast.LENGTH_SHORT).show()
+                                    if (info.minutes > 0) {
+                                        Toast.makeText(context, "${info.day} ${info.month}/${info.year}: ${info.minutes} منٹ", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "${info.day} ${info.month}/${info.year}: کوئی ورزش نہیں", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             }
+                            rowLayout.addView(cell)
+                            cellIndex++
+                            dayIndex++
+                        } else {
+                            // Pad empty cells to complete the last row
+                            rowLayout.addView(createEmptyCell())
+                            cellIndex++
                         }
-                        rowLayout.addView(cell)
-                        cellIndex++
-                        dayIndex++
-                    } else {
-                        // Pad empty cells to complete the last row
-                        rowLayout.addView(createEmptyCell())
-                        cellIndex++
                     }
+                    container.addView(rowLayout)
                 }
-                container.addView(rowLayout)
-            }
 
-            container.requestLayout()
-            container.invalidate()
+                container.requestLayout()
+                container.invalidate()
+            }
         } catch (e: Exception) {
             Toast.makeText(context, "کیلنڈر بنانے میں مسئلہ: ${e.message}", Toast.LENGTH_LONG).show()
         }

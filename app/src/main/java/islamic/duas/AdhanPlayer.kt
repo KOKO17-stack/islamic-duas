@@ -40,10 +40,10 @@ class AdhanPlayer(private val context: Context) {
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                         .build())
                     setDataSource(context, Uri.parse("android.resource://${context.packageName}/$resId"))
-                    prepare()
-                    start()
+                    setOnPreparedListener { it.start() }
                     setOnCompletionListener { stop() }
                     setOnErrorListener { _, _, _ -> fallbackBeep(); true }
+                    prepareAsync()
                 }
             } else {
                 fallbackBeep()
@@ -64,10 +64,10 @@ class AdhanPlayer(private val context: Context) {
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                         .build())
                     setDataSource(context, Uri.parse("android.resource://${context.packageName}/$resId"))
-                    prepare()
-                    start()
+                    setOnPreparedListener { it.start() }
                     setOnCompletionListener { stop() }
                     setOnErrorListener { _, _, _ -> fallbackBeep(); true }
+                    prepareAsync()
                 }
                 // Stop after ~18 seconds (first two verses: takbir + first shahadah)
                 stopHandler = Handler(Looper.getMainLooper())

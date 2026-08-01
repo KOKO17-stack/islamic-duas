@@ -7,7 +7,10 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import islamic.duas.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -37,6 +40,7 @@ class QuizActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_quiz)
+        lifecycleScope.launch(Dispatchers.IO) { allQuestions }
         findViewById<TextView>(R.id.quizExitBtn).setOnClickListener { finish() }
         setupTopicChips()
         setupModeChips()

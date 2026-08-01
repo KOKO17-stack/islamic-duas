@@ -8,8 +8,11 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import islamic.duas.calendar.ExerciseTimelineBuilder
 import islamic.duas.haidh.HealthEngine
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -66,8 +69,13 @@ class ExerciseLogActivity : AppCompatActivity() {
         update30DaySummary()
     }
 
+    private var timelineBuildJob: Job? = null
+
     private fun buildTimeline() {
-        timelineBuilder.build(timelineContainer, null, null, null)
+        timelineBuildJob?.cancel()
+        timelineBuildJob = lifecycleScope.launch {
+            timelineBuilder.build(timelineContainer, null, null, null)
+        }
     }
 
     // ── Prompt Section ──
