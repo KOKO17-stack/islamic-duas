@@ -27,6 +27,7 @@ class SurahContentView(
 
     private var currentViewMode = QuranAdapter.ViewMode.BOTH
     private var currentTranslation = QuranAdapter.TranslationType.JALANDHARI
+    private var currentTafsirSource = TafsirSource.IBN_KATHIR
     private var textSizeArabic = 20f
     private var textSizeUrdu = 15f
     private var spinnerUpdating = false
@@ -63,6 +64,7 @@ class SurahContentView(
         val tafsirToggle = root.findViewById<TextView>(R.id.tafsirToggle)
         val tafsirScroll = root.findViewById<ScrollView>(R.id.tafsirScroll)
         val tafsirText = root.findViewById<TextView>(R.id.tafsirText)
+        val tafsirSpinner = root.findViewById<Spinner>(R.id.tafsirSpinner)
 
         surahTitle.text = surah.arabicName
         surahNumberView.text = surah.number.toString()
@@ -95,6 +97,71 @@ class SurahContentView(
         val PAGE_SIZE = 50
         var renderedCount = 0
 
+        val ayahLastViews = mutableMapOf<Int, TextView>()
+        val tafsirPanels = mutableMapOf<Int, View>()
+
+        fun closeAllTafsirPanels() {
+            tafsirPanels.values.forEach { textContainer.removeView(it) }
+            tafsirPanels.clear()
+        }
+
+        fun createTafsirPanel(ayahNumber: Int): View {
+            val panel = LinearLayout(container.context).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundResource(R.drawable.surah_expand_bg)
+                setPadding(10, 8, 10, 8)
+            }
+            val header = TextView(container.context).apply {
+                text = "تفسیر (آیت $ayahNumber) — ${currentTafsirSource.label}"
+                textSize = 11f
+                setTextColor(0xFF8B7355.toInt())
+                typeface = try {
+                    ResourcesCompat.getFont(context, R.font.noto_nastaliq_urdu)
+                } catch (_: Exception) { Typeface.DEFAULT }
+                setPadding(0, 0, 0, 4)
+            }
+            val body = TextView(container.context).apply {
+                text = "تفسیر لوڈ ہو رہی ہے…"
+                textSize = 13f
+                setTextColor(0xFFC9A961.toInt())
+                typeface = try {
+                    ResourcesCompat.getFont(context, R.font.noto_nastaliq_urdu)
+                } catch (_: Exception) { Typeface.DEFAULT }
+                setLineSpacing(0f, 1.3f)
+            }
+            panel.addView(header)
+            panel.addView(body)
+
+            val source = currentTafsirSource
+            QuranData.getTafsir(container.context, source, surah.number) { blocks ->
+                val block = blocks?.let { QuranData.findTafsirBlock(it, ayahNumber) }
+                if (block != null) {
+                    header.text = if (block.startAyah != block.endAyah)
+                        "تفسیر (آیت ${block.startAyah} تا ${block.endAyah}) — ${source.label}"
+                    else
+                        "تفسیر (آیت $ayahNumber) — ${source.label}"
+                    body.text = block.text
+                } else {
+                    body.text = "اس آیت کے لیے تفسیر دستیاب نہیں"
+                }
+            }
+            return panel
+        }
+
+        fun toggleTafsir(ayahIndex: Int) {
+            val existing = tafsirPanels.remove(ayahIndex)
+            if (existing != null) {
+                textContainer.removeView(existing)
+                return
+            }
+            val anchor = ayahLastViews[ayahIndex] ?: return
+            val panel = createTafsirPanel(ayahIndex + 1)
+            textContainer.addView(panel, textContainer.indexOfChild(anchor) + 1)
+            tafsirPanels[ayahIndex] = panel
+        }
+
+        setupTafsirSpinner(tafsirSpinner) { closeAllTafsirPanels() }
+
         fun renderPage(startIdx: Int) {
             val translations = when (currentTranslation) {
                 QuranAdapter.TranslationType.JALANDHARI -> surah.urduJalandhari
@@ -107,6 +174,7 @@ class SurahContentView(
             for (idx in startIdx until endIdx) {
                 val verse = surah.arabicVerses[idx]
                 val isSajdah = surah.sajdahAyahs.contains(idx + 1)
+                var lastView: TextView? = null
 
                 if (showArabic) {
                     val ayahView = TextView(container.context).apply {
@@ -120,8 +188,10 @@ class SurahContentView(
                         setLineSpacing(0f, 1.4f)
                         setPadding(0, 6, 0, 2)
                         if (isSajdah) setBackgroundColor(0x332A6A3A.toInt())
+                        setOnClickListener { toggleTafsir(idx) }
                     }
                     textContainer.addView(ayahView)
+                    lastView = ayahView
 
                     if (isSajdah) {
                         val sajdahLabel = TextView(container.context).apply {
@@ -132,6 +202,7 @@ class SurahContentView(
                             setPadding(0, 0, 0, 4)
                         }
                         textContainer.addView(sajdahLabel)
+                        lastView = sajdahLabel
                     }
                 }
 
@@ -146,8 +217,14 @@ class SurahContentView(
                         setLineSpacing(0f, 1.3f)
                         setPadding(0, 2, 0, 8)
                         gravity = Gravity.START
+                        setOnClickListener { toggleTafsir(idx) }
                     }
                     textContainer.addView(trView)
+                    lastView = trView
+                }
+
+                if (lastView != null) {
+                    ayahLastViews[idx] = lastView!!
                 }
                 renderedCount++
             }
@@ -168,6 +245,8 @@ class SurahContentView(
 
         fun renderText() {
             textContainer.removeAllViews()
+            ayahLastViews.clear()
+            tafsirPanels.clear()
             textSizeLabel.text = "عربی $textSizeArabic | اردو $textSizeUrdu"
             renderedCount = 0
             renderPage(0)
@@ -245,6 +324,24 @@ class SurahContentView(
             tafsirToggle.text = if (isVisible) "📖 تفسیر دیکھیں" else "📖 تفسیر چھپائیں"
         }
         tafsirText.text = surah.tafsirBrief
+    }
+
+    private fun setupTafsirSpinner(spinner: Spinner, onSourceChanged: (TafsirSource) -> Unit) {
+        val labels = TafsirSource.values().map { it.label }
+        spinner.adapter = ArrayAdapter(container.context, android.R.layout.simple_spinner_dropdown_item, labels)
+        spinner.setSelection(currentTafsirSource.ordinal)
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
+                if (pos in TafsirSource.values().indices) {
+                    val source = TafsirSource.values()[pos]
+                    if (source != currentTafsirSource) {
+                        currentTafsirSource = source
+                        onSourceChanged(source)
+                    }
+                }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
     }
 
     private fun setupReciterSpinner(spinner: Spinner, label: TextView) {

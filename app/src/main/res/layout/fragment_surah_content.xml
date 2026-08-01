@@ -157,6 +157,32 @@
                 android:layout_marginBottom="8dp">
 
                 <TextView
+                    android:id="@+id/tafsirLabel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="تفسیر:"
+                    android:textSize="11sp"
+                    android:textColor="#8B7355"
+                    android:fontFamily="sans-serif" />
+
+                <Spinner
+                    android:id="@+id/tafsirSpinner"
+                    android:layout_width="0dp"
+                    android:layout_height="32dp"
+                    android:layout_weight="2"
+                    android:background="@drawable/rounded_bg"
+                    android:paddingHorizontal="8dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginBottom="8dp">
+
+                <TextView
                     android:id="@+id/expTextSizeMinus"
                     android:layout_width="36dp"
                     android:layout_height="30dp"

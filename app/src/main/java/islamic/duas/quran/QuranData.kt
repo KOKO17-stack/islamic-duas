@@ -1,6 +1,10 @@
 package islamic.duas.quran
 
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -20,6 +24,21 @@ data class QuranSurah(
     val urduMaududi: List<String>
 )
 
+data class TafsirBlock(
+    val startAyah: Int,
+    val endAyah: Int,
+    val text: String
+)
+
+enum class TafsirSource(val slug: String, val label: String) {
+    IBN_KATHIR("ibn_kathir", "ابن کثیر"),
+    FI_ZILAL("fi_zilal", "فی ظلال القرآن"),
+    BAYAN_UL_QURAN("bayan_ul_quran", "بیان القرآن"),
+    TAZKIRUL("tazkirul", "تذکیر القرآن"),
+    GHAMIDI("ghamidi", "البَیان (غامدی)"),
+    ISLAHI("islahi", "تدبر القرآن (اصلاحی)")
+}
+
 object QuranData {
     var surahs: List<QuranSurah> = emptyList()
         private set
@@ -31,6 +50,45 @@ object QuranData {
     fun getSurahsByGroup(group: Int): List<QuranSurah> = surahs.filter { it.groupNumber == group }
 
     fun getRevelationOrder(): List<Int> = revelationOrder
+
+    private val tafsirCache = mutableMapOf<String, List<TafsirBlock>?>()
+
+    fun findTafsirBlock(blocks: List<TafsirBlock>, ayahNumber: Int): TafsirBlock? =
+        blocks.find { ayahNumber in it.startAyah..it.endAyah }
+
+    fun getTafsir(
+        context: Context,
+        source: TafsirSource,
+        surahNumber: Int,
+        onReady: (List<TafsirBlock>?) -> Unit
+    ) {
+        val key = "${source.slug}/$surahNumber"
+        if (tafsirCache.containsKey(key)) {
+            onReady(tafsirCache[key])
+            return
+        }
+        CoroutineScope(Dispatchers.Main).launch {
+            val result = withContext(Dispatchers.IO) { loadTafsirBlocks(context, source, surahNumber) }
+            tafsirCache[key] = result
+            onReady(result)
+        }
+    }
+
+    private fun loadTafsirBlocks(context: Context, source: TafsirSource, surahNumber: Int): List<TafsirBlock>? {
+        return try {
+            val stream = context.assets.open("tafsir/${source.slug}/surah_$surahNumber.json")
+            val text = stream.bufferedReader().use { it.readText() }
+            val arr = JSONObject(text).getJSONArray("blocks")
+            val list = mutableListOf<TafsirBlock>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(TafsirBlock(obj.getInt("start"), obj.getInt("end"), obj.getString("text")))
+            }
+            list
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     private val revelationOrder = listOf(
         96,68,73,74,1,111,81,87,92,89,93,94,103,100,108,102,107,109,105,113,114,112,53,80,97,91,85,95,106,101,75,104,77,50,90,86,54,38,70,79,82,84,30,29,83,73,52,56,69,31,32,53,55,70,72,36,37,25,23,76,65,71,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72
