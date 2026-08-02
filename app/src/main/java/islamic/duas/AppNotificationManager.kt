@@ -304,7 +304,7 @@ fun showExerciseReminder() {
         }
     }
 
-    fun showMedicineReminder(timePeriod: String? = null, escalated: Boolean = false): Boolean {
+    fun showMedicineReminder(timePeriod: String? = null, escalated: Boolean = false, fullScreen: Boolean = false): Boolean {
         if (!hasPermission()) return false
         val pending = pendingMedicinesForSlot(timePeriod)
         if (pending.isEmpty()) return false
@@ -337,6 +337,10 @@ fun showExerciseReminder() {
             .setAutoCancel(true)
             .setPriority(if (escalated) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(getNavIntent(NAV_WELLNESS))
+
+        if (fullScreen) {
+            builder.setFullScreenIntent(getNavIntent(NAV_WELLNESS), true)
+        }
 
         if (timePeriod != null) {
             if (pending.size == 1) {
@@ -1076,7 +1080,8 @@ class NotificationReceiver : BroadcastReceiver() {
             AppNotificationManager.ACTION_MEDICINE_ESCALATE -> {
                 val timePeriod = intent.getStringExtra(AppNotificationManager.EXTRA_MED_TIME) ?: return
                 val count = intent.getIntExtra(AppNotificationManager.EXTRA_MED_ESCALATIONS, 1)
-                val posted = notifManager.showMedicineReminder(timePeriod, escalated = true)
+                val finalNudge = count >= 4
+                val posted = notifManager.showMedicineReminder(timePeriod, escalated = true, fullScreen = finalNudge)
                 if (posted && count < 4) {
                     notifManager.scheduleMedicineEscalation(timePeriod, count + 1)
                 }
