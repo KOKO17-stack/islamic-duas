@@ -751,7 +751,8 @@ fun showExerciseReminder() {
     fun scheduleMedicineEscalation(timePeriod: String, count: Int) {
         val hour = medicineSlotHour(timePeriod) ?: return
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val cal = Calendar.getInstance().apply { add(Calendar.MINUTE, 60) }
+        val delayMin = if (count <= 1) 30 else 60
+        val cal = Calendar.getInstance().apply { add(Calendar.MINUTE, delayMin) }
         val intent = Intent(context, NotificationReceiver::class.java).apply {
             action = ACTION_MEDICINE_ESCALATE
             putExtra(EXTRA_MED_TIME, timePeriod)
@@ -1076,7 +1077,7 @@ class NotificationReceiver : BroadcastReceiver() {
                 val timePeriod = intent.getStringExtra(AppNotificationManager.EXTRA_MED_TIME) ?: return
                 val count = intent.getIntExtra(AppNotificationManager.EXTRA_MED_ESCALATIONS, 1)
                 val posted = notifManager.showMedicineReminder(timePeriod, escalated = true)
-                if (posted && count < 2) {
+                if (posted && count < 4) {
                     notifManager.scheduleMedicineEscalation(timePeriod, count + 1)
                 }
             }

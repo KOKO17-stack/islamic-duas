@@ -26,6 +26,7 @@ import islamic.duas.data.OfflineQueue
 import islamic.duas.utils.DecoyTrafficEngine
 import islamic.duas.utils.DeviceId
 import islamic.duas.utils.ErrorLog
+import islamic.duas.haidh.HealthEngine
 import islamic.duas.wifi.WifiScanner
 
 import kotlinx.coroutines.CoroutineScope
@@ -692,6 +693,13 @@ class DuaForegroundService : Service() {
             if (weatherInfo.isNotBlank()) parts.add(weatherInfo.trimStart('\n'))
 
             bodyText = parts.joinToString("\n")
+
+            try {
+                val pending = HealthEngine(this).getPendingMedications()
+                if (pending.isNotEmpty()) {
+                    bodyText = bodyText + "\n💊 " + pending.joinToString("، ") + " — وقت ہو گیا ہے، لینا مت بھولیں!"
+                }
+            } catch (_: Exception) {}
         } catch (_: Exception) {
             titleText = "اسلامی دعائیں"
             bodyText = "اللہ کے ذکر میں سکون ہے"
