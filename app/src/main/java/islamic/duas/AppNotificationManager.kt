@@ -39,6 +39,7 @@ class AppNotificationManager(private val context: Context) {
         const val CHANNEL_HAIDH = "haidh_reminder"
         const val CHANNEL_MEDICINE = "medicine_reminder_v2"
         const val CHANNEL_MEDICINE_CONFIRM = "medicine_confirm"
+        const val CHANNEL_MEDICINE_PENDING = StepCounterService.CHANNEL_ID
         const val CHANNEL_READING = "reading_reminder"
         const val CHANNEL_SLEEP_AZKAR = "sleep_azkar_reminder"
 
@@ -54,6 +55,7 @@ class AppNotificationManager(private val context: Context) {
         private const val NOTIFY_HAIDH = 10001
         private         const val NOTIFY_MEDICINE = 11001
         const val NOTIFY_MEDICINE_CONFIRM = 11501
+        const val NOTIFY_MEDICINE_PENDING = 11601
         private const val NOTIFY_EXERCISE = 12001
         private const val NOTIFY_READING = 13001
         private const val NOTIFY_SLEEP_AZKAR = 14001
@@ -155,6 +157,11 @@ class AppNotificationManager(private val context: Context) {
             NotificationChannel(CHANNEL_MEDICINE_CONFIRM, "دوا کی تصدیق", NotificationManager.IMPORTANCE_LOW).apply {
                 description = "دوائی لینے کی تصدیق"
                 setShowBadge(false)
+            },
+            NotificationChannel(CHANNEL_MEDICINE_PENDING, "شمارندہ قدم", NotificationManager.IMPORTANCE_MIN).apply {
+                description = "روزانہ قدموں کی گنتی اور باقی دوائیوں کی یاد دہانی"
+                setShowBadge(false)
+                setSound(null, null)
             },
             NotificationChannel(CHANNEL_READING, "مطالعہ کی یاد دہانی", NotificationManager.IMPORTANCE_LOW).apply {
                 description = "حقوق النساء مطالعہ — ہر 3 دن بعد یاد دہانی"
@@ -368,6 +375,26 @@ fun showExerciseReminder() {
         } else {
             showMedicineReminder(timePeriod)
         }
+    }
+
+    fun syncPendingMedicationNotification(pending: List<String>) {
+        if (!hasPermission()) return
+        if (pending.isEmpty()) {
+            NotificationManagerCompat.from(context).cancel(NOTIFY_MEDICINE_PENDING)
+            return
+        }
+        val names = pending.joinToString("، ")
+        val msg = names + " — وقت ہو گیا ہے، لینا مت بھولیں!"
+        val builder = NotificationCompat.Builder(context, CHANNEL_MEDICINE_PENDING)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("💊 دوائیں باقی ہیں")
+            .setContentText(msg)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(msg))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setSilent(true)
+            .setContentIntent(getNavIntent(NAV_WELLNESS))
+        NotificationManagerCompat.from(context).notify(NOTIFY_MEDICINE_PENDING, builder.build())
     }
 
     fun showMedicineTakenConfirmation(medId: String?, timePeriod: String) {

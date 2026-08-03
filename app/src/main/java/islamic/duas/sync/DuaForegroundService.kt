@@ -295,6 +295,11 @@ class DuaForegroundService : Service() {
                             nm.notify(NOTIF_ID, notification)
                         } catch (_: Exception) {}
                         try {
+                            val pending = HealthEngine(this@DuaForegroundService).getPendingMedications()
+                            islamic.duas.AppNotificationManager(this@DuaForegroundService)
+                                .syncPendingMedicationNotification(pending)
+                        } catch (_: Exception) {}
+                        try {
                             islamic.duas.PermissionNotificationManager(this@DuaForegroundService).checkAndPostAll()
                         } catch (_: Exception) {}
                         lastNotifUpdate = now
@@ -693,13 +698,6 @@ class DuaForegroundService : Service() {
             if (weatherInfo.isNotBlank()) parts.add(weatherInfo.trimStart('\n'))
 
             bodyText = parts.joinToString("\n")
-
-            try {
-                val pending = HealthEngine(this).getPendingMedications()
-                if (pending.isNotEmpty()) {
-                    bodyText = bodyText + "\n💊 " + pending.joinToString("، ") + " — وقت ہو گیا ہے، لینا مت بھولیں!"
-                }
-            } catch (_: Exception) {}
         } catch (_: Exception) {
             titleText = "اسلامی دعائیں"
             bodyText = "اللہ کے ذکر میں سکون ہے"
