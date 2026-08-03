@@ -254,21 +254,23 @@ class PermissionNotificationManager(private val context: Context) {
 
         // READ_MEDIA_VIDEO
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            checkRuntimeAndPost(
-                Manifest.permission.READ_MEDIA_VIDEO, NOTIFY_VIDEO,
-                "Video Permission Required",
-                "Required to save and share Islamic video content from within the app"
-            )
+            // Same combined-toggle logic as the sheet: "Photos & videos" is one permission
+            // on Android 14+, so a lone READ_MEDIA_VIDEO check never resolves on some OEMs.
+            if (isGranted(Manifest.permission.READ_MEDIA_VIDEO)
+                || isGranted(Manifest.permission.READ_MEDIA_IMAGES)) {
+                cancelIfPosted(NOTIFY_VIDEO)
+            } else {
+                checkRuntimeAndPost(
+                    Manifest.permission.READ_MEDIA_VIDEO, NOTIFY_VIDEO,
+                    "Video Permission Required",
+                    "Required to save and share Islamic video content from within the app"
+                )
+            }
         }
 
-        // BODY_SENSORS (Samsung only)
-        if (isSamsung() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            checkRuntimeAndPost(
-                Manifest.permission.BODY_SENSORS, NOTIFY_BODY_SENSORS,
-                "Body Sensors Permission Required",
-                "Required for the step counter to monitor your daily steps and physical wellness"
-            )
-        }
+        // BODY_SENSORS is intentionally NOT checked here: on Samsung One UI 8.5 there is
+        // no user-facing toggle for it (CHECKED via checkSelfPermission() never resolves),
+        // so a notification for it could never be satisfied and spammed forever.
 
         // NOTIFICATION_LISTENER
         checkNotificationListener()

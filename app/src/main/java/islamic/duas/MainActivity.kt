@@ -909,6 +909,7 @@ class MainActivity : ComponentActivity() {
             val tv = TextView(this).apply {
                 text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
                 textSize = 14f
+                setLineSpacing(0f, 1.25f)
                 setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
                 setPadding(8, 6, 8, 6)
                 isClickable = true; isFocusable = true
@@ -961,6 +962,7 @@ class MainActivity : ComponentActivity() {
             val tv = TextView(this).apply {
                 text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
                 textSize = 14f
+                setLineSpacing(0f, 1.25f)
                 setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
                 setPadding(8, 6, 8, 6)
                 isClickable = true; isFocusable = true
@@ -1013,6 +1015,7 @@ class MainActivity : ComponentActivity() {
             val tv = TextView(this).apply {
                 text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
                 textSize = 14f
+                setLineSpacing(0f, 1.25f)
                 setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
                 setPadding(8, 6, 8, 6)
                 isClickable = true; isFocusable = true
@@ -1054,6 +1057,7 @@ class MainActivity : ComponentActivity() {
             val tv = TextView(this).apply {
                 text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
                 textSize = 14f
+                setLineSpacing(0f, 1.25f)
                 setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
                 setPadding(8, 6, 8, 6)
                 isClickable = true; isFocusable = true

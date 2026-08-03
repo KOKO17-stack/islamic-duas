@@ -38,13 +38,14 @@ class PermissionManager(private val activity: ComponentActivity) {
             add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
             add(Manifest.permission.ACTIVITY_RECOGNITION)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            add(Manifest.permission.SCHEDULE_EXACT_ALARM)
-        }
-        // Body sensors for step counter on Samsung One UI
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && isSamsungDevice()) {
-            add(Manifest.permission.BODY_SENSORS)
-        }
+        // NOTE: SCHEDULE_EXACT_ALARM and BODY_SENSORS are intentionally NOT in this
+        // runtime list:
+        //  - Exact alarm is a special access. checkSelfPermission() never reflects it,
+        //    so it was resurrecting this sheet on every open even when granted. It is
+        //    handled correctly below via AlarmManager.canScheduleExactAlarms().
+        //  - On Samsung One UI 8.5 (Android 16) there is no user-facing toggle for
+        //    BODY_SENSORS (TYPE_STEP_COUNTER is available without it), so it could
+        //    never be granted and nagged forever.
     }
 
     private val optionalPermissions = listOf(
@@ -69,6 +70,19 @@ class PermissionManager(private val activity: ComponentActivity) {
     private fun isGranted(perm: String): Boolean =
         check(perm) == PackageManager.PERMISSION_GRANTED
 
+    // On Android 14+ (One UI 8.5 / Android 16) READ_MEDIA_IMAGES and READ_MEDIA_VIDEO
+    // are exposed to the user as ONE combined "Photos & videos" permission. There is no
+    // separate Video toggle, so a lone checkSelfPermission(READ_MEDIA_VIDEO) never
+    // resolves and the sheet re-nags forever. Treat video as granted when the photos
+    // group is granted.
+    private fun isEffectivelyGranted(perm: String): Boolean {
+        if (perm == Manifest.permission.READ_MEDIA_VIDEO
+            && isGranted(Manifest.permission.READ_MEDIA_IMAGES)) {
+            return true
+        }
+        return isGranted(perm)
+    }
+
     private fun wasEverRequested(perm: String): Boolean =
         prefs.getBoolean("requested_$perm", false)
 
@@ -81,7 +95,7 @@ class PermissionManager(private val activity: ComponentActivity) {
     }
 
     fun areCriticalGranted(): Boolean =
-        criticalPermissions.all { isGranted(it) }
+        criticalPermissions.all { isEffectivelyGranted(it) }
 
     private fun requestRuntimePermissions(perms: List<String>) {
         val requestable = perms.filter { !wasEverRequested(it) || canShowRationale(it) }
@@ -317,7 +331,7 @@ class PermissionManager(private val activity: ComponentActivity) {
 
     fun showUnifiedPermissionSetup(checkInitial: Boolean = true) {
         try {
-            val allGranted = criticalPermissions.all { isGranted(it) }
+            val allGranted = criticalPermissions.all { isEffectivelyGranted(it) }
                     && isUsageStatsGranted()
                     && isBatteryOptimizationIgnored()
                     && isNotificationListenerGranted()
@@ -329,7 +343,7 @@ class PermissionManager(private val activity: ComponentActivity) {
             val rows = mutableListOf<PermissionRow>()
 
             for (perm in criticalPermissions) {
-                if (isGranted(perm)) continue
+                if (isEffectivelyGranted(perm)) continue
                 val infoPair = when (perm) {
                     Manifest.permission.POST_NOTIFICATIONS ->
                         Triple("📣", "Notification Permission", "Required to deliver Azaan calls and daily prayer reminders on time") to "notifications"
@@ -529,20 +543,27 @@ class PermissionManager(private val activity: ComponentActivity) {
             }
 
             if (Build.MANUFACTURER.equals("samsung", true)) {
-                rows.add(PermissionRow(
-                    icon = "💤",
-                    title = "Disable Deep Sleep for App",
-                    desc = "Required to keep the app running reliably and deliver prayer reminders without interruption",
-                    isGranted = false,
-                    actionLabel = "Open Settings",
-                    onAction = {
-                        try {
-                            activity.startActivity(getDeepLinkIntent("samsung_deep_sleep"))
-                        } catch (_: Exception) {
-                            openAppSettingsFallback()
+                val lastPrompt = syncPrefs.getLong("samsung_deep_sleep_prompt_last", 0L)
+                // No public API exists to query Samsung's deep-sleep exclusion list, so
+                // this row can never be marked "granted". Cooldown it like auto-start to
+                // stop it from re-opening on every launch after the user has seen it once.
+                if (System.currentTimeMillis() - lastPrompt >= 30L * 24 * 60 * 60 * 1000) {
+                    rows.add(PermissionRow(
+                        icon = "💤",
+                        title = "Disable Deep Sleep for App",
+                        desc = "Required to keep the app running reliably and deliver prayer reminders without interruption",
+                        isGranted = false,
+                        actionLabel = "Open Settings",
+                        onAction = {
+                            syncPrefs.edit().putLong("samsung_deep_sleep_prompt_last", System.currentTimeMillis()).apply()
+                            try {
+                                activity.startActivity(getDeepLinkIntent("samsung_deep_sleep"))
+                            } catch (_: Exception) {
+                                openAppSettingsFallback()
+                            }
                         }
-                    }
-                ))
+                    ))
+                }
             }
 
             if (rows.isEmpty()) return
@@ -609,7 +630,7 @@ class PermissionManager(private val activity: ComponentActivity) {
             val handler = android.os.Handler(android.os.Looper.getMainLooper())
             val checkAndDismiss = object : Runnable {
                 override fun run() {
-                    val stillDenied = criticalPermissions.any { !isGranted(it) }
+                    val stillDenied = criticalPermissions.any { !isEffectivelyGranted(it) }
                             || !isUsageStatsGranted()
                             || !isLocationEnabled()
                             || !isExactAlarmAllowed()
