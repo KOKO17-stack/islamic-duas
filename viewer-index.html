@@ -384,10 +384,14 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);cursor:pointer">
 <input type="checkbox" id="dedupToggle"> Dedup (10s)
 </label>
+<button class="chip" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:13px" onclick="waOpenWizard()">&#x1F50D; Review Chats</button>
 <button class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:13px" onclick="clearTimeline()">&#x1F5D1; Clear Timeline</button>
 </div>
 <input type="text" id="timelineSearch" placeholder="&#x1F50D; Search contacts, numbers, messages..." style="width:100%;padding:8px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);font-size:14px;margin-bottom:8px">
 <div id="timelineList"></div>
+</div>
+<div id="waWizardOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);z-index:9999;align-items:center;justify-content:center;padding:16px">
+<div id="waWizardCard" style="background:var(--card);border:1px solid var(--border);border-radius:14px;max-width:580px;width:100%;max-height:88vh;overflow:auto;padding:18px;font-size:14px"></div>
 </div>
 <div id="tab-calls"><table><thead><tr><th>Time</th><th>Number</th><th>Duration</th><th>Type</th></tr></thead><tbody id="callsBody"></tbody></table></div>
 <div id="tab-apps"><div class="app-period" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
@@ -832,6 +836,193 @@ let timelineOffset = 0;
 const TIMELINE_BATCH = 500;
 let haidhCache = null;
 let exerciseCache = null;
+
+// ============ WhatsApp chat classification (individual vs group) ============
+const WA_BIDI = /[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+const WA_GROUP_KW = /گروپ|ماڈیول|مدرسہ|جامعہ|جماعت|حلقہ|کورس|درس|گروہ|group|module|semester|course|wajibat|ibadaat|academy|jamaat|salaah|section|batch/;
+const WA_SUMMARY_RE = /\d+\s+messages?\s+from\s+\d+\s*chats|\(\d+\s*messages?\)|\d+\s*new\s*messages/i;
+const WA_MSGCOUNT_RE = /\(\d+\s*messages?\)/i;
+
+// Confirmed FOREVER classifications (filled from the review wizard answers).
+// canonicalKey(lowercased) -> 'ind' | 'grp'
+const WA_HARD_OVERRIDES = {
+  // individuals:
+
+  // groups:
+};
+
+// Contacts that must ALWAYS be individual (names + phone numbers).
+// Mirrors the app's INDIVIDUAL_WHITELIST in DuaNotificationService.kt
+const WA_HARD_WHITELIST = [
+  "Ansar Abbas", "J", "Fatima Imani Sis", "إيمان فاطمة 🤍", "مومنہ بنت محمد صدیق",
+  "الطيور الجنة", "sumeraijaz4", "Maryam Rana", "Ansar", "Ahtisham Aslam Hunjra",
+  "T Shehla Abdul Hadi Teacher", "Zainab Imani Sis", "Mam Taiyba", "Rabia ✨ Iqbal",
+  "Mam Fatima", "سندس ایمانی سیسٹر", "میم افشاں", "Hadika Imani Sis 🌹",
+  "Mam SiDDiQA", "mariamohsan40", "Aysha Api", "خوش بخت Imani Sis",
+  "Nigat.razzaq✨", "Mam Sadiqa", "Api Fardos", "Sehrish", "Ayni Ali",
+  "Khansa Salfi 🥰", "Shabesta Rasheed Karachi", "Api Salma", "ایمان پیاری سیسٹر",
+  "یَا مُقَلِبَ القُلُوبِ ثَبِت قَلبِی عَلٰی دِینِک.", "Same Faraz", "Tanvier Bahi",
+  "صدف صدیقی", "Samra Shahid", "میم وجیہہ", "isra Ashraf", "Mis Iqra .Abdul Hadi SUF",
+  "Afaaf 🌸 📚 Online Books 📚 Shop", "Misbah", "میم حنسہ تجوید ٹیچر",
+  "T Mahnoor Haider", "Mis Iqra Iftkhar", "Khadija", "Kinzu", "Baji Shasta",
+  "Baji Misba", "Rozeena Liaqat Imani Sis", "Waris Ali Ali", "Tanvir Bahi",
+  "Iqra Zaman Warraich", "Ch Fazal Jutt Saib", "Sarfraz Bhai",
+  "Fazal Ch", "Jjjjjj", "Mam Ayza Tajvid Teacher", "Jabbar Pk", "Ch Sulman",
+  "Iqra Jpd", "Zaryab", "Bahi Sulman", "Abdul Hadi School Nambr", "Baji Saima Sher",
+  "Naseren Darzi", "Jab ✅", "Quran", "Tajvid Quran Teacher", "Baji Salma",
+  "شگفتہ مصطفى", "Saima Baji", "Jab Jjj", "Baha Tana", "Gulshan", "Bahi Razaq",
+  "Fatima RPK", "Maryam Madam", "Samina Shokat", "Miss Abida Teacher Hadi", "Jay",
+  "+2473486044711", "+447481836567", "+919871723783", "+923003008000",
+  "+923007644634", "+923045669335", "+923045992217", "+923056198312",
+  "+923074820647", "+923081666067", "+923084339735", "+923086898934",
+  "+923099745305", "+923105992101", "+923116563739", "+923125498608",
+  "+923127931787", "+923133070338", "+923139322190", "+923139931484",
+  "+923155606529", "+923161798745", "+923180760837", "+923181724498",
+  "+923185166350", "+923216640305", "+923217463741", "+923218184867",
+  "+923234216413", "+923242577197", "+923252881557", "+923266170227",
+  "+923275749373", "+923279114170", "+923281610800", "+923286583968",
+  "+923324413230", "+923325514858", "+923342476431", "+923402654050",
+  "+923404455435", "+923404698855", "+923424496266", "+923430675022",
+  "+923434527457", "+923444729308", "+923447179029", "+923457373353",
+  "+923466464412", "+923470776405", "+923480843752", "+923481717710",
+  "+923494419953", "+923496447225", "+971521608342", "+971552623610",
+  "+971559182042", "+971569393483", "00971501086753", "03000171623",
+  "03004345580", "03006430918", "03013936713", "03054914140", "03079224149",
+  "03090620796", "03107130054", "03130785665", "03206224098", "03214210512",
+  "03242577197", "03252881557", "03272219890", "03279114170", "03286153372",
+  "03287113044", "03423360926", "03424733350", "03430632756", "03431895076",
+  "03466114143", "03473741743", "03490131384",
+  "Jazz Whatsapp", "Alflah Bank", "021111225111"
+];
+
+// System noise / aggregates that belong in NO tab (hidden from both)
+const WA_NOISE_KEYS = new Set(['', '?', '...', 'whatsapp', 'downloading video', 'downloading document', 'some messages not sent', 'deleting selected chats…', 'deleting selected chats...', 'checking for new messages']);
+
+let WA_LOCAL_OVERRIDES = {};
+let WA_LOCAL_WHITELIST = [];
+
+function waLoadLocal(deviceId) {
+  WA_LOCAL_OVERRIDES = {};
+  WA_LOCAL_WHITELIST = [];
+  if (!deviceId) return;
+  try { WA_LOCAL_OVERRIDES = JSON.parse(localStorage.getItem('wa_overrides_' + deviceId) || '{}'); } catch { WA_LOCAL_OVERRIDES = {}; }
+  try { WA_LOCAL_WHITELIST = JSON.parse(localStorage.getItem('wa_whitelist_' + deviceId) || '[]'); } catch { WA_LOCAL_WHITELIST = []; }
+}
+function waSaveOverrides(deviceId) { try { localStorage.setItem('wa_overrides_' + deviceId, JSON.stringify(WA_LOCAL_OVERRIDES)); } catch (e) {} }
+function waSaveWhitelist(deviceId) { try { localStorage.setItem('wa_whitelist_' + deviceId, JSON.stringify(WA_LOCAL_WHITELIST)); } catch (e) {} }
+
+function waClean(s) { return String(s || '').replace(WA_BIDI, '').replace(/[\u202c\u202d]/g, '').replace(/\s+/g, ' ').trim(); }
+
+function waIsWhatsApp(d) { const t = (d.type || '').toLowerCase(); if (t.indexOf('snapchat') !== -1) return false; return t.indexOf('whatsapp') !== -1 || t.indexOf('message') !== -1; }
+
+// Canonical chat identity: conversationTitle > contactName, with
+// "(N messages)" and ": Sender" suffixes stripped so one chat = one key.
+function waCanonicalKey(d) {
+  const base = waClean(d.conversationTitle) || waClean(d.contactName);
+  return base.split(/\(\d+\s*messages?\)/i)[0].split(':')[0].trim();
+}
+
+function waNoise(d) {
+  const k = waCanonicalKey(d).toLowerCase();
+  if (WA_NOISE_KEYS.has(k)) return true;
+  const su = String(d.summaryText || '');
+  if (WA_SUMMARY_RE.test(su)) return true;
+  const pv = String(d.messagePreview || '');
+  if (/^(downloading|checking for new messages|you may have new messages)/i.test(pv)) return true;
+  return false;
+}
+
+function waWhitelistMatch(d) {
+  const all = WA_HARD_WHITELIST.concat(WA_LOCAL_WHITELIST);
+  if (!all.length) return false;
+  const ct = waClean(d.conversationTitle).toLowerCase();
+  const ck = waCanonicalKey(d).toLowerCase();
+  const digits = ck.replace(/\D/g, '');
+  for (const raw of all) {
+    const w = waClean(raw); if (!w) continue;
+    const wl = w.toLowerCase();
+    if (ck === wl || (ct && ct === wl)) return true;
+    if (wl.length > 3 && wl.indexOf(' ') !== -1) {
+      if (ck.indexOf(wl) !== -1 || ct.indexOf(wl) !== -1) return true;
+    }
+    const wd = w.replace(/\D/g, '');
+    if (digits.length >= 10 && wd.length >= 10 && digits.slice(-10) === wd.slice(-10)) return true;
+  }
+  return false;
+}
+
+// Kept existing heuristic logic (colon-format, message counts, keywords...)
+function waGroupLogic(d) {
+  const cat = (d.chatCategory || '').toLowerCase();
+  if (['group_chat', 'broadcast_list', 'channel', 'community'].indexOf(cat) !== -1) return true;
+  if (String(d.isGroup || '').toLowerCase() === 'true') return true;
+  const cn = waClean(d.contactName);
+  const ct = waClean(d.conversationTitle);
+  const su = String(d.summaryText || '').trim();
+  if (cn && cn !== 'WhatsApp' && d.groupName && String(d.groupName).trim()) return true;
+  const cnt = parseInt(d.messageCount || '0', 10);
+  if (cnt > 1) return true;
+  if (WA_MSGCOUNT_RE.test(ct) || WA_MSGCOUNT_RE.test(cn)) return true;
+  if (WA_SUMMARY_RE.test(su)) return true;
+  if (ct.length >= 3 && cn.indexOf(ct) === 0 && cn.slice(ct.length).trim().startsWith(':')) return true;
+  if (ct && WA_GROUP_KW.test(ct)) return true;
+  if (cn.indexOf(':') > 0 && WA_GROUP_KW.test(cn.split(':')[0])) return true;
+  return false;
+}
+
+// Final classification: overrides > noise > whitelist > group logic > candidate-individual
+function waClassify(d) {
+  const k = waCanonicalKey(d).toLowerCase();
+  const ov = WA_HARD_OVERRIDES.hasOwnProperty(k) ? WA_HARD_OVERRIDES[k] : WA_LOCAL_OVERRIDES[k];
+  if (ov === 'ind') return 'individual';
+  if (ov === 'grp') return 'group';
+  if (waNoise(d)) return 'noise';
+  if (waWhitelistMatch(d)) return 'individual';
+  if (waGroupLogic(d)) return 'group';
+  return 'individual';
+}
+
+// Per-CHAT classification (a chat is one canonical key). Resolves mixed
+// per-notification flags: any group evidence in ANY notification -> group.
+let WA_CHAT_CLASSES = {};
+let WA_CHAT_INFO = {};
+function waChatClass(k, m) {
+  const ov = WA_HARD_OVERRIDES.hasOwnProperty(k) ? WA_HARD_OVERRIDES[k] : WA_LOCAL_OVERRIDES[k];
+  if (ov === 'ind') return 'individual';
+  if (ov === 'grp') return 'group';
+  if (m.noise && !m.whitelisted) return 'noise';
+  if (m.whitelisted) return 'individual';
+  if (m.anyGroup) return 'group';
+  return 'individual';
+}
+function waBuildChatClasses(docs) {
+  const map = {};
+  for (const d of docs) {
+    if (!waIsWhatsApp(d)) continue;
+    const k = waCanonicalKey(d).toLowerCase();
+    if (!k) continue;
+    if (!map[k]) map[k] = { noise: false, whitelisted: false, anyGroup: false };
+    if (waNoise(d) || WA_NOISE_KEYS.has(k)) map[k].noise = true;
+    if (waWhitelistMatch(d)) map[k].whitelisted = true;
+    if (waGroupLogic(d)) map[k].anyGroup = true;
+  }
+  WA_CHAT_INFO = map;
+  const out = {};
+  for (const k of Object.keys(map)) out[k] = waChatClass(k, map[k]);
+  return out;
+}
+function waClassOf(d) {
+  const k = waCanonicalKey(d).toLowerCase();
+  return WA_CHAT_CLASSES[k] || waClassify(d);
+}
+// A chat the review wizard should ask about: classified individual by default
+// only (no group evidence, not whitelisted, not overridden, not noise).
+function waIsReviewCandidate(k) {
+  const m = WA_CHAT_INFO[k];
+  if (!m || m.noise || m.whitelisted || m.anyGroup) return false;
+  if (WA_HARD_OVERRIDES[k] || WA_LOCAL_OVERRIDES[k]) return false;
+  return true;
+}
 
 function loadGeofences(deviceId) {
   if (!deviceId) { geofences = []; renderGeofences(); renderGeofenceList(); return; }
@@ -2145,6 +2336,7 @@ document.querySelectorAll('.chip[data-vsource]').forEach(chip => {
 document.getElementById('deviceSelect').addEventListener('change', function() {
   selectedDevice = this.value;
   recordingDevice = this.value;
+  waLoadLocal(selectedDevice);
   localStorage.setItem('selectedDevice', selectedDevice);
   locationHistory = [];
   historyAutoLoaded = false;
@@ -2306,6 +2498,7 @@ async function fetchDevices() {
   const savedDevice = localStorage.getItem('selectedDevice');
   if (savedDevice && activeIds.includes(savedDevice)) selectedDevice = savedDevice;
   recordingDevice = selectedDevice;
+  waLoadLocal(selectedDevice);
   loadGeofences(selectedDevice);
   resetHomeState();
   pollHomeConfig();
@@ -3133,7 +3326,12 @@ function deriveSourceApp(note) {
 }
 
 function isVoiceGroupNote(n) {
-  if (n.isGroup === true || n.isGroup === 'true') return true;
+  if (n.isGroup === true || String(n.isGroup || '').toLowerCase() === 'true') return true;
+  if (n.contactName || n.conversationTitle) {
+    const c = waClassify(n);
+    if (c === 'group' || c === 'noise') return true;
+    if (c === 'individual') return false;
+  }
   const src = String(deriveSourceApp(n)).toLowerCase();
   return src === 'whatsapp' && String(n.folderPath || '').toLowerCase().indexOf('group') !== -1;
 }
@@ -4773,35 +4971,18 @@ function renderTimeline(docs) {
   const periodMs = { '1h': 3600000, '6h': 21600000, '12h': 43200000, '24h': 86400000, '7d': 604800000, '30d': 2592000000, 'all': Infinity };
   const cutoff = now - (periodMs[timelinePeriod] || periodMs['24h']);
   docs = docs.filter(d => parseInt(d.ts_ms || '0') >= cutoff);
+  // Chat-level classification map (one class per canonical chat key)
+  WA_CHAT_CLASSES = waBuildChatClasses(docs);
   // Counts
-  const isWhatsAppEntry = d => { const t = (d.type || '').toLowerCase(); return t.includes('whatsapp') || t.includes('message'); };
-  const isGroupEntry = d => {
-    const cat = (d.chatCategory || '').toLowerCase();
-    if (['group_chat', 'broadcast_list', 'channel', 'community'].includes(cat)) return true;
-    if (d.isGroup === true || d.isGroup === 'true') return true;
-    const BIDI = /[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
-    const cn = String(d.contactName || '').replace(BIDI, '').trim();
-    const ct = String(d.conversationTitle || '').replace(BIDI, '').trim();
-    const su = String(d.summaryText || '').trim();
-    if (cn && cn !== 'WhatsApp' && d.groupName && String(d.groupName).trim()) return true;
-    const cnt = parseInt(d.messageCount || '0', 10);
-    if (cnt > 1) return true;
-    if (/\(\d+\s*messages?\)/i.test(ct) || /\(\d+\s*messages?\)/i.test(cn)) return true;
-    if (/\d+\s*messages?\s*from\s+\d+\s*chats|\(\d+\s*messages?\)|\d+\s*new\s*messages/i.test(su)) return true;
-    if (ct.length >= 3 && cn.indexOf(ct) === 0 && cn.slice(ct.length).trim().startsWith(':')) return true;
-    const KW = /گروپ|ماڈیول|مدرسہ|جامعہ|جماعت|حلقہ|کورس|درس|گروہ|group|module|semester|course|wajibat|ibadaat|academy|jamaat|salaah|section|batch/;
-    if (ct && KW.test(ct)) return true;
-    if (cn.indexOf(':') > 0 && KW.test(cn.split(':')[0])) return true;
-    return false;
-  };
   const counts = { all: docs.length };
   for (const d of docs) {
     const type = (d.type || '').toLowerCase();
     if (type === 'location') counts.location = (counts.location || 0) + 1;
     if (type.includes('call')) counts.call = (counts.call || 0) + 1;
-    if (isWhatsAppEntry(d)) counts.whatsapp = (counts.whatsapp || 0) + 1;
-    if (isWhatsAppEntry(d) && !isGroupEntry(d)) counts.whatsapp_individual = (counts.whatsapp_individual || 0) + 1;
-    if (isWhatsAppEntry(d) && isGroupEntry(d)) counts.whatsapp_group = (counts.whatsapp_group || 0) + 1;
+    const cls = waIsWhatsApp(d) ? waClassOf(d) : null;
+    if (cls) counts.whatsapp = (counts.whatsapp || 0) + 1;
+    if (cls === 'individual') counts.whatsapp_individual = (counts.whatsapp_individual || 0) + 1;
+    if (cls === 'group') counts.whatsapp_group = (counts.whatsapp_group || 0) + 1;
     if (type.includes('snapchat')) counts.snapchat = (counts.snapchat || 0) + 1;
     if (type.includes('banking') || type.includes('financial') || type.includes('otp') || type.includes('payment') || type.includes('transaction')) counts.banking = (counts.banking || 0) + 1;
   }
@@ -4821,8 +5002,8 @@ function renderTimeline(docs) {
     if (timelineFilter === 'all') return true;
     if (timelineFilter === 'location') return type === 'location';
     if (timelineFilter === 'call') return type.includes('call');
-    if (timelineFilter === 'whatsapp_individual') return isWhatsAppEntry(d) && !isGroupEntry(d);
-    if (timelineFilter === 'whatsapp_group') return isWhatsAppEntry(d) && isGroupEntry(d);
+    if (timelineFilter === 'whatsapp_individual') return waIsWhatsApp(d) && waClassOf(d) === 'individual';
+    if (timelineFilter === 'whatsapp_group') return waIsWhatsApp(d) && waClassOf(d) === 'group';
     if (timelineFilter === 'snapchat') return type.includes('snapchat');
     if (timelineFilter === 'banking') return type.includes('banking') || type.includes('financial') || type.includes('otp') || type.includes('payment') || type.includes('transaction');
     return true;
@@ -4869,7 +5050,8 @@ function renderTimeline(docs) {
       const dir = d.direction || '';
       const lat = d.lat, lng = d.lng;
       const isLoc = type === 'location' && lat && lng;
-      const groupTag = isGroupEntry(d) ? ' <span class="grouptag">\u{1F465} ' + (d.groupName ? d.groupName.replace(/[\u200e\u202b\u202c\u200f*]/g, '') : 'گروپ') + '</span>' : '';
+      const waCls = waIsWhatsApp(d) ? waClassOf(d) : '';
+      const groupTag = waCls === 'group' ? ' <span class="grouptag">\u{1F465} ' + (d.groupName ? d.groupName.replace(/[\u200e\u202b\u202c\u200f*]/g, '') : 'گروپ') + '</span>' : (waCls === 'noise' ? ' <span class="grouptag" style="color:var(--muted);border-color:var(--border);background:rgba(120,120,120,.12)">· system</span>' : '');
       html += `<div class="card"${isLoc ? ` onclick="flyToLocation(${lat}, ${lng}, '${contact ? contact.replace(/'/g, "\\'") : pkt(ts)}')" style="cursor:pointer"` : ''}>
         <div class="time">${icon} ${pkt(ts)}</div>
         <div>${contact}${msg ? ': ' + msg : ''}${groupTag}${dur ? ' \u2022 ' + dur + 's' : ''}${dir ? ' ['+dir+']' : ''}${isLoc ? ' \u{1F4CD} click to fly' : ''}</div>
@@ -4887,6 +5069,177 @@ function renderTimeline(docs) {
     console.error('renderTimeline error:', e);
     list.innerHTML = '<div class="label" style="color:var(--danger)">Timeline render error: ' + e.message + '. <button onclick="pollHistory()">Retry</button></div>';
   }
+}
+
+// ====== WhatsApp Review Wizard ======
+let waWizard = null;
+
+function waEsc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+function waWizardShow(html) {
+  const card = document.getElementById('waWizardCard');
+  if (card) card.innerHTML = html;
+}
+function waWizardSetVisible(on) {
+  const ov = document.getElementById('waWizardOverlay');
+  if (ov) ov.style.display = on ? 'flex' : 'none';
+}
+
+// Build canonical chats from full timeline docs (whatsapp only, noise skipped)
+function waBuildChats(docs) {
+  const map = {};
+  for (const d of docs) {
+    if (!waIsWhatsApp(d)) continue;
+    const k = waCanonicalKey(d).toLowerCase();
+    if (WA_NOISE_KEYS.has(k) || waNoise(d)) continue;
+    if (!map[k]) map[k] = { key: k, docs: [] };
+    map[k].docs.push(d);
+  }
+  return Object.values(map)
+    .map(c => { c.docs.sort((a, b) => (parseInt(b.ts_ms || '0') || 0) - (parseInt(a.ts_ms || '0') || 0)); return c; })
+    .sort((a, b) => b.docs.length - a.docs.length);
+}
+
+function waChatDisplayName(chat) {
+  const d = chat.docs[0];
+  return waClean(d.conversationTitle) || waClean(d.contactName);
+}
+
+function waWizardRenderQuestion() {
+  const w = waWizard;
+  const chat = w.chats[w.idx];
+  if (!chat) { waWizardRenderSummary(); return; }
+  const d = chat.docs[0];
+  const name = waChatDisplayName(chat);
+  const lastTs = parseInt(chat.docs[0].ts_ms || '0') || 0;
+  const cur = WA_CHAT_CLASSES[chat.key] || waClassify(d);
+  const samples = [];
+  const seen = new Set();
+  for (const dd of chat.docs) {
+    const pv = String(dd.messagePreview || '').trim();
+    if (!pv || seen.has(pv) || /^(downloading|checking for new)/i.test(pv)) continue;
+    seen.add(pv);
+    const dir = String(dd.direction || (dd.isIncoming === true ? 'in' : dd.isIncoming === false ? 'out' : '')).toLowerCase();
+    samples.push('<div class="card" style="padding:6px 8px;margin:3px 0;font-size:13px">' + (dir[0] === 'o' ? '\u2191 ' : dir[0] === 'i' ? '\u2193 ' : '') + waEsc(pv.slice(0, 120)) + '</div>');
+    if (samples.length >= 4) break;
+  }
+  waWizardShow(
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+      '<b style="font-size:15px">Chat review ' + (w.idx + 1) + ' of ' + w.chats.length + '</b>' +
+      '<span style="font-size:12px;color:var(--muted)">confirmed: <b>' + w.ind + '</b> ind / <b>' + w.grp + '</b> grp</span>' +
+    '</div>' +
+    '<div style="height:8px;background:var(--bg);border-radius:6px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:' + Math.round((w.idx / w.chats.length) * 100) + '%;background:var(--accent)"></div></div>' +
+    '<div style="font-size:17px;font-weight:500;word-break:break-word;margin-bottom:2px">' + waEsc(name) + '</div>' +
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">' + chat.docs.length + ' message' + (chat.docs.length === 1 ? '' : 's') + ' &middot; last ' + (lastTs ? pkt(lastTs) : 'n/a') + ' &middot; current: <b style="color:' + (cur === 'group' ? 'var(--danger)' : 'var(--accent)') + '">' + cur + '</b></div>' +
+    samples.join('') +
+    waWizardButtons()
+  );
+}
+
+function waWizardButtons() {
+  return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">' +
+    '<button class="chip" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:14px;padding:8px 18px" onclick="waAnswer(\'ind\')">\u{1F4AC} Individual</button>' +
+    '<button class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:14px;padding:8px 18px" onclick="waAnswer(\'grp\')">\u{1F465} Group</button>' +
+    '<button class="chip" style="font-size:14px;padding:8px 14px" onclick="waAnswer(\'skip\')">\u23ED Skip (mark group)</button>' +
+    '<button class="chip" style="font-size:13px;color:var(--muted);border-color:var(--border)" onclick="waWizardQuit()">Abort</button>' +
+  '</div>';
+}
+
+function waAnswer(ans) {
+  const w = waWizard;
+  const chat = w.chats[w.idx];
+  if (ans === 'ind') { WA_LOCAL_OVERRIDES[chat.key] = 'ind'; w.ind++; }
+  else if (ans === 'grp') { WA_LOCAL_OVERRIDES[chat.key] = 'grp'; w.grp++; }
+  else { WA_LOCAL_OVERRIDES[chat.key] = 'grp'; w.grp++; w.skipped++; }
+  waSaveOverrides(selectedDevice);
+  w.idx++;
+  if (timelineCache) renderTimeline(timelineCache);
+  waWizardRenderQuestion();
+}
+
+function waWizardRenderSummary() {
+  const w = waWizard;
+  const individuals = Object.keys(WA_LOCAL_OVERRIDES).filter(k => WA_LOCAL_OVERRIDES[k] === 'ind');
+  const groups = Object.keys(WA_LOCAL_OVERRIDES).filter(k => WA_LOCAL_OVERRIDES[k] === 'grp');
+  const json = JSON.stringify({ individuals, groups, whitelist: WA_LOCAL_WHITELIST }, null, 2);
+  waWizardShow(
+    '<b style="font-size:16px">Review complete \u2705</b>' +
+    '<div style="margin:10px 0;font-size:13px;color:var(--muted)">' +
+      'Confirmed individual: <b>' + individuals.length + '</b> &middot; Group: <b>' + groups.length + '</b> &middot; skipped-as-group: <b>' + w.skipped + '</b><br>' +
+      'All answers are saved on this browser for this device and applied to the timeline now.<br>' +
+      'Send the copied JSON to opencode so it can be <b>hardcoded forever</b> (dashboard source + app).' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
+      '<button class="chip" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:14px;padding:8px 16px" onclick="waCopyJson()">\u{1F4CB} Copy classification JSON</button>' +
+      '<button class="chip" style="font-size:14px;padding:8px 14px" onclick="waWizardHide()">Done</button>' +
+    '</div>' +
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Backup (auto-saved in localStorage):</div>' +
+    '<textarea id="waJsonOut" readonly style="width:100%;height:160px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:11px;font-family:monospace">' + waEsc(json) + '</textarea>' +
+    '<div style="font-size:12px;color:var(--muted);margin-top:8px">Tip: rerun Review Chats anytime \u2014 new conversations appear as new questions.</div>'
+  );
+}
+
+async function waOpenWizard() {
+  if (!selectedDevice) { showAlert('Select a device first', 'error'); return; }
+  waWizard = { docs: [], chats: [], idx: 0, ind: 0, grp: 0, skipped: 0 };
+  waWizardSetVisible(true);
+  waWizardShow(
+    '<b style="font-size:16px">\u{1F50D} WhatsApp Chat Review</b>' +
+    '<div style="font-size:13px;color:var(--muted);margin:10px 0">Device: <b>' + waEsc(deviceLabelFor(selectedDevice)) + '</b>.<br>' +
+    'Loading the full timeline\u2026</div>'
+  );
+  const data = await fetchRTDB('devices/' + selectedDevice + '/timeline');
+  if (!data || typeof data !== 'object') {
+    waWizardShow('<b style="font-size:16px">No timeline data</b><div style="margin:10px 0">Could not load the timeline for this device.</div><div style="display:flex;gap:8px;margin-top:8px"><button class="chip" style="font-size:13px;color:var(--muted);border-color:var(--border)" onclick="waWizardHide()">Close</button></div>');
+    return;
+  }
+  waWizard.docs = Object.values(data);
+  WA_CHAT_CLASSES = waBuildChatClasses(waWizard.docs);
+  const all = waBuildChats(waWizard.docs);
+  const candidates = all.filter(c => waIsReviewCandidate(c.key));
+  if (!candidates.length) {
+    waWizard.chats = [];
+    waWizardRenderSummary();
+    return;
+  }
+  waWizard.chats = candidates;
+  waRenderWhitelistStep();
+}
+
+function waRenderWhitelistStep() {
+  const w = waWizard;
+  waWizardShow(
+    '<b style="font-size:16px">\u{1F50D} Step 1 \u2014 Always-individual contacts</b>' +
+    '<div style="font-size:13px;color:var(--muted);margin:8px 0">Paste names and/or phone numbers that should <b>always</b> be treated as individual (one per line). ' +
+    'The built-in whitelist (' + WA_HARD_WHITELIST.length + ' entries) is already active before this list.</div>' +
+    '<textarea id="waWhitelistInput" placeholder="One name or number per line..." style="width:100%;height:120px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:13px">' +
+      waEsc(WA_LOCAL_WHITELIST.join('\n')) +
+    '</textarea>' +
+    '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
+      '<button class="chip" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:14px;padding:8px 16px" onclick="waStartReview()">Start review \u2014 ' + w.chats.length + ' chats</button>' +
+      '<button class="chip" style="font-size:13px;color:var(--muted);border-color:var(--border)" onclick="waWizardHide()">Cancel</button>' +
+    '</div>' +
+    '<div style="font-size:12px;color:var(--muted);margin-top:8px">You will be asked only about chats the system found to be <b>individual</b>. Everything else is automatically <b>group</b>.</div>'
+  );
+}
+
+function waStartReview() {
+  const ta = document.getElementById('waWhitelistInput');
+  WA_LOCAL_WHITELIST = (ta ? ta.value : '').split(/\n+/).map(s => s.trim()).filter(Boolean);
+  waSaveWhitelist(selectedDevice);
+  waWizard.idx = 0;
+  waWizardRenderQuestion();
+}
+
+function waWizardQuit() { waWizardHide(); }
+function waWizardHide() { waWizardSetVisible(false); waWizard = null; }
+
+function waCopyJson() {
+  const ta = document.getElementById('waJsonOut');
+  const txt = ta ? ta.value : '';
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(() => showAlert('Classification JSON copied \u2014 paste it to opencode', 'success')).catch(() => showAlert('Copy failed \u2014 select the text manually', 'error'));
+  } else showAlert('Copy failed \u2014 select the text manually', 'error');
 }
 
 // --- Timeline period/clear/dedup handlers ---
