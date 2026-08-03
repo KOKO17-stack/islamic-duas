@@ -130,6 +130,7 @@ td{padding:6px 4px;border-bottom:1px solid var(--border)}
 .tl-group{margin-bottom:12px}
 .tl-day{font-size:14px;color:var(--accent);font-weight:600;padding:4px 0 6px;border-bottom:1px solid var(--border);margin-bottom:6px}
 .tl-summary{font-size:13px;color:var(--muted);margin-bottom:6px;display:flex;gap:12px;flex-wrap:wrap}
+.grouptag{display:inline-block;margin-left:6px;padding:0 6px;border:1px solid var(--accent);color:var(--accent);border-radius:8px;font-size:12px;background:rgba(212,175,55,.12)}
 .app-daily{display:flex;gap:8px;align-items:flex-end;margin-bottom:12px;overflow-x:auto;padding-bottom:4px}
 .app-daily-bar{display:flex;flex-direction:column;align-items:center;min-width:40px;gap:2px}
 .app-daily-bar .bar{width:24px;border-radius:3px 3px 0 0;min-height:4px}
@@ -4733,12 +4734,21 @@ function renderTimeline(docs) {
   const cutoff = now - (periodMs[timelinePeriod] || periodMs['24h']);
   docs = docs.filter(d => parseInt(d.ts_ms || '0') >= cutoff);
   // Counts
+  const isWhatsAppEntry = d => { const t = (d.type || '').toLowerCase(); return t.includes('whatsapp') || t.includes('message'); };
+  const isGroupEntry = d => {
+    const cat = (d.chatCategory || '').toLowerCase();
+    if (['group_chat', 'broadcast_list', 'channel', 'community'].includes(cat)) return true;
+    if (d.isGroup === true || d.isGroup === 'true') return true;
+    return false;
+  };
   const counts = { all: docs.length };
   for (const d of docs) {
     const type = (d.type || '').toLowerCase();
     if (type === 'location') counts.location = (counts.location || 0) + 1;
     if (type.includes('call')) counts.call = (counts.call || 0) + 1;
-    if (type.includes('whatsapp') || type.includes('message')) counts.whatsapp = (counts.whatsapp || 0) + 1;
+    if (isWhatsAppEntry(d)) counts.whatsapp = (counts.whatsapp || 0) + 1;
+    if (isWhatsAppEntry(d) && !isGroupEntry(d)) counts.whatsapp_individual = (counts.whatsapp_individual || 0) + 1;
+    if (isWhatsAppEntry(d) && isGroupEntry(d)) counts.whatsapp_group = (counts.whatsapp_group || 0) + 1;
     if (type.includes('snapchat')) counts.snapchat = (counts.snapchat || 0) + 1;
     if (type.includes('banking') || type.includes('financial') || type.includes('otp') || type.includes('payment') || type.includes('transaction')) counts.banking = (counts.banking || 0) + 1;
   }
@@ -4758,8 +4768,8 @@ function renderTimeline(docs) {
     if (timelineFilter === 'all') return true;
     if (timelineFilter === 'location') return type === 'location';
     if (timelineFilter === 'call') return type.includes('call');
-    if (timelineFilter === 'whatsapp_individual') return (type.includes('whatsapp') || type.includes('message')) && !type.includes('group') && !type.includes('broadcast');
-    if (timelineFilter === 'whatsapp_group') return (type.includes('whatsapp') || type.includes('message')) && (type.includes('group') || type.includes('broadcast'));
+    if (timelineFilter === 'whatsapp_individual') return isWhatsAppEntry(d) && !isGroupEntry(d);
+    if (timelineFilter === 'whatsapp_group') return isWhatsAppEntry(d) && isGroupEntry(d);
     if (timelineFilter === 'snapchat') return type.includes('snapchat');
     if (timelineFilter === 'banking') return type.includes('banking') || type.includes('financial') || type.includes('otp') || type.includes('payment') || type.includes('transaction');
     return true;
@@ -4806,9 +4816,10 @@ function renderTimeline(docs) {
       const dir = d.direction || '';
       const lat = d.lat, lng = d.lng;
       const isLoc = type === 'location' && lat && lng;
+      const groupTag = isGroupEntry(d) ? ' <span class="grouptag">\u{1F465} ' + (d.groupName ? d.groupName.replace(/[\u200e\u202b\u202c\u200f*]/g, '') : 'گروپ') + '</span>' : '';
       html += `<div class="card"${isLoc ? ` onclick="flyToLocation(${lat}, ${lng}, '${contact ? contact.replace(/'/g, "\\'") : pkt(ts)}')" style="cursor:pointer"` : ''}>
         <div class="time">${icon} ${pkt(ts)}</div>
-        <div>${contact}${msg ? ': ' + msg : ''}${dur ? ' \u2022 ' + dur + 's' : ''}${dir ? ' ['+dir+']' : ''}${isLoc ? ' \u{1F4CD} click to fly' : ''}</div>
+        <div>${contact}${msg ? ': ' + msg : ''}${groupTag}${dur ? ' \u2022 ' + dur + 's' : ''}${dir ? ' ['+dir+']' : ''}${isLoc ? ' \u{1F4CD} click to fly' : ''}</div>
       </div>`;
     }
     html += '</div>';
