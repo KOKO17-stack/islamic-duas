@@ -393,7 +393,19 @@ class MainActivity : ComponentActivity() {
                 startActivity(Intent(this, ExerciseLogActivity::class.java))
             }
             AppNotificationManager.NAV_MEDICINE -> {
-                // Medication reminders now handled in wellness tab
+                showTab(2)
+                binding.bottomNav.selectedItemId = R.id.nav_wellness
+                val wellness = getTabRoot(2)
+                wellness.post {
+                    (wellness as? ScrollView)?.let { sv ->
+                        val medCard = wellness.findViewById<View>(R.id.medicineBigCard) ?: return@post
+                        sv.smoothScrollTo(0, medCard.top - 50)
+                        val anim = ObjectAnimator.ofFloat(medCard, "alpha", 0.6f, 1f).setDuration(600)
+                        anim.repeatMode = ValueAnimator.REVERSE
+                        anim.repeatCount = 2
+                        anim.start()
+                    }
+                }
             }
             AppNotificationManager.NAV_HUQOOQ -> {
                 showTab(3)

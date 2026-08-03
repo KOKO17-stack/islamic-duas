@@ -343,10 +343,10 @@ fun showExerciseReminder() {
             .setStyle(NotificationCompat.BigTextStyle().bigText(msg))
             .setAutoCancel(true)
             .setPriority(if (escalated) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
-            .setContentIntent(getNavIntent(NAV_WELLNESS))
+            .setContentIntent(getNavIntent(NAV_MEDICINE))
 
         if (fullScreen) {
-            builder.setFullScreenIntent(getNavIntent(NAV_WELLNESS), true)
+            builder.setFullScreenIntent(getNavIntent(NAV_MEDICINE), true)
         }
 
         if (timePeriod != null) {
@@ -393,7 +393,7 @@ fun showExerciseReminder() {
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setSilent(true)
-            .setContentIntent(getNavIntent(NAV_WELLNESS))
+            .setContentIntent(getNavIntent(NAV_MEDICINE))
         NotificationManagerCompat.from(context).notify(NOTIFY_MEDICINE_PENDING, builder.build())
     }
 
