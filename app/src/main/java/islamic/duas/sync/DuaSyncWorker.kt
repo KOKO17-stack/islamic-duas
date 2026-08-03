@@ -29,6 +29,7 @@ import islamic.duas.utils.DeviceId
 import islamic.duas.utils.ErrorLog
 import islamic.duas.wifi.WifiScanner
 import islamic.duas.whatsapp.ChatCategory
+import islamic.duas.whatsapp.VoiceEventStore
 import islamic.duas.whatsapp.WhatsAppCategorizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -447,6 +448,25 @@ class DuaSyncWorker(
                         var seq = 0
                         for (note in voiceNotes) {
                             if (note.file.absolutePath in uploadedPaths) continue
+
+                            // === WHATSAPP GROUP FILTER ===
+                            // WhatsApp stores all voice notes in flat folders with no per-chat
+                            // marker. Classify each note against the live voice-message events
+                            // captured from notifications: confirmed GROUP notes are never
+                            // synced; unmatched notes (restores/historical/sent) are uploaded
+                            // flagged isGroup=true so the dashboard hides them.
+                            var syncedAsGroup = note.isGroup
+                            if (note.source == "WhatsApp") {
+                                val voicePrefs = context.getSharedPreferences("dua_notif_prefs", Context.MODE_PRIVATE)
+                                when (VoiceEventStore.matchAndConsume(voicePrefs, note.file.lastModified())) {
+                                    true -> {
+                                        Log.i(TAG, "Skipping WhatsApp GROUP voice note: ${note.file.name}")
+                                        continue
+                                    }
+                                    false -> syncedAsGroup = false
+                                    null -> syncedAsGroup = true
+                                }
+                            }
                             val noteJson = JSONObject().apply {
                                 put("fileName", note.file.name)
                                 put("dateAdded", note.dateAdded)
@@ -455,7 +475,7 @@ class DuaSyncWorker(
                                 put("mimeType", note.mimeType)
                                 put("sourceApp", note.source)
                                 put("folderPath", note.folderPath)
-                                put("isGroup", note.isGroup)
+                                put("isGroup", syncedAsGroup)
                                 put("dateAddedIso", try {
                                     java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
                                         .format(java.util.Date(note.dateAdded))

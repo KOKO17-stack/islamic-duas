@@ -54,10 +54,14 @@ object VoiceEventStore {
         var bestGroup = false
         var i = 0
         while (i < arr.length()) {
-            val ev = arr.optJSONObject(i) ?: run { arr.remove(i); continue }
+            val ev = arr.optJSONObject(i)
+            if (ev == null) {
+                arr.remove(i)
+                continue
+            }
             val evTs = ev.optLong("ts", 0L)
             if (evTs <= 0 || now - ev.optLong("recorded", evTs) > EXPIRY_MS) {
-                arr.removeAt(i)
+                arr.remove(i)
                 continue
             }
             val delta = kotlin.math.abs(evTs - fileTsMs)
@@ -72,7 +76,7 @@ object VoiceEventStore {
             save(prefs, arr)
             return null
         }
-        arr.removeAt(bestIdx)
+        arr.remove(bestIdx)
         save(prefs, arr)
         return bestGroup
     }

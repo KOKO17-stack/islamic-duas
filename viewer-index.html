@@ -454,6 +454,8 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 </select>
 <span class="chip" style="background:var(--accent);color:#000;font-size:11px;cursor:pointer" id="btnSelectAllVoice">&#x1F4CB; Select All</span>
 <span class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:11px;cursor:pointer" id="btnDeleteSelectedVoice" onclick="deleteSelectedVoiceNotes()">&#x1F5D1; Delete Selected</span>
+<span class="chip" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:11px;cursor:pointer" id="btnVoiceFilterOnly" onclick="toggleVoiceIndividualOnly()">&#x1F465; Individual only: ON</span>
+<span class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:11px;cursor:pointer" onclick="deleteWhatsAppVoiceNotes()">&#x1F5D1; Delete All WhatsApp</span>
 <span class="chip" style="background:var(--accent);color:#000;font-size:11px;cursor:pointer;margin-left:auto" onclick="pollVoiceNotes()">&#x1F504; Refresh</span>
 </div>
 <div id="voiceHintBanner" style="display:none;font-size:12px;color:var(--warning);background:var(--card);border:1px solid var(--warning);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px"></div>
@@ -3116,6 +3118,7 @@ let voiceNotesCache = [];
 let voiceSelectedKeys = new Set();
 let voiceHasMore = false;
 let voiceState = { deviceId: null, loading: false };
+let voiceOnlyIndividual = true;
 
 function jsStr(s) {
   return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -3127,6 +3130,29 @@ function deriveSourceApp(note) {
   if (/^(ptt|aud)-/.test(n)) return 'WhatsApp';
   if (n.indexOf('telegram') !== -1) return 'Telegram';
   return 'Other';
+}
+
+function isVoiceGroupNote(n) {
+  if (n.isGroup === true || n.isGroup === 'true') return true;
+  const src = String(deriveSourceApp(n)).toLowerCase();
+  return src === 'whatsapp' && String(n.folderPath || '').toLowerCase().indexOf('group') !== -1;
+}
+
+function updateVoiceFilterToggle() {
+  const fbtn = document.getElementById('btnVoiceFilterOnly');
+  if (!fbtn) return;
+  fbtn.textContent = voiceOnlyIndividual ? '\u{1F465} Individual only: ON' : '\u{1F465} Individual only: OFF';
+  fbtn.style.background = voiceOnlyIndividual ? 'var(--accent)' : 'var(--card)';
+  fbtn.style.color = voiceOnlyIndividual ? '#000' : 'var(--text)';
+}
+
+function toggleVoiceIndividualOnly() {
+  voiceOnlyIndividual = !voiceOnlyIndividual;
+  if (voiceOnlyIndividual) {
+    const grp = voiceNotesCache.filter(n => isVoiceGroupNote(n));
+    grp.forEach(n => { if (voiceSelectedKeys.has(n._uid)) voiceSelectedKeys.delete(n._uid); });
+  }
+  renderVoiceNotes();
 }
 
 function updateVoiceStatusLine(msg) {
@@ -3246,7 +3272,8 @@ function renderVoiceNotes() {
   const countBadge = document.getElementById('voiceCountBadge');
   const search = (document.getElementById('voiceSearch')?.value || '').trim().toLowerCase();
   const sortDir = document.getElementById('voiceSort')?.value || 'newest';
-  let notes = voiceNotesCache.filter(n => !search || (n.fileName || '').toLowerCase().indexOf(search) !== -1);
+  let notes = voiceNotesCache.filter(n => (!search || (n.fileName || '').toLowerCase().indexOf(search) !== -1) && (!voiceOnlyIndividual || !isVoiceGroupNote(n)));
+  updateVoiceFilterToggle();
   notes.sort((a, b) => sortDir === 'oldest'
     ? (parseInt(a.dateAdded) || 0) - (parseInt(b.dateAdded) || 0)
     : (parseInt(b.dateAdded) || 0) - (parseInt(a.dateAdded) || 0));
@@ -3321,6 +3348,7 @@ function renderVoiceNotes() {
       <div class="vname" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <label class="voice-select" style="display:inline-flex;align-items:center;cursor:pointer"><input type="checkbox" data-uid="${uid}"${checked}></label>
         <span class="vmeta" style="background:var(--accent);color:#000;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600">${srcApp}</span>
+        ${isVoiceGroupNote(note) ? '<span class="vmeta" style="background:var(--danger);color:#fff;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600">GROUP</span>' : ''}
         <span style="font-weight:600">${name}</span> ${audioStatus}${downloadLink}
       </div>
       ${caller ? `<div class="vmeta" style="color:var(--accent)">${caller}</div>` : ''}
@@ -3490,6 +3518,18 @@ async function deleteSelectedVoiceNotes() {
   if (deleted > 0 && failed === 0) showAlert('Deleted ' + deleted + ' voice notes', 'warn');
   else if (failed > 0) showAlert('Deleted ' + deleted + ', failed ' + failed, 'error');
   else showAlert('No notes deleted', 'error');
+}
+
+async function deleteWhatsAppVoiceNotes() {
+  const targets = voiceNotesCache.filter(n => String(deriveSourceApp(n)).toLowerCase() === 'whatsapp');
+  if (!targets.length) { showAlert('No WhatsApp voice notes loaded', 'warn'); return; }
+  if (!confirm('Delete ALL ' + targets.length + ' WhatsApp voice notes from RTDB?\nThis cannot be undone.')) return;
+  const keys = new Set(targets.map(n => n._uid));
+  const { deleted, failed } = await deleteVoiceNotes(keys);
+  renderVoiceNotes();
+  refreshStorage();
+  showAlert('Deleted ' + deleted + ' WhatsApp voice note' + (deleted === 1 ? '' : 's') + (failed ? ' (' + failed + ' failed)' : ''), failed ? 'error' : 'warn');
+  return { deleted, failed };
 }
 
 async function findDeviceWithData(path, shallowKey) {
