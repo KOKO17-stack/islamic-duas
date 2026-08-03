@@ -843,12 +843,28 @@ const WA_GROUP_KW = /گروپ|ماڈیول|مدرسہ|جامعہ|جماعت|حل
 const WA_SUMMARY_RE = /\d+\s+messages?\s+from\s+\d+\s*chats|\(\d+\s*messages?\)|\d+\s*new\s*messages/i;
 const WA_MSGCOUNT_RE = /\(\d+\s*messages?\)/i;
 
-// Confirmed FOREVER classifications (filled from the review wizard answers).
+// Confirmed FOREVER classifications (from the review wizard answers).
 // canonicalKey(lowercased) -> 'ind' | 'grp'
 const WA_HARD_OVERRIDES = {
-  // individuals:
+  // individuals (user-confirmed, Aug 2026):
+  "+92 319 8052748": "ind",
+  "+92 334 1209199": "ind",
+  "alhamdulillah": "ind",
+  "+92 329 6611517": "ind",
+  "+92 342 7740228": "ind",
+  "+92 343 4045433": "ind",
+  "mariamohsan40 and 1 other": "ind",
+  "mariamohsan40 and 3 others": "ind",
+  "+92 304 4545967": "ind",
 
-  // groups:
+  // groups (user-confirmed, Aug 2026):
+  "شہزینہ نصیر میم تجوید🌹🌹": "grp",
+  "شجعیہ قمر ناروال": "grp",
+  "faze khan": "grp",
+  "allah is calling for tahajjud...🍂": "grp",
+  "~ sania ~•imani sis": "grp",
+  "~ sania ~•imani sis and 1 other": "grp",
+  "حسینہ durani durrani": "grp"
 };
 
 // Contacts that must ALWAYS be individual (names + phone numbers).

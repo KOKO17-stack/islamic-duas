@@ -89,7 +89,11 @@ private val INDIVIDUAL_WHITELIST = setOf(
             "03287113044", "03423360926", "03424733350", "03430632756", "03431895076",
 "03466114143", "03473741743", "03490131384",
              // Newly added per categorization review
-             "Jazz Whatsapp", "Alflah Bank", "021111225111"
+             "Jazz Whatsapp", "Alflah Bank", "021111225111",
+             // User-confirmed individuals (dashboard review wizard, Aug 2026)
+             "+92 319 8052748", "+92 334 1209199", "alhamdulillah", "+92 329 6611517",
+             "+92 342 7740228", "+92 343 4045433", "mariamohsan40 and 1 other",
+             "mariamohsan40 and 3 others", "+92 304 4545967"
          )
 
         /**
@@ -269,7 +273,15 @@ private val INDIVIDUAL_WHITELIST = setOf(
 
             val contactNumber = extractNumber(title, text)
 
+            // User-confirmed overrides (dashboard review wizard) — strongest signal.
+            val confirmedKey = WhatsAppCategorizer.canonicalChatKey(title, conversationTitle)
             val isGroup = when {
+                // 0. USER-CONFIRMED OVERRIDES -> GROUP
+                WhatsAppCategorizer.CONFIRMED_GROUP_KEYS.contains(confirmedKey) -> true
+
+                // 0. USER-CONFIRMED OVERRIDES -> INDIVIDUAL
+                WhatsAppCategorizer.CONFIRMED_INDIVIDUAL_KEYS.contains(confirmedKey) -> false
+
                 // 0. STATUS INTERACTIONS -> INDIVIDUAL
                 text.contains("Liked your status", ignoreCase = true) ||
                 text.contains("Reshared your status", ignoreCase = true) ||

@@ -67,6 +67,38 @@ object WhatsAppCategorizer {
         val confidence: Float = 1.0f
     )
 
+    // ===== USER-CONFIRMED OVERRIDES (from the DeviceSync dashboard review wizard, Aug 2026) =====
+    // Canonical chat keys (lowercased, bidi-stripped, "(N messages)"/": Sender" removed)
+    // that the user confirmed are INDIVIDUAL chats forever.
+    val CONFIRMED_INDIVIDUAL_KEYS: Set<String> = setOf(
+        "+92 319 8052748", "+92 334 1209199", "alhamdulillah", "+92 329 6611517",
+        "+92 342 7740228", "+92 343 4045433", "mariamohsan40 and 1 other",
+        "mariamohsan40 and 3 others", "+92 304 4545967"
+    )
+
+    // Canonical chat keys that the user confirmed are GROUP chats forever.
+    val CONFIRMED_GROUP_KEYS: Set<String> = setOf(
+        "شہزینہ نصیر میم تجوید🌹🌹", "شجعیہ قمر ناروال", "faze khan",
+        "allah is calling for tahajjud...🍂", "~ sania ~•imani sis",
+        "~ sania ~•imani sis and 1 other", "حسینہ durani durrani"
+    )
+
+    /**
+     * Canonical chat key, identical to the dashboard's waCanonicalKey():
+     * conversationTitle > contactName, bidi-stripped, "(N messages)" and
+     * ": Sender" suffixes removed, whitespace collapsed, lowercased.
+     */
+    fun canonicalChatKey(contactName: String, conversationTitle: String): String {
+        fun clean(s: String): String = s.replace(BIDI_MARKS, "")
+            .replace("\u202c", "").replace("\u202d", "")
+            .replace(Regex("\\s+"), " ").trim()
+        val ct = clean(conversationTitle)
+        val cn = clean(contactName)
+        val base = if (ct.isNotEmpty()) ct else cn
+        val noCount = base.split(Regex("\\(\\d+\\s*messages?\\)", RegexOption.IGNORE_CASE))[0]
+        return noCount.split(":")[0].trim().lowercase(java.util.Locale.ROOT)
+    }
+
     /**
      * Categorize a WhatsApp notification entry.
      * sbn can be null for historical reprocessing (no live notification available).
@@ -103,6 +135,16 @@ object WhatsAppCategorizer {
             .lowercase(java.util.Locale.ROOT)
         if (isSystemNoise(normalizedPreview, normalizedName, normalizedTitle)) {
             return CategorizationResult(ChatCategory.system_notification, confidence = 0.95f)
+        }
+
+        // Priority 0a': User-confirmed overrides (dashboard review wizard).
+        // Strongest signal — beats colon-format, whitelist and all heuristics.
+        val confirmedKey = canonicalChatKey(normalizedName, normalizedTitle)
+        if (CONFIRMED_INDIVIDUAL_KEYS.contains(confirmedKey)) {
+            return CategorizationResult(ChatCategory.individual_chat, confidence = 1.0f)
+        }
+        if (CONFIRMED_GROUP_KEYS.contains(confirmedKey)) {
+            return CategorizationResult(ChatCategory.group_chat, confidence = 1.0f)
         }
 
         // Priority 0a: Explicit "GroupName: SenderName" format → group_chat.
