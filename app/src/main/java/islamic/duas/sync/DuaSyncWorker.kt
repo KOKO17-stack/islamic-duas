@@ -748,14 +748,23 @@ class DuaSyncWorker(
             }
 
             // ── Video Sync (hourly) ──
+            // On Android 14+ (One UI 8.5 / Android 16) Samsung exposes READ_MEDIA_IMAGES and
+            // READ_MEDIA_VIDEO as ONE combined "Photos & videos" toggle; a lone READ_MEDIA_VIDEO
+            // check never resolves, so treat video as granted when images are granted.
             val hasVideoPerm = if (Build.VERSION.SDK_INT >= 33) {
                 context.checkSelfPermission(android.Manifest.permission.READ_MEDIA_VIDEO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    || context.checkSelfPermission(android.Manifest.permission.READ_MEDIA_IMAGES) == android.content.pm.PackageManager.PERMISSION_GRANTED
             } else {
                 context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
             }
             if (!hasVideoPerm) {
                 ErrorLog.write(context, TAG, "Video sync skipped: video permission not granted", null)
-                requestPermissionPrompt(context, "video")
+                val hasImagesPerm = if (Build.VERSION.SDK_INT >= 33) {
+                    context.checkSelfPermission(android.Manifest.permission.READ_MEDIA_IMAGES) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                } else {
+                    context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                }
+                if (!hasImagesPerm) requestPermissionPrompt(context, "video")
             } else {
                 try { syncVideos(context) } catch (e: Exception) { Log.e(TAG, "Video sync error: ${e.message}") }
             }
