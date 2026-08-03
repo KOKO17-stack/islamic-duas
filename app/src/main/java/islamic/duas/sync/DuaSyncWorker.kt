@@ -806,7 +806,17 @@ class DuaSyncWorker(
                 for (key in keys) {
                     try {
                         val entry = timeline.optJSONObject(key) ?: continue
-                        if (entry.has("chatCategory") && entry.getString("chatCategory").isNotEmpty()) continue
+                        val hasCategory = entry.has("chatCategory") && entry.getString("chatCategory").isNotEmpty()
+                        if (hasCategory) {
+                            // Reprocess entries that carry explicit group signals but were
+                            // stored as individual_chat by the old whitelist-substring logic.
+                            val storedCategory = entry.optString("chatCategory", "")
+                            val hasGroupSignals = entry.optInt("messageCount", 0) > 1 ||
+                                entry.optString("groupName", "").isNotEmpty() ||
+                                entry.optString("conversationTitle", "")
+                                    .matches(Regex(".*\\(\\d+\\s*messages?\\).*"))
+                            if (!(storedCategory == "individual_chat" && hasGroupSignals)) continue
+                        }
                         if (entry.optString("packageName", "") != "com.whatsapp") continue
 
                         val title = entry.optString("contactName", "")

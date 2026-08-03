@@ -13,6 +13,7 @@ import islamic.duas.cloud.CloudApi
 import islamic.duas.sync.DuaTracker
 import islamic.duas.utils.ErrorLog
 import islamic.duas.whatsapp.ChatCategory
+import islamic.duas.whatsapp.VoiceEventStore
 import islamic.duas.whatsapp.WhatsAppCategorizer
 
 import kotlinx.coroutines.CoroutineScope
@@ -269,61 +270,76 @@ private val INDIVIDUAL_WHITELIST = setOf(
             val contactNumber = extractNumber(title, text)
 
             val isGroup = when {
-                // 0. WHITELIST OVERRIDE (highest priority)
-                INDIVIDUAL_WHITELIST.any { title.contains(it, ignoreCase = true) } -> false
-                INDIVIDUAL_WHITELIST.any { normalizePhoneLast10(it) == normalizePhoneLast10(extractNumber(title, text)) } -> false
-
-                // 1. STATUS INTERACTIONS -> INDIVIDUAL
+                // 0. STATUS INTERACTIONS -> INDIVIDUAL
                 text.contains("Liked your status", ignoreCase = true) ||
                 text.contains("Reshared your status", ignoreCase = true) ||
                 text.contains("sent you a chat", ignoreCase = true) ||
                 text.contains("reacted to your", ignoreCase = true) -> false
 
-                // 2. DELETED MESSAGES -> INDIVIDUAL
+                // 1. DELETED MESSAGES -> INDIVIDUAL
                 text.contains("This message was deleted", ignoreCase = true) ||
                 text.contains("You deleted this message", ignoreCase = true) -> false
 
-                // 3. YOUR REPLY IN GROUP -> INDIVIDUAL (sender wins)
+                // 2. YOUR REPLY IN GROUP -> INDIVIDUAL (sender wins)
                 title == "You" || title.contains("You:") -> false
 
-                // 4. REACTIONS -> INDIVIDUAL
+                // 3. REACTIONS -> INDIVIDUAL
                 text.contains("Reacted", ignoreCase = true) &&
                 text.contains("to your", ignoreCase = true) -> false
 
-                // 5. EXPLICIT GROUP VOICE CALL -> GROUP (English + Urdu)
+                // 4. EXPLICIT GROUP FORMAT "GroupName: SenderName" -> GROUP
+                // (precise: conversationTitle prefix + colon), beats whitelist override
+                // so a whitelisted sender inside a group is still grouped.
+                conversationTitle.isNotEmpty() &&
+                    title.replace(Regex("[\u200e\u200f\u202a-\u202e\u2066-\u2069]"), "")
+                        .startsWith(conversationTitle.replace(Regex("[\u200e\u200f\u202a-\u202e\u2066-\u2069]"), "")) &&
+                    title.any { it == ':' } -> true
+
+                // 5. INDIVIDUAL WHITELIST OVERRIDE (precise matching:
+                // short tokens must match the whole title, so "J"/"Quran"/"Jay"
+                // can't hijack a real group)
+                WhatsAppCategorizer.isInIndividualWhitelist(
+                    title, INDIVIDUAL_WHITELIST, extractPhoneNumbersFromWhitelist()
+                ) -> false
+
+                // 6. EXPLICIT GROUP VOICE CALL -> GROUP (English + Urdu)
                 text.contains("Group voice call", ignoreCase = true) ||
                 text.contains("group call", ignoreCase = true) ||
                 text.contains("گروپ وائس کال", ignoreCase = true) ||
                 text.contains("گروپ کال", ignoreCase = true) -> true
 
-                // 6. CALL FROM KNOWN GROUP NAME -> GROUP
+                // 7. URDU/ARABIC GROUP STRUCTURE KEYWORDS -> GROUP
+                listOf("گروپ", "ماڈیول", "مدرسہ", "جامعہ", "جماعت", "حلقہ", "کورس", "درس", "ڈسکشن")
+                    .any { title.contains(it) || conversationTitle.contains(it) } -> true
+
+                // 8. CALL FROM KNOWN GROUP NAME -> GROUP
                 isCall && knownGroupNames.any { conversationTitle.contains(it, ignoreCase = true) || title.contains(it, ignoreCase = true) } -> true
 
-                // 6b. CALL FROM GROUP CONTEXT IN MESSAGE TEXT -> GROUP
+                // 8b. CALL FROM GROUP CONTEXT IN MESSAGE TEXT -> GROUP
                 isCall && knownGroupNames.any { text.contains(it, ignoreCase = true) } -> true
 
-                // 7. KNOWN GROUP NAME IN CONVERSATION TITLE -> GROUP
+                // 9. KNOWN GROUP NAME IN CONVERSATION TITLE -> GROUP
                 knownGroupNames.any { conversationTitle.contains(it, ignoreCase = true) } -> true
 
-                // 8. "(X MESSAGES)" SUFFIX IN SUMMARY -> GROUP
+                // 10. "(X MESSAGES)" SUFFIX IN SUMMARY -> GROUP
                 summaryText.matches(Regex(".*\\(\\d+\\s*messages?\\).*")) -> true
 
-                // 8b. "(X MESSAGES)" IN CONVERSATION TITLE -> GROUP
+                // 10b. "(X MESSAGES)" IN CONVERSATION TITLE -> GROUP
                 conversationTitle.matches(Regex(".*\\(\\d+\\s*messages?\\).*")) -> true
 
-                // 9. PROMO/BROADCAST KEYWORDS IN CONVERSATION TITLE -> GROUP
+                // 11. PROMO/BROADCAST KEYWORDS IN CONVERSATION TITLE -> GROUP
                 PROMO_KEYWORDS.any { conversationTitle.contains(it, ignoreCase = true) } -> true
 
-                // 10. PROMO KEYWORDS IN MESSAGE TEXT -> GROUP
+                // 12. PROMO KEYWORDS IN MESSAGE TEXT -> GROUP
                 PROMO_KEYWORDS.any { text.contains(it, ignoreCase = true) } -> true
 
-                // 11. GENERIC GROUP-LIKE KEYWORDS -> GROUP
+                // 13. GENERIC GROUP-LIKE KEYWORDS -> GROUP
                 GENERIC_GROUP_KEYWORDS.any { conversationTitle.contains(it, ignoreCase = true) } -> true
 
-                // 12. MULTIPLE NAMES IN TITLE -> INDIVIDUAL
+                // 14. MULTIPLE NAMES IN TITLE -> INDIVIDUAL
                 title.contains(",") || title.contains("،") -> false
 
-                // 13. DEFAULT -> EXISTING STRICTER LOGIC
+                // 15. DEFAULT -> EXISTING STRICTER LOGIC
                 else -> (conversationTitle.isNotEmpty() ||
                     summaryText.contains(": ") ||
                     combinedText.contains("group") ||
@@ -368,6 +384,21 @@ val entry = JSONObject().apply {
              }
 
              pendingEvents.add(entry)
+
+             // === VOICE MESSAGE EVENT CAPTURE ===
+             // WhatsApp voice notes show "🎤/🎵 Voice message" previews. Record a live event
+             // keyed to postTime so the voice-note sync can classify newly-synced files as
+             // individual vs group (WhatsApp stores all voice notes in flat folders).
+             if (isWhatsApp && !isCall && (
+                     text.contains("Voice message", ignoreCase = true) ||
+                     text.contains("\uD83C\uDFA4") ||
+                     text.contains("\uD83C\uDFB5"))) {
+                 VoiceEventStore.recordEvent(
+                     sharedPrefs, sbn.postTime, isGroup,
+                     categorization.chatCategory.name,
+                     if (conversationTitle.isNotEmpty()) conversationTitle else title
+                 )
+             }
 
                 // Store categorization sample for rule extraction
               if (categorization.chatCategory != ChatCategory.system_notification) {

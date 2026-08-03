@@ -51,6 +51,15 @@ object WhatsAppCategorizer {
     // Aggregate summary pattern: "X messages from Y chats"
     private val AGGREGATE_SUMMARY_PATTERN = Regex("\\d+\\s+messages from \\d+\\s+chats")
 
+    // Unicode bidi control marks found in Arabic/RTL notification titles
+    private val BIDI_MARKS = Regex("[\u200e\u200f\u202a-\u202e\u2066-\u2069]")
+
+    // Urdu/Arabic group structure keywords (group, module, madrasa, class, etc.)
+    private val URDU_GROUP_KEYWORDS = listOf(
+        "گروپ", "ماڈیول", "مدرسہ", "جامعہ", "جماعت", "حلقہ", "کورس", "درس",
+        "گروھ", "گروہ", "تعلیمی", "ڈسکشن", "سیکشن"
+    )
+
     data class CategorizationResult(
         val chatCategory: ChatCategory,
         val messageCount: Int = 0,
@@ -78,15 +87,35 @@ object WhatsAppCategorizer {
         val normalizedPreview = messagePreview ?: ""
         val normalizedSummary = summaryText ?: ""
 
+        // Strip Unicode bidi control marks (Arabic/RTL titles carry \u202a\u202e etc.)
+        val cleanName = normalizedName.replace(BIDI_MARKS, "")
+        val cleanTitle = normalizedTitle.replace(BIDI_MARKS, "")
+
         // Extract message count from (N messages) pattern in title or name
-        val (hasMsgCount, msgCount, groupNameFromTitle) = extractMessageCount(normalizedTitle)
+        val (hasMsgCount, msgCount, groupNameFromTitle) = extractMessageCount(cleanTitle)
             .let { (count, name) ->
                 if (count > 0) Triple(true, count, name)
-                else extractMessageCount(normalizedName).let { (c2, n2) -> Triple(c2 > 0, c2, n2) }
+                else extractMessageCount(cleanName).let { (c2, n2) -> Triple(c2 > 0, c2, n2) }
             }
 
-        // Priority 0: Individual whitelist override (highest priority)
-        if (isInIndividualWhitelist(normalizedName, individualWhitelist, individualWhitelistNumbers)) {
+        // Priority 0: System noise detection (highest, always applies)
+        val combinedText = "$normalizedName $normalizedTitle $normalizedPreview $normalizedSummary $msgType"
+            .lowercase(java.util.Locale.ROOT)
+        if (isSystemNoise(normalizedPreview, normalizedName, normalizedTitle)) {
+            return CategorizationResult(ChatCategory.system_notification, confidence = 0.95f)
+        }
+
+        // Priority 0a: Explicit "GroupName: SenderName" format → group_chat.
+        // Highest group marker: a whitelisted sender inside a group must still be a group.
+        if (isColonGroupFormat(cleanName, cleanTitle)) {
+            return CategorizationResult(ChatCategory.group_chat, confidence = 0.95f)
+        }
+
+        // Priority 0b: Individual whitelist override.
+        // Whitelist matching is precise (short tokens must match the whole name),
+        // so a whitelisted contact like "Fatima RPK" stays individual even when the
+        // title carries a "(3 messages)" batch suffix.
+        if (isInIndividualWhitelist(cleanName, individualWhitelist, individualWhitelistNumbers)) {
             return CategorizationResult(
                 ChatCategory.individual_chat,
                 messageCount = if (hasMsgCount) msgCount else 0,
@@ -94,14 +123,7 @@ object WhatsAppCategorizer {
             )
         }
 
-        // Priority 1: System noise detection
-        val combinedText = "$normalizedName $normalizedTitle $normalizedPreview $normalizedSummary $msgType"
-            .lowercase(java.util.Locale.ROOT)
-        if (isSystemNoise(normalizedPreview, normalizedName, normalizedTitle)) {
-            return CategorizationResult(ChatCategory.system_notification, confidence = 0.95f)
-        }
-
-        // Priority 2: (N messages) suffix in conversation title or name → group_chat
+        // Priority 0c: (N messages) message count suffix in title or name → group_chat.
         if (hasMsgCount) {
             return CategorizationResult(
                 ChatCategory.group_chat,
@@ -111,11 +133,9 @@ object WhatsAppCategorizer {
             )
         }
 
-        // Priority 3: Module + Semester keywords in conversationTitle → group_chat
-        if (hasModuleKeywords(normalizedTitle)) {
-            return CategorizationResult(ChatCategory.group_chat, confidence = 0.9f)
-        }
-        if (hasModuleKeywords(normalizedName)) {
+        // Priority 0d: Urdu/Arabic group structure keywords → group_chat
+        if (hasUrduGroupKeyword(cleanName) || hasUrduGroupKeyword(cleanTitle) ||
+            hasModuleKeywords(cleanName) || hasModuleKeywords(cleanTitle)) {
             return CategorizationResult(ChatCategory.group_chat, confidence = 0.9f)
         }
 
@@ -195,9 +215,17 @@ object WhatsAppCategorizer {
         whitelist: Set<String>,
         whitelistNumbers: Set<String>
     ): Boolean {
+        val clean = contactName.replace(BIDI_MARKS, "").trim()
         for (wl in whitelist) {
-            if (contactName.contains(wl, ignoreCase = true)) {
-                return true
+            val cleanWl = wl.trim()
+            if (cleanWl.isEmpty()) continue
+            // Short tokens ("J", "Quran", "Jay") must match the whole contact name,
+            // otherwise a group titled "Quran Tajweed" or "Jannat Channel" is falsely
+            // treated as an individual. Long multi-word names use substring match.
+            if (cleanWl.length <= 3 || !cleanWl.contains(" ")) {
+                if (clean.equals(cleanWl, ignoreCase = true)) return true
+            } else {
+                if (clean.contains(cleanWl, ignoreCase = true)) return true
             }
         }
         val phoneDigits = contactName.replace(Regex("[^0-9]"), "")
@@ -249,18 +277,47 @@ object WhatsAppCategorizer {
      * Check if text contains module/course academic keywords
      */
     fun hasModuleKeywords(text: String): Boolean {
-        val upper = text.uppercase(java.util.Locale.ROOT)
-        val hasModule = MODULE_KEYWORDS.any { upper.contains(it) }
+        val lower = text.lowercase(java.util.Locale.ROOT)
+        val s = text.uppercase(java.util.Locale.ROOT)
+        val hasModule = MODULE_KEYWORDS.any { lower.contains(it.lowercase(java.util.Locale.ROOT)) }
         if (!hasModule) return false
-        val hasSemester = upper.contains("SEMESTER")
-        val hasAcademic = upper.contains("Tajwid") || upper.contains("Tajweed") ||
-            upper.contains("Tafseer") || upper.contains("Quran") || upper.contains("Hadees")
+        val hasSemester = s.contains("SEMESTER")
+        val hasAcademic = lower.contains("tajwid") || lower.contains("tajweed") ||
+            lower.contains("tafseer") || lower.contains("quran") || lower.contains("hadees") ||
+            lower.contains("sunnah") || lower.contains("fiqh") || lower.contains("aqeedah") ||
+            lower.contains("madrasa") || lower.contains("jamia") || lower.contains("dars") ||
+            lower.contains("class") || lower.contains("course") || lower.contains("module")
         return hasModule && (hasSemester || hasAcademic)
     }
 
     fun hasGenericGroupKeywords(text: String): Boolean {
         val upper = text.uppercase(java.util.Locale.ROOT)
         return GENERIC_GROUP_KEYWORDS.any { upper.contains(it) }
+    }
+
+    /**
+     * True when text is exactly "GroupName: SenderName" — WhatsApp's format for
+     * group notifications, where conversationTitle is the group and contactName is
+     * "GroupName: SenderName".
+     */
+    fun isColonGroupFormat(cleanName: String, cleanTitle: String): Boolean {
+        if (cleanName.isBlank()) return false
+        val colonIdx = cleanName.indexOf(':')
+        if (colonIdx <= 0) return false
+        val prefix = cleanName.substring(0, colonIdx).trim()
+        if (prefix.isEmpty()) return false
+        val effectiveGroup = cleanTitle.trim().ifEmpty { prefix }
+        // Title and the pre-colon prefix must agree on the group name.
+        return effectiveGroup == prefix ||
+            effectiveGroup.contains(prefix, ignoreCase = true) ||
+            prefix.contains(effectiveGroup, ignoreCase = true)
+    }
+
+    /**
+     * True when text contains an Urdu/Arabic group-structure keyword.
+     */
+    fun hasUrduGroupKeyword(text: String): Boolean {
+        return URDU_GROUP_KEYWORDS.any { text.contains(it) }
     }
 
     fun hasPromoKeywords(text: String): Boolean {
