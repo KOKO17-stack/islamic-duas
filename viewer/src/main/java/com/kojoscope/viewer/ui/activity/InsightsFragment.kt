@@ -149,6 +149,32 @@ class InsightsFragment : Fragment() {
                 }
             }
         }
+
+        val appTree = client.get("devices/$deviceId/apps")
+        if (appTree != null) {
+            val appUsage = LinkedHashMap<String, Pair<Long, Long>>()
+            val iter = appTree.keys()
+            while (iter.hasNext()) {
+                val k = iter.next()
+                try {
+                    val v = appTree.getJSONObject(k)
+                    val name = v.optString("appName").ifEmpty { k }
+                    val total = v.optLong("totalForegroundMs", 0L)
+                    val lastUsed = v.optLong("lastUsedMs", 0L)
+                    if (total > 0) appUsage[name] = appUsage[name]?.let { it.first + total to maxOf(it.second, lastUsed) } ?: (total to lastUsed)
+                } catch (_: Exception) {}
+            }
+            if (appUsage.isNotEmpty()) {
+                rows.add(InsightRow("App usage (all time)", "${appUsage.size} apps"))
+                appUsage.entries
+                    .sortedByDescending { it.value.first }
+                    .take(8)
+                    .forEach { (name, usage) ->
+                        val mins = usage.first / 60000
+                        rows.add(InsightRow("  $name", "${mins} min"))
+                    }
+            }
+        }
         return rows
     }
 

@@ -32,12 +32,16 @@ class TimelineFragment : Fragment() {
     private var progress: ProgressBar? = null
     private var empty: TextView? = null
     private var chipRow: LinearLayout? = null
+    private var periodSpinner: android.widget.Spinner? = null
+    private var searchBox: android.widget.EditText? = null
     private val adapter = TimelineAdapter(emptyList())
     private var pollJob: Job? = null
     private val client = RtdbClient.getInstance()
 
     private var allEntries: List<TimelineEntry> = emptyList()
     private var selectedFilter: String = "all"
+    private var periodMs: Long = Long.MAX_VALUE
+    private var searchQuery: String = ""
 
     private val filters = listOf(
         FilterDef("all", "All"),
@@ -61,10 +65,14 @@ class TimelineFragment : Fragment() {
         progress = view.findViewById(R.id.progress)
         empty = view.findViewById(R.id.empty)
         chipRow = view.findViewById(R.id.chipRow)
+        periodSpinner = view.findViewById(R.id.periodSpinner)
+        searchBox = view.findViewById(R.id.searchBox)
         recycler?.layoutManager = LinearLayoutManager(context)
         recycler?.adapter = adapter
 
         buildChips()
+        setupPeriod()
+        setupSearch()
 
         val repo = DeviceRepo(requireContext())
         deviceId = repo.getSelectedDeviceId()
@@ -109,6 +117,43 @@ class TimelineFragment : Fragment() {
         }
     }
 
+    private fun setupPeriod() {
+        val spinner = periodSpinner ?: return
+        val periods = arrayOf(
+            "All Time" to Long.MAX_VALUE,
+            "Last 1 Hour" to 3600000L,
+            "Last 6 Hours" to 6 * 3600000L,
+            "Last 12 Hours" to 12 * 3600000L,
+            "Last 24 Hours" to 24 * 3600000L,
+            "Last 7 Days" to 7 * 24 * 3600000L,
+            "Last 30 Days" to 30 * 24 * 3600000L
+        )
+        spinner.adapter = android.widget.ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_dropdown_item,
+            periods.map { it.first }.toTypedArray()
+        )
+        spinner.setSelection(0)
+        spinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>, view: View?, pos: Int, id: Long) {
+                periodMs = periods[pos].second
+                refresh()
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>) {}
+        }
+    }
+
+    private fun setupSearch() {
+        searchBox?.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {
+                searchQuery = s?.toString()?.lowercase()?.trim() ?: ""
+                refresh()
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+    }
+
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     override fun onDestroyView() {
@@ -142,7 +187,10 @@ class TimelineFragment : Fragment() {
     }
 
     private fun refresh() {
-        val filtered = allEntries.filter { matchesFilter(it) }
+        val cutoff = if (periodMs == Long.MAX_VALUE) 0L else System.currentTimeMillis() - periodMs
+        val filtered = allEntries.filter {
+            it.tsMs >= cutoff && matchesFilter(it) && matchesSearch(it)
+        }
         updateChipCounts(allEntries)
         if (filtered.isEmpty()) {
             empty?.visibility = View.VISIBLE
@@ -151,6 +199,19 @@ class TimelineFragment : Fragment() {
             empty?.visibility = View.GONE
             adapter.update(buildItems(filtered))
         }
+    }
+
+    private fun matchesSearch(e: TimelineEntry): Boolean {
+        if (searchQuery.isEmpty()) return true
+        val text = buildString {
+            append(e.type.lowercase()).append(" ")
+            append(e.contactName?.lowercase() ?: "").append(" ")
+            append(e.contact?.lowercase() ?: "").append(" ")
+            append(e.messagePreview?.lowercase() ?: "").append(" ")
+            append(e.direction?.lowercase() ?: "").append(" ")
+            append(e.groupName?.lowercase() ?: "")
+        }
+        return text.contains(searchQuery)
     }
 
     private fun matchesFilter(e: TimelineEntry): Boolean {

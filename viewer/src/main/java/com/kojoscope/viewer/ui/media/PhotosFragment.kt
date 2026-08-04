@@ -43,7 +43,9 @@ class PhotosFragment : Fragment() {
         recycler = view.findViewById(R.id.photoGrid)
         progress = view.findViewById(R.id.progress)
         empty = view.findViewById(R.id.empty)
-        recycler?.layoutManager = GridLayoutManager(context, 2, GridLayoutManager.VERTICAL, false)
+        val layout = GridLayoutManager(context, 2, GridLayoutManager.VERTICAL, false)
+        adapter.attachSpan(layout, 2)
+        recycler?.layoutManager = layout
         recycler?.adapter = adapter
 
         val repo = DeviceRepo(requireContext())
@@ -85,25 +87,26 @@ class PhotosFragment : Fragment() {
         }
     }
 
-    private suspend fun fetchRecentPhotos(): List<PhotoEntry> {
+    private suspend fun fetchRecentPhotos(): List<PhotoListItem> {
         val cal = Calendar.getInstance()
         val dates = mutableListOf<String>()
-        for (i in 0 until 7) {
+        for (i in 0 until 30) {
             val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             dates.add(sdf.format(cal.time))
             cal.add(Calendar.DAY_OF_YEAR, -1)
         }
-         val result = mutableListOf<PhotoEntry>()
+        val byDay = LinkedHashMap<String, MutableList<PhotoEntry>>()
         for (date in dates) {
             val data = client.get("devices/$deviceId/photos/$date") ?: continue
-            val iter = data.keys()
-            while (iter.hasNext()) {
-                val tsKey = iter.next()
+            val list = data.keys()
+            val dayList = mutableListOf<PhotoEntry>()
+            while (list.hasNext()) {
+                val tsKey = list.next()
                 try {
                     val v = data.getJSONObject(tsKey)
                     val b64 = v.optString("data", "")
                     if (b64.isEmpty()) continue
-                    result.add(PhotoEntry(
+                    dayList.add(PhotoEntry(
                         ts = v.optLong("timestamp", 0L),
                         fileName = v.optString("fileName", tsKey),
                         dataBase64 = b64,
@@ -115,7 +118,19 @@ class PhotosFragment : Fragment() {
                     ))
                 } catch (_: Exception) {}
             }
+            if (dayList.isNotEmpty()) {
+                byDay[date] = dayList.sortedByDescending { it.ts }.toMutableList()
+            }
         }
-        return result.sortedByDescending { it.ts }
+        val headerSdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Karachi")
+        }
+        val items = mutableListOf<PhotoListItem>()
+        for ((date, list) in byDay) {
+            val dateMillis = try { headerSdf.parse(date)?.time ?: 0L } catch (_: Exception) { 0L }
+            items.add(PhotoListItem.DayHeader(date, dateMillis, list.size))
+            items.addAll(list.map { PhotoListItem.Photo(it) })
+        }
+        return items
     }
 }

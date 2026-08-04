@@ -1,7 +1,6 @@
 package com.kojoscope.viewer.ui.media
 
 import com.kojoscope.viewer.ui.GroupFragment
-import com.kojoscope.viewer.ui.PlaceholderFragment
 import com.kojoscope.viewer.ui.control.RecordingFragment
 
 class MediaGroupFragment : GroupFragment() {
@@ -11,7 +10,7 @@ class MediaGroupFragment : GroupFragment() {
         tabs = listOf(
             "Photos" to { PhotosFragment() },
             "Videos" to { VideosFragment() },
-            "Voice" to { PlaceholderFragment.newInstance("No voice notes synced") },
+            "Voice" to { VoiceNotesFragment() },
             "Recordings" to { RecordingFragment() }
         )
     }
