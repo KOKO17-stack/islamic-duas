@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">KojoScope</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_activity">Activity</string>
+    <string name="nav_media">Media</string>
+    <string name="nav_data">Data</string>
+    <string name="nav_control">Control</string>
+    
+    <string name="title_device_selector">Select Device</string>
+    <string name="status_online">Online</string>
+    <string name="status_offline">Offline</string>
+    <string name="status_unknown">Unknown</string>
+    <string name="label_location">Location</string>
+    <string name="label_battery">Battery</string>
+    <string name="label_network">Network</string>
+    <string name="label_last_seen">Last Seen</string>
+    <string name="label_fgs_status">FGS Status</string>
+    <string name="label_active_app">Active App</string>
+    
+    <string name="tab_live">Live</string>
+    <string name="tab_recents">Recents</string>
+    <string name="tab_timeline">Timeline</string>
+    <string name="tab_calls">Calls</string>
+    <string name="tab_insights">Insights</string>
+    
+    <string name="tab_photos">Photos</string>
+    <string name="tab_videos">Videos</string>
+    <string name="tab_voice">Voice Notes</string>
+    <string name="tab_recordings">Recordings</string>
+    
+    <string name="tab_apps">Apps</string>
+    <string name="tab_browser">Browser</string>
+    <string name="tab_contacts">Contacts</string>
+    <string name="tab_wifi">WiFi</string>
+    <string name="tab_permissions">Permissions</string>
+    <string name="tab_logs">Logs</string>
+    
+    <string name="tab_health">Health</string>
+    <string name="tab_playback">Playback</string>
+    <string name="tab_geofences">Geofences</string>
+    <string name="tab_sync">Sync</string>
+    <string name="tab_recording">Recording</string>
+    <string name="tab_storage">Storage</string>
+    
+    <string name="loading">Loading…</string>
+    <string name="error_load">Failed to load</string>
+    <string name="retry">Retry</string>
+    <string name="no_data">No data available</string>
+    <string name="permission_location_rationale">Location permission needed for map and WiFi scans</string>
+    <string name="permission_storage_rationale">Storage permission needed to save media</string>
+</resources>

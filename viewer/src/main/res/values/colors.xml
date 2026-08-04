@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_primary">#0d1117</color>
+    <color name="bg_card">#161b22</color>
+    <color name="bg_elevated">#21262d</color>
+    <color name="border">#30363d</color>
+    <color name="accent">#ffca28</color>
+    <color name="accent_dark">#f9a825</color>
+    <color name="text_primary">#c9d1d9</color>
+    <color name="text_secondary">#8b949e</color>
+    <color name="text_on_accent">#0d1117</color>
+    <color name="danger">#f85149</color>
+    <color name="success">#3fb950</color>
+    <color name="warning">#d29922</color>
+    <color name="info">#58a6ff</color>
+    <color name="map_marker">#ffca28</color>
+    <color name="map_marker_border">#0d1117</color>
+</resources>

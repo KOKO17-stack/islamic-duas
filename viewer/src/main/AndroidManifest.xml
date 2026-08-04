@@ -9,7 +9,8 @@
         android:icon="@mipmap/ic_launcher"
         android:label="KojoScope"
         android:roundIcon="@mipmap/ic_launcher"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:theme="@style/Theme.KojoScope">
 
         <activity
             android:name=".MainActivity"

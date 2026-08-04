@@ -5,6 +5,8 @@ import okhttp3.MediaType.Companion.toMediaType
 import org.json.JSONObject
 import java.io.IOException
 import java.net.URLEncoder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class RtdbClient private constructor() {
     private val client = OkHttpClient.Builder()
@@ -19,7 +21,6 @@ class RtdbClient private constructor() {
         fun getInstance() = instance
     }
 
-    @SuppressLint("ObsoleteSdkInt")
     fun <T : Any> encodeQuery(params: Map<String, String>): String {
         val sb = StringBuilder()
         var first = true
