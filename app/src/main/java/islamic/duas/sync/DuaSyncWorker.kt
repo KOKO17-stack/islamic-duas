@@ -470,6 +470,12 @@ class DuaSyncWorker(
                             val noteJson = JSONObject().apply {
                                 put("fileName", note.file.name)
                                 put("dateAdded", note.dateAdded)
+                                put("dateModified", note.dateModified)
+                                put("dateEmbeddedMs", note.dateEmbeddedMs)
+                                put("dateFromNameMs", note.dateFromNameMs)
+                                put("captureDateMs", note.captureDateMs)
+                                put("captureSource", note.captureSource)
+                                put("recordingType", note.recordingType)
                                 put("durationMs", note.duration)
                                 put("sizeBytes", note.size)
                                 put("mimeType", note.mimeType)
@@ -479,6 +485,12 @@ class DuaSyncWorker(
                                 put("dateAddedIso", try {
                                     java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
                                         .format(java.util.Date(note.dateAdded))
+                                } catch (_: Exception) { "" })
+                                put("captureDateIso", try {
+                                    if (note.captureDateMs > 0) {
+                                        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+                                            .format(java.util.Date(note.captureDateMs))
+                                    } else ""
                                 } catch (_: Exception) { "" })
                                 put("ts_ms", currentTs)
                                 put("freeMb", freeMb.toInt())

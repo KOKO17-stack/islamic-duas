@@ -456,14 +456,32 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <select id="voiceSort" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px" onchange="renderVoiceNotes()">
 <option value="newest">Newest first</option>
 <option value="oldest">Oldest first</option>
+<option value="longest">Longest first</option>
+<option value="shortest">Shortest first</option>
+</select>
+<select id="voiceGroupFilter" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px" onchange="setVoiceGroupMode()">
+<option value="individual">&#x1F465; Individual only</option>
+<option value="all">&#x1F46B; All chats</option>
+<option value="group">&#x1F46B;&#xFE0F; Groups only</option>
+</select>
+<select id="voiceAvailFilter" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px" onchange="renderVoiceNotes()">
+<option value="all">&#x1F50A; All audio</option>
+<option value="playable">&#x25CF; Playable only</option>
+<option value="unavailable">&#x26A0; Unavailable only</option>
+</select>
+<select id="voiceDateFilter" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px" onchange="renderVoiceNotes()">
+<option value="all">&#x1F4C5; Any date</option>
+<option value="24h">Last 24 hours</option>
+<option value="7d">Last 7 days</option>
+<option value="30d">Last 30 days</option>
 </select>
 <span class="chip" style="background:var(--accent);color:#000;font-size:11px;cursor:pointer" id="btnSelectAllVoice">&#x1F4CB; Select All</span>
 <span class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:11px;cursor:pointer" id="btnDeleteSelectedVoice" onclick="deleteSelectedVoiceNotes()">&#x1F5D1; Delete Selected</span>
-<span class="chip" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:11px;cursor:pointer" id="btnVoiceFilterOnly" onclick="toggleVoiceIndividualOnly()">&#x1F465; Individual only: ON</span>
 <span class="chip" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:11px;cursor:pointer" onclick="deleteWhatsAppVoiceNotes()">&#x1F5D1; Delete All WhatsApp</span>
 <span class="chip" style="background:var(--accent);color:#000;font-size:11px;cursor:pointer;margin-left:auto" onclick="pollVoiceNotes()">&#x1F504; Refresh</span>
 </div>
 <div id="voiceHintBanner" style="display:none;font-size:12px;color:var(--warning);background:var(--card);border:1px solid var(--warning);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px"></div>
+<div id="voiceStatsStrip" style="display:none;font-size:12px;color:var(--muted);background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin-bottom:8px"></div>
 <div id="voiceStatusLine" style="font-size:12px;color:var(--muted);margin-bottom:6px"></div>
 <div id="voiceNotesList"><div class="label">No voice notes yet</div></div>
 <div id="voiceLoadMore"></div>
@@ -1347,6 +1365,19 @@ function pkt(ts) {
   const d = new Date(ts);
   return d.toLocaleString('en-PK', { timeZone: PKT, hour12: true,
     year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+}
+function csvPkt(ts) {
+  try {
+    const d = new Date(ts);
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: PKT, hour12: true,
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(d);
+    const get = (t) => (parts.find(p => p.type === t) || {}).value || '';
+    return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')} ${get('dayPeriod')}`;
+  } catch { return pkt(ts); }
+}
+function csvEsc(s) {
+  const v = String(s == null ? '' : s);
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
 }
 function pktShort(ts) {
   const d = new Date(ts);
@@ -3376,7 +3407,7 @@ let voiceNotesCache = [];
 let voiceSelectedKeys = new Set();
 let voiceHasMore = false;
 let voiceState = { deviceId: null, loading: false };
-let voiceOnlyIndividual = true;
+let voiceGroupMode = 'individual';
 
 function jsStr(s) {
   return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -3402,20 +3433,127 @@ function isVoiceGroupNote(n) {
 }
 
 function updateVoiceFilterToggle() {
-  const fbtn = document.getElementById('btnVoiceFilterOnly');
-  if (!fbtn) return;
-  fbtn.textContent = voiceOnlyIndividual ? '\u{1F465} Individual only: ON' : '\u{1F465} Individual only: OFF';
-  fbtn.style.background = voiceOnlyIndividual ? 'var(--accent)' : 'var(--card)';
-  fbtn.style.color = voiceOnlyIndividual ? '#000' : 'var(--text)';
+  const sel = document.getElementById('voiceGroupFilter');
+  if (!sel) return;
+  const mode = voiceGroupMode === 'all' ? 'all' : (voiceGroupMode === 'group' ? 'group' : 'individual');
+  sel.value = mode;
+  sel.style.background = mode === 'all' ? 'var(--bg)' : 'var(--accent)';
+  sel.style.color = mode === 'all' ? 'var(--text)' : '#000';
 }
 
-function toggleVoiceIndividualOnly() {
-  voiceOnlyIndividual = !voiceOnlyIndividual;
-  if (voiceOnlyIndividual) {
-    const grp = voiceNotesCache.filter(n => isVoiceGroupNote(n));
+function setVoiceGroupMode() {
+  const sel = document.getElementById('voiceGroupFilter');
+  voiceGroupMode = sel ? sel.value : 'individual';
+  if (voiceGroupMode !== 'all') {
+    const hideGroup = voiceGroupMode === 'individual';
+    const grp = voiceNotesCache.filter(n => isVoiceGroupNote(n) === hideGroup);
     grp.forEach(n => { if (voiceSelectedKeys.has(n._uid)) voiceSelectedKeys.delete(n._uid); });
   }
+  updateVoiceFilterToggle();
   renderVoiceNotes();
+}
+
+function noteCaptureMs(note) {
+  if (typeof note.captureDateMs === 'number' && note.captureDateMs > 100000000000) return note.captureDateMs;
+  if (typeof note.dateAdded === 'number') {
+    if (note.dateAdded > 100000000000) return note.dateAdded;
+    if (note.dateAdded > 1000000000) return note.dateAdded * 1000;
+  }
+  return 0;
+}
+
+function legacyNameDateMs(note) {
+  const n = (note.fileName || '').toLowerCase();
+  let m = n.match(/ptt-(\d{4})(\d{2})(\d{2})/);
+  if (m) {
+    const d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 12, 0, 0);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  m = n.match(/(\d{4})[-_](\d{2})[-_](\d{2})[_T\s-](\d{2})[-_.](\d{2})[-_.](\d{2})/);
+  if (m) {
+    const d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10),
+      parseInt(m[4], 10), parseInt(m[5], 10), parseInt(m[6], 10));
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  m = n.match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
+  if (m && parseInt(m[1], 10) >= 1990 && parseInt(m[1], 10) <= 2099) {
+    const d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10),
+      parseInt(m[4], 10), parseInt(m[5], 10), parseInt(m[6], 10));
+    if (!isNaN(d.getTime()) && d.getTime() > 0) return d.getTime();
+  }
+  return 0;
+}
+
+function effectiveCaptureMs(note) {
+  if (note._capMs !== undefined) return note._capMs;
+  const direct = noteCaptureMs(note);
+  const nameMs = legacyNameDateMs(note);
+  let ms = 0;
+  if (nameMs) {
+    const day = 86400000;
+    if (direct && Math.abs(direct - nameMs) <= 2 * day) {
+      const dName = new Date(nameMs), dDev = new Date(direct);
+      dName.setHours(dDev.getHours(), dDev.getMinutes(), dDev.getSeconds(), 0);
+      ms = dName.getTime();
+    } else {
+      ms = nameMs;
+    }
+  } else {
+    ms = direct;
+  }
+  note._capMs = ms || 0;
+  return note._capMs;
+}
+
+function notePlayable(note) {
+  if (note.audioUrl) return true;
+  if (note.audioData && typeof note.audioData === 'string' && note.audioData.length > 100) return true;
+  return false;
+}
+
+function renderVoiceStats() {
+  const el = document.getElementById('voiceStatsStrip');
+  if (!el) return;
+  if (!voiceNotesCache.length) { el.style.display = 'none'; return; }
+  const notes = voiceNotesCache;
+  const playable = notes.filter(n => notePlayable(n)).length;
+  let durMs = 0, sizeB = 0;
+  const srcCount = {};
+  const callCount = notes.filter(n => n.recordingType === 'call').length;
+  for (const n of notes) {
+    durMs += parseInt(n.durationMs) || 0;
+    sizeB += parseInt(n.sizeBytes) || 0;
+    const s = deriveSourceApp(n);
+    srcCount[s] = (srcCount[s] || 0) + 1;
+  }
+  const s = Math.round(durMs / 1000);
+  const durStr = (s >= 3600 ? Math.floor(s / 3600) + 'h ' : '') + (s >= 60 ? Math.floor((s % 3600) / 60) + 'm ' : '') + (s % 60) + 's';
+  const srcBits = Object.entries(srcCount).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ': ' + v).join(' &nbsp;|&nbsp; ');
+  el.innerHTML = '&#x1F3A4; <b>' + notes.length + '</b> notes &nbsp;&#x2022;&nbsp; Playable: <b>' + playable + '</b>' +
+    (callCount ? ' &nbsp;&#x2022;&nbsp; Call recs: <b>' + callCount + '</b>' : '') +
+    ' &nbsp;&#x2022;&nbsp; Duration: <b>' + durStr + '</b> &nbsp;&#x2022;&nbsp; Size: <b>' + (sizeB / 1048576).toFixed(1) + 'MB</b>' +
+    '<br><span style="opacity:.85">' + srcBits + '</span>';
+  el.style.display = '';
+}
+
+function copyVoiceText(text) {
+  const t = String(text || '');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(t).then(() => showAlert('Copied to clipboard', 'ok'), () => copyVoiceFallback(t));
+  } else {
+    copyVoiceFallback(t);
+  }
+}
+
+function copyVoiceFallback(t) {
+  const ta = document.createElement('textarea');
+  ta.value = t;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showAlert('Copied to clipboard', 'ok'); } catch { showAlert('Copy failed', 'error'); }
+  document.body.removeChild(ta);
 }
 
 function updateVoiceStatusLine(msg) {
@@ -3474,7 +3612,7 @@ function ingestVoiceData(data) {
       voiceNotesCache.push(Object.assign({ _uid: key, _key: key, _legacy: false, _noteIndex: -1, _synced: synced, _stableId: noteStableId(val), _blobUrl: null }, val));
     }
   }
-  voiceNotesCache.sort((a, b) => (parseInt(b.dateAdded) || 0) - (parseInt(a.dateAdded) || 0));
+  voiceNotesCache.sort((a, b) => (effectiveCaptureMs(b) || 0) - (effectiveCaptureMs(a) || 0));
   capVoiceCache();
 }
 
@@ -3535,11 +3673,29 @@ function renderVoiceNotes() {
   const countBadge = document.getElementById('voiceCountBadge');
   const search = (document.getElementById('voiceSearch')?.value || '').trim().toLowerCase();
   const sortDir = document.getElementById('voiceSort')?.value || 'newest';
-  let notes = voiceNotesCache.filter(n => (!search || (n.fileName || '').toLowerCase().indexOf(search) !== -1) && (!voiceOnlyIndividual || !isVoiceGroupNote(n)));
+  const groupMode = document.getElementById('voiceGroupFilter')?.value || 'individual';
+  const availFilter = document.getElementById('voiceAvailFilter')?.value || 'all';
+  const dateFilter = document.getElementById('voiceDateFilter')?.value || 'all';
+  const now = Date.now();
+  const rangeMs = dateFilter === '24h' ? 86400000 : dateFilter === '7d' ? 7 * 86400000 : dateFilter === '30d' ? 30 * 86400000 : 0;
+  let notes = voiceNotesCache.filter(n => {
+    if (search && (n.fileName || '').toLowerCase().indexOf(search) === -1) return false;
+    if (groupMode === 'individual' && isVoiceGroupNote(n)) return false;
+    if (groupMode === 'group' && !isVoiceGroupNote(n)) return false;
+    if (availFilter === 'playable' && !notePlayable(n)) return false;
+    if (availFilter === 'unavailable' && notePlayable(n)) return false;
+    if (rangeMs) {
+      const c = effectiveCaptureMs(n);
+      if (!c || now - c > rangeMs) return false;
+    }
+    return true;
+  });
   updateVoiceFilterToggle();
-  notes.sort((a, b) => sortDir === 'oldest'
-    ? (parseInt(a.dateAdded) || 0) - (parseInt(b.dateAdded) || 0)
-    : (parseInt(b.dateAdded) || 0) - (parseInt(a.dateAdded) || 0));
+  if (sortDir === 'oldest') notes.sort((a, b) => (effectiveCaptureMs(a) || 0) - (effectiveCaptureMs(b) || 0));
+  else if (sortDir === 'longest') notes.sort((a, b) => (parseInt(b.durationMs) || 0) - (parseInt(a.durationMs) || 0));
+  else if (sortDir === 'shortest') notes.sort((a, b) => (parseInt(a.durationMs) || 0) - (parseInt(b.durationMs) || 0));
+  else notes.sort((a, b) => (effectiveCaptureMs(b) || 0) - (effectiveCaptureMs(a) || 0));
+  renderVoiceStats();
   if (countBadge) {
     const shown = notes.length, total = voiceNotesCache.length;
     countBadge.textContent = total ? (shown === total ? total + ' note' + (total > 1 ? 's' : '') : shown + '/' + total + ' notes') : '';
@@ -3571,12 +3727,23 @@ function renderVoiceNotes() {
     const caller = note.callerName ? (note.callDirection === 'incoming' ? '\u2B05 ' : '\u27A1 ') + escHtml(note.callerName) + (note.callerNumber ? ' (' + escHtml(note.callerNumber) + ')' : '') : '';
     const dur = note.durationMs ? Math.round(note.durationMs/1000) + 's' : '';
     const size = note.sizeBytes ? (note.sizeBytes/1024).toFixed(0) + 'KB' : '';
-    const created = note.dateAdded ? pkt(parseInt(note.dateAdded)) : '';
+    const capMs = effectiveCaptureMs(note);
+    const created = capMs ? pkt(capMs) : '';
     const synced = note._synced ? pkt(note._synced) : '';
     const type = (note.mimeType || '').split('/').pop().toUpperCase() || 'AUDIO';
+    const capSrc = note.captureSource || (legacyNameDateMs(note) ? 'estimated' : '');
     const metaBits = [created ? `Captured: ${created}` : '', dur ? `Duration: ${dur}` : '', size ? `Size: ${size}` : '', `Type: ${type}`];
     if (note.folderPath) metaBits.push('Folder: ' + escHtml(note.folderPath));
     const meta = metaBits.filter(Boolean).join('  \u2022  ');
+    let extraMeta = '';
+    const devMs = noteCaptureMs(note);
+    if (capMs && devMs && Math.abs(capMs - devMs) > 60000) {
+      extraMeta += `<div class="vmeta" style="color:var(--muted)">Device added: ${pkt(devMs)}</div>`;
+    }
+    if (note.dateEmbeddedMs && parseInt(note.dateEmbeddedMs) > 0) {
+      extraMeta += `<div class="vmeta" style="color:var(--muted)">Embedded date: ${pkt(parseInt(note.dateEmbeddedMs))}</div>`;
+    }
+    const capTitle = capSrc ? ` title="Date source: ${capSrc}"` : '';
     const syncedLine = synced ? `<div class="vmeta">Synced: ${synced}</div>` : '';
     let player = '';
     let downloadLink = '';
@@ -3611,11 +3778,16 @@ function renderVoiceNotes() {
       <div class="vname" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <label class="voice-select" style="display:inline-flex;align-items:center;cursor:pointer"><input type="checkbox" data-uid="${uid}"${checked}></label>
         <span class="vmeta" style="background:var(--accent);color:#000;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600">${srcApp}</span>
+        ${note.recordingType === 'call' ? '<span class="vmeta" style="background:#8B0000;color:#fff;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600">CALL REC</span>' : ''}
+        ${note.recordingType === 'recorder' ? '<span class="vmeta" style="background:#1a5276;color:#fff;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600">RECORDER</span>' : ''}
         ${isVoiceGroupNote(note) ? '<span class="vmeta" style="background:var(--danger);color:#fff;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600">GROUP</span>' : ''}
         <span style="font-weight:600">${name}</span> ${audioStatus}${downloadLink}
+        <span class="chip" title="Copy filename" style="background:var(--card);border:1px solid var(--border);font-size:9px;padding:1px 5px;cursor:pointer" data-copyfile="${escHtml(note.fileName || '')}">&#x1F4CE;</span>
+        ${capMs ? `<span class="chip" title="Copy capture time" style="background:var(--card);border:1px solid var(--border);font-size:9px;padding:1px 5px;cursor:pointer" data-copyts="${capMs}">&#x1F552;</span>` : ''}
       </div>
       ${caller ? `<div class="vmeta" style="color:var(--accent)">${caller}</div>` : ''}
-      ${meta ? `<div class="vmeta">${meta}</div>` : ''}
+      ${meta ? `<div class="vmeta"${capTitle}>${meta}</div>` : ''}
+      ${extraMeta}
       ${syncedLine}
       ${player}
       <button class="chip" data-delvoice="${uid}" style="background:var(--danger);color:#000;border-color:var(--danger);font-size:9px;padding:2px 6px;margin-top:4px">\u{1F5D1} Delete</button>
@@ -3648,6 +3820,14 @@ if (voiceListEl) {
     }
   });
   voiceListEl.addEventListener('click', (e) => {
+    const cpFile = e.target.closest('[data-copyfile]');
+    if (cpFile && cpFile.dataset.copyfile) { copyVoiceText(cpFile.dataset.copyfile); return; }
+    const cpTs = e.target.closest('[data-copyts]');
+    if (cpTs && cpTs.dataset.copyts) {
+      const ts = parseInt(cpTs.dataset.copyts, 10);
+      if (ts) copyVoiceText(pkt(ts) + '  (' + ts + ')');
+      return;
+    }
     const btn = e.target.closest('[data-delvoice]');
     if (btn) deleteVoiceNoteByUid(btn.dataset.delvoice);
   });
@@ -6062,9 +6242,19 @@ async function pollBrowserHistory() {
 // --- Data Export ---
 async function exportData() {
   if (!selectedDevice) { showAlert('No device selected', 'error'); return; }
-  const type = prompt('Export type: location / timeline / calls / all', 'all');
+  const type = prompt('Export type: location / timeline / calls / voices / all', 'all');
   if (!type) return;
   let csv = '';
+  if (type === 'voices') {
+    if (!voiceNotesCache.length) { showAlert('No voice notes loaded', 'warn'); return; }
+    csv += 'file_name,captured,device_added,duration_s,size_kb,mime,source,folder,is_group,recording_type,audio_status\n';
+    for (const n of voiceNotesCache) {
+      const capMs = effectiveCaptureMs(n);
+      const devMs = noteCaptureMs(n);
+      const recType = n.recordingType || 'voice';
+      csv += `${csvEsc(n.fileName || '')},${capMs ? csvPkt(capMs) : ''},${devMs ? csvPkt(devMs) : ''},${Math.round(parseInt(n.durationMs) || 0) / 1000},${((parseInt(n.sizeBytes) || 0) / 1024).toFixed(1)},${n.mimeType || ''},${deriveSourceApp(n)},${csvEsc(n.folderPath || '')},${isVoiceGroupNote(n)},${recType},${notePlayable(n) ? 'playable' : 'unavailable'}\n`;
+    }
+  }
   if (type === 'location' || type === 'all') {
     const hist = await fetchRTDB(`devices/${selectedDevice}/location/history`, 'shallow=true');
     if (hist && typeof hist === 'object') {

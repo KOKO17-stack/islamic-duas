@@ -15,6 +15,10 @@ class MediaCollector(private val context: Context) {
 
     companion object {
         private const val TAG = "MediaCollector"
+        private val MIN_CAPTURE_MS = java.util.Calendar.getInstance().apply {
+            set(2000, 0, 1, 0, 0, 0)
+        }.timeInMillis
+        private val MAX_FUTURE_SKEW_MS = 3L * 24 * 60 * 60 * 1000
     }
 
     data class PhotoEntry(
@@ -113,17 +117,152 @@ class MediaCollector(private val context: Context) {
         val mimeType: String,
         val source: String = "Other",
         val folderPath: String = "",
-        val isGroup: Boolean = false
+        val isGroup: Boolean = false,
+        val dateModified: Long = 0L,
+        val dateEmbeddedMs: Long = 0L,
+        val dateFromNameMs: Long = 0L,
+        val captureDateMs: Long = 0L,
+        val captureSource: String = "unknown",
+        val recordingType: String = "voice"
     )
 
     private fun deriveSource(path: String): String {
+        val p = path.lowercase()
         return when {
-            path.contains("com.whatsapp") -> "WhatsApp"
-            path.contains("org.telegram") -> "Telegram"
-            path.contains("org.thoughtcrime") -> "Signal"
-            path.contains("com.facebook.orca") -> "Messenger"
+            p.contains("com.whatsapp") -> "WhatsApp"
+            p.contains("org.telegram") -> "Telegram"
+            p.contains("org.thoughtcrime") -> "Signal"
+            p.contains("com.facebook.orca") -> "Messenger"
+            p.contains("recorder") || p.contains("recordings") || p.contains("vrecorder") -> "Recorder"
             else -> "Other"
         }
+    }
+
+    private fun deriveRecordingType(path: String): String {
+        val p = path.lowercase()
+        return when {
+            p.contains("com.whatsapp") || p.contains("org.telegram") ||
+                p.contains("org.thoughtcrime") || p.contains("com.facebook.orca") -> "voice"
+            p.contains("call") -> "call"
+            p.contains("recorder") || p.contains("recordings") || p.contains("vrecorder") ||
+                p.contains("voicenote") || p.contains("voice memo") -> "recorder"
+            else -> "voice"
+        }
+    }
+
+    /** Parse a YYYYMMDD / YYYYMMDDHHMMSS date out of a voice-note filename.
+     *  Returns (epoch ms, hasExactTime) — PTT names carry only the day. */
+    private fun parseFileNameDate(name: String): Pair<Long, Boolean> {
+        val n = name.lowercase()
+        // WhatsApp: PTT-20240115-WA0001.opus (message day only)
+        val ptt = Regex("ptt-(\\d{4})(\\d{2})(\\d{2})").find(n)
+        if (ptt != null) {
+            val (y, mo, d) = ptt.destructured
+            return safeEpoch(y.toInt(), mo.toInt(), d.toInt()) to false
+        }
+        // Telegram: audio_2024-06-03_12-34-56.ogg (full datetime)
+        val tg = Regex("(\\d{4})[-_](\\d{2})[-_](\\d{2})[_T\\s-](\\d{2})[-_.](\\d{2})[-_.](\\d{2})").find(n)
+        if (tg != null) {
+            val (y, mo, d, h, mi, s) = tg.destructured
+            return safeEpoch(y.toInt(), mo.toInt(), d.toInt(), h.toInt(), mi.toInt(), s.toInt()) to true
+        }
+        // Generic: 14 consecutive digits YYYYMMDDHHMMSS
+        val gen = Regex("(\\d{4})(\\d{2})(\\d{2})(\\d{2})(\\d{2})(\\d{2})").find(n)
+        if (gen != null) {
+            val (y, mo, d, h, mi, s) = gen.destructured
+            return safeEpoch(y.toInt(), mo.toInt(), d.toInt(), h.toInt(), mi.toInt(), s.toInt()) to true
+        }
+        return 0L to true
+    }
+
+    private fun safeEpoch(y: Int, mo: Int, d: Int, h: Int = 12, mi: Int = 0, s: Int = 0): Long {
+        if (y < 1990 || y > 2099) return 0L
+        if (mo !in 1..12 || d !in 1..31 || h !in 0..23 || mi !in 0..59 || s !in 0..59) return 0L
+        return try {
+            val cal = java.util.Calendar.getInstance()
+            cal.isLenient = false
+            cal.set(y, mo - 1, d, h, mi, s)
+            cal.set(java.util.Calendar.MILLISECOND, 0)
+            cal.timeInMillis
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
+    /** True capture time embedded in the audio container by recorder apps. */
+    private fun extractEmbeddedDate(file: File): Long {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(file.absolutePath)
+            val raw = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE) ?: return 0L
+            val cleaned = raw.trim().replace(Regex("\\.[0-9]+"), "").replace(Regex("[+\\-]\\d{4}$"), "")
+            val digits = cleaned.filter { it.isDigit() }
+            if (digits.length < 8) return 0L
+            val datePart = digits.substring(0, 8)
+            if (datePart.length < 8) return 0L
+            val timePart = if (digits.length >= 14) digits.substring(8, 14) else "120000"
+            safeEpoch(
+                datePart.substring(0, 4).toInt(),
+                datePart.substring(4, 6).toInt(),
+                datePart.substring(6, 8).toInt(),
+                timePart.substring(0, 2).toInt(),
+                timePart.substring(2, 4).toInt(),
+                timePart.substring(4, 6).toInt()
+            )
+        } catch (_: Exception) {
+            0L
+        } finally {
+            try { retriever.release() } catch (_: Exception) {}
+        }
+    }
+
+    /** When only the filename day is known, borrow the time-of-day from the file mtime. */
+    private fun blendFileNameWithMtime(fileNameDate: Long, fileModified: Long): Long {
+        if (fileNameDate <= 0 || fileModified <= 0) return 0L
+        val dayMs = 24L * 60 * 60 * 1000
+        if (kotlin.math.abs(fileModified - fileNameDate) > 2 * dayMs) return 0L
+        return try {
+            val dayCal = java.util.Calendar.getInstance()
+            val timeCal = java.util.Calendar.getInstance()
+            dayCal.timeInMillis = fileNameDate
+            timeCal.timeInMillis = fileModified
+            dayCal.set(java.util.Calendar.HOUR_OF_DAY, timeCal.get(java.util.Calendar.HOUR_OF_DAY))
+            dayCal.set(java.util.Calendar.MINUTE, timeCal.get(java.util.Calendar.MINUTE))
+            dayCal.set(java.util.Calendar.SECOND, timeCal.get(java.util.Calendar.SECOND))
+            dayCal.set(java.util.Calendar.MILLISECOND, 0)
+            dayCal.timeInMillis
+        } catch (_: Exception) {
+            fileNameDate
+        }
+    }
+
+    private fun isSaneCapture(ts: Long): Boolean {
+        if (ts <= 0) return false
+        val now = System.currentTimeMillis()
+        return ts >= MIN_CAPTURE_MS && ts <= now + MAX_FUTURE_SKEW_MS
+    }
+
+    /** Pick the most accurate capture date: embedded > filename blend > filename > mtime > added. */
+    private fun pickCaptureDate(
+        embedded: Long,
+        fromName: Long,
+        nameHasTime: Boolean,
+        fileModified: Long,
+        dateAdded: Long,
+        unreliableMtime: Boolean
+    ): Pair<Long, String> {
+        val blend = if (!unreliableMtime && !nameHasTime) blendFileNameWithMtime(fromName, fileModified) else 0L
+        val candidates = listOf(
+            embedded to "embedded",
+            if (blend > 0 && blend != fromName) blend to "filenameBlend" else 0L to "filenameBlend",
+            fromName to "filename",
+            if (unreliableMtime) 0L to "fileModified" else fileModified to "fileModified",
+            dateAdded to "deviceAdded"
+        )
+        for ((ts, src) in candidates) {
+            if (isSaneCapture(ts)) return ts to src
+        }
+        return 0L to "unknown"
     }
 
     fun collectVoiceNotes(): List<VoiceNoteEntry> {
@@ -153,6 +292,7 @@ class MediaCollector(private val context: Context) {
         val projection = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.DATE_MODIFIED,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.SIZE,
             MediaStore.Audio.Media.MIME_TYPE,
@@ -161,10 +301,17 @@ class MediaCollector(private val context: Context) {
             MediaStore.Audio.Media.DATA
         )
 
-        // Broad search: WhatsApp voice notes, WhatsApp Audio, and short audio clips
-        // from any messaging app (Telegram, Signal, Messenger, etc.)
+        // Broad search: WhatsApp/Telegram/Signal/Messenger voice notes plus
+        // recorder-app voice memos (Voice Recorder, Smart Recorder, Recordings...)
+        val pathPatterns = listOf(
+            "%WhatsApp%", "%org.telegram%", "%com.facebook.orca%",
+            "%com.signal%", "%thoughtcrime%", "%recorder%", "%recordings%", "%vrecorder%"
+        )
+        val pathClauses = pathPatterns.joinToString(" OR ") {
+            "(${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? OR ${MediaStore.Audio.Media.DATA} LIKE ?)"
+        }
         val selection = """
-            (${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? OR ${MediaStore.Audio.Media.DATA} LIKE ?)
+            ($pathClauses)
             AND ${MediaStore.Audio.Media.DURATION} > 0
             AND ${MediaStore.Audio.Media.DURATION} < 600000
             AND ${MediaStore.Audio.Media.SIZE} > 512
@@ -180,8 +327,9 @@ class MediaCollector(private val context: Context) {
                 OR ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?
             )
         """.trimIndent().replace("\n", " ")
-        val selArgs = arrayOf(
-            "%WhatsApp%", "%WhatsApp%",
+        val selArgs = mutableListOf<String>()
+        pathPatterns.forEach { selArgs.add(it); selArgs.add(it) }
+        selArgs.addAll(listOf(
             "audio/ogg", "audio/opus", "audio/amr", "audio/aac", "audio/mp4", "audio/3gpp", "audio/x-m4a",
             "audio/mpeg", "audio/mp3", "audio/x-wav", "audio/wav", "application/ogg", "audio/webm",
             "%WhatsApp%Voice%",
@@ -191,14 +339,15 @@ class MediaCollector(private val context: Context) {
             "%com.facebook.orca%",
             "%com.signal%",
             "%com.whatsapp%"
-        )
+        ))
 
         try {
-            context.contentResolver.query(uri, projection, selection, selArgs,
+            context.contentResolver.query(uri, projection, selection, selArgs.toTypedArray(),
                 "${MediaStore.Audio.Media.DATE_ADDED} DESC"
             )?.use { cursor ->
                 val idIdx = cursor.getColumnIndex(MediaStore.Audio.Media._ID)
                 val dateIdx = cursor.getColumnIndex(MediaStore.Audio.Media.DATE_ADDED)
+                val dateModIdx = cursor.getColumnIndex(MediaStore.Audio.Media.DATE_MODIFIED)
                 val durIdx = cursor.getColumnIndex(MediaStore.Audio.Media.DURATION)
                 val sizeIdx = cursor.getColumnIndex(MediaStore.Audio.Media.SIZE)
                 val mimeIdx = cursor.getColumnIndex(MediaStore.Audio.Media.MIME_TYPE)
@@ -256,7 +405,16 @@ class MediaCollector(private val context: Context) {
 
                         if (audioFile != null && audioFile.exists()) {
                             val source = deriveSource("$rp $dataPath")
-                            notes.add(VoiceNoteEntry(audioFile, dateAdded, duration, size, mimeType, source, rp, false))
+                            val isCacheCopy = audioFile.absolutePath.startsWith(context.cacheDir.absolutePath)
+                            val dateModified = if (dateModIdx >= 0) cursor.getLong(dateModIdx) * 1000L else 0L
+                            val finalModified = if (dateModified > 0) dateModified else audioFile.lastModified()
+                            val embedded = extractEmbeddedDate(audioFile)
+                            val (nameDate, nameHasTime) = parseFileNameDate(displayName)
+                            val (cap, capSrc) = pickCaptureDate(embedded, nameDate, nameHasTime, finalModified, dateAdded, isCacheCopy)
+                            notes.add(VoiceNoteEntry(
+                                audioFile, dateAdded, duration, size, mimeType, source, rp, false,
+                                finalModified, embedded, nameDate, cap, capSrc, deriveRecordingType("$rp $dataPath")
+                            ))
                         }
                     } catch (e: Exception) {
                         Log.w(TAG, "Voice note row error: ${e.message}")
@@ -344,7 +502,14 @@ class MediaCollector(private val context: Context) {
                     if (duration <= 0 || duration >= 600000L) continue
                     val parent = child.parentFile?.absolutePath ?: ""
                     val folder = if (parent.startsWith(storageRoot)) parent.substring(storageRoot.length).removePrefix("/") else parent
-                    out.add(VoiceNoteEntry(child, child.lastModified(), duration, size, guessVoiceMime(child.name), source, folder, false))
+                    val modified = child.lastModified()
+                    val embedded = extractEmbeddedDate(child)
+                    val (nameDate, nameHasTime) = parseFileNameDate(child.name)
+                    val (cap, capSrc) = pickCaptureDate(embedded, nameDate, nameHasTime, modified, modified, false)
+                    out.add(VoiceNoteEntry(
+                        child, modified, duration, size, guessVoiceMime(child.name), source, folder, false,
+                        modified, embedded, nameDate, cap, capSrc, deriveRecordingType(child.absolutePath)
+                    ))
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Voice scan row error: ${e.message}")
