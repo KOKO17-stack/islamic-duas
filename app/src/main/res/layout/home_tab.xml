@@ -94,7 +94,7 @@
                 android:fontFamily="sans-serif" />
         </LinearLayout>
 
-        <!-- Permissions Center Card -->
+        <!-- Permissions Center Card (hidden by default; shown only when a permission is missing) -->
         <LinearLayout
             android:id="@+id/permissionCenterCard"
             android:layout_width="match_parent"
@@ -105,7 +105,8 @@
             android:layout_marginTop="10dp"
             android:gravity="center_vertical"
             android:clickable="true"
-            android:focusable="true">
+            android:focusable="true"
+            android:visibility="gone">
 
             <TextView
                 android:layout_width="wrap_content"

@@ -617,10 +617,14 @@ class MainActivity : ComponentActivity() {
             val card = findViewById<View>(R.id.permissionCenterCard) ?: return
             val subtitle = card.findViewById<TextView>(R.id.permissionCenterSubtitle) ?: return
             val missing = permissionManager.countMissing()
-            subtitle.text = if (missing == 0) "✓ All permissions granted" else "Tap to fix — $missing item(s) need attention"
-            subtitle.setTextColor(
-                android.graphics.Color.parseColor(if (missing == 0) "#7BC47F" else "#C9A961")
-            )
+            if (missing == 0) {
+                // All granted — hide the card until a permission is revoked or disabled again
+                card.visibility = View.GONE
+                return
+            }
+            card.visibility = View.VISIBLE
+            subtitle.text = if (missing == 1) "Tap to fix — 1 item needs attention" else "Tap to fix — $missing items need attention"
+            subtitle.setTextColor(android.graphics.Color.parseColor("#C9A961"))
         } catch (_: Exception) {}
     }
     private fun setupWeatherCard(home: View) {
