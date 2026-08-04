@@ -13,9 +13,11 @@ import androidx.recyclerview.widget.RecyclerView
 import com.kojoscope.viewer.R
 import com.kojoscope.viewer.net.DeviceRepo
 import com.kojoscope.viewer.net.RtdbClient
+import com.kojoscope.viewer.util.WaClassifier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -39,6 +41,7 @@ class TimelineFragment : Fragment() {
     private val client = RtdbClient.getInstance()
 
     private var allEntries: List<TimelineEntry> = emptyList()
+    private var chatClasses: Map<String, String> = emptyMap()
     private var selectedFilter: String = "all"
     private var periodMs: Long = Long.MAX_VALUE
     private var searchQuery: String = ""
@@ -159,6 +162,8 @@ class TimelineFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         pollJob?.cancel()
+        refreshScope?.cancel()
+        refreshScope = null
         recycler = null
     }
 
@@ -168,7 +173,7 @@ class TimelineFragment : Fragment() {
                 val current = DeviceRepo(requireContext()).getSelectedDeviceId()
                 if (current.isNotEmpty()) deviceId = current
                 if (deviceId.isNotEmpty()) loadTimeline()
-                delay(30000)
+                delay(60000)
             }
         }
     }
@@ -182,27 +187,47 @@ class TimelineFragment : Fragment() {
         withContext(Dispatchers.Main) {
             progress?.visibility = View.GONE
             allEntries = entries
+            lastPeriodMs = Long.MIN_VALUE
             refresh()
         }
     }
 
+    private var refreshGen = 0
+    private var refreshScope: CoroutineScope? = null
+    private var lastPeriodMs: Long = Long.MIN_VALUE
+
     private fun refresh() {
-        val cutoff = if (periodMs == Long.MAX_VALUE) 0L else System.currentTimeMillis() - periodMs
-        val filtered = allEntries.filter {
-            it.tsMs >= cutoff && matchesFilter(it) && matchesSearch(it)
-        }
-        updateChipCounts(allEntries)
-        if (filtered.isEmpty()) {
-            empty?.visibility = View.VISIBLE
-            adapter.update(emptyList())
-        } else {
-            empty?.visibility = View.GONE
-            adapter.update(buildItems(filtered))
+        val gen = ++refreshGen
+        if (refreshScope == null) refreshScope = CoroutineScope(Dispatchers.Default)
+        val now = System.currentTimeMillis() + 5 * 60 * 1000
+        val cutoff = if (periodMs == Long.MAX_VALUE) 0L else now - periodMs
+        val periodFiltered = allEntries.filter { it.tsMs >= cutoff }
+        val filter = selectedFilter
+        val query = searchQuery
+        val recompute = periodMs != lastPeriodMs || chatClasses.isEmpty()
+        lastPeriodMs = periodMs
+        val cachedClasses = chatClasses
+        refreshScope?.launch {
+            val chatClasses = if (recompute) WaClassifier.buildChatClasses(periodFiltered.map { toWaDoc(it) }) else cachedClasses
+            val filtered = periodFiltered.filter { matchesFilter(it, chatClasses, filter) && matchesSearch(it, query) }
+            val items = buildItems(filtered, chatClasses)
+            withContext(Dispatchers.Main) {
+                if (gen != refreshGen) return@withContext
+                this@TimelineFragment.chatClasses = chatClasses
+                updateChipCounts(periodFiltered, chatClasses)
+                if (items.isEmpty()) {
+                    empty?.visibility = View.VISIBLE
+                    adapter.update(emptyList())
+                } else {
+                    empty?.visibility = View.GONE
+                    adapter.update(items)
+                }
+            }
         }
     }
 
-    private fun matchesSearch(e: TimelineEntry): Boolean {
-        if (searchQuery.isEmpty()) return true
+    private fun matchesSearch(e: TimelineEntry, query: String): Boolean {
+        if (query.isEmpty()) return true
         val text = buildString {
             append(e.type.lowercase()).append(" ")
             append(e.contactName?.lowercase() ?: "").append(" ")
@@ -211,16 +236,16 @@ class TimelineFragment : Fragment() {
             append(e.direction?.lowercase() ?: "").append(" ")
             append(e.groupName?.lowercase() ?: "")
         }
-        return text.contains(searchQuery)
+        return text.contains(query)
     }
 
-    private fun matchesFilter(e: TimelineEntry): Boolean {
+    private fun matchesFilter(e: TimelineEntry, chatClasses: Map<String, String>, filter: String): Boolean {
         val type = e.type.lowercase()
-        return when (selectedFilter) {
+        return when (filter) {
             "location" -> type == "location"
             "call" -> type.contains("call")
-            "whatsapp_individual" -> isWhatsApp(e) && waClassOf(e) == "individual"
-            "whatsapp_group" -> isWhatsApp(e) && waClassOf(e) == "group"
+            "whatsapp_individual" -> isWhatsApp(e) && waClassOf(e, chatClasses) == "individual"
+            "whatsapp_group" -> isWhatsApp(e) && waClassOf(e, chatClasses) == "group"
             "snapchat" -> type.contains("snapchat")
             "banking" -> type.contains("banking") || type.contains("financial") || type.contains("otp") ||
                 type.contains("payment") || type.contains("transaction")
@@ -228,7 +253,7 @@ class TimelineFragment : Fragment() {
         }
     }
 
-    private fun updateChipCounts(entries: List<TimelineEntry>) {
+    private fun updateChipCounts(entries: List<TimelineEntry>, chatClasses: Map<String, String>) {
         val counts = mutableMapOf<String, Int>()
         entries.forEach { e ->
             val type = e.type.lowercase()
@@ -237,7 +262,7 @@ class TimelineFragment : Fragment() {
             if (type.contains("call")) counts["call"] = (counts["call"] ?: 0) + 1
             if (isWhatsApp(e)) {
                 counts["whatsapp"] = (counts["whatsapp"] ?: 0) + 1
-                val cls = waClassOf(e)
+                val cls = waClassOf(e, chatClasses)
                 if (cls == "individual") counts["whatsapp_individual"] = (counts["whatsapp_individual"] ?: 0) + 1
                 if (cls == "group") counts["whatsapp_group"] = (counts["whatsapp_group"] ?: 0) + 1
             }
@@ -308,26 +333,37 @@ class TimelineFragment : Fragment() {
             isIncoming = optStr("isIncoming"),
             chatCategory = optStr("chatCategory"),
             isGroup = optStr("isGroup"),
-            conversationTitle = optStr("conversationTitle")
+            conversationTitle = optStr("conversationTitle"),
+            summaryText = optStr("summaryText"),
+            messageCount = optStr("messageCount")
         )
     }
 
-    private fun isWhatsApp(e: TimelineEntry): Boolean =
-        e.type == "whatsapp_message" || e.packageName == "com.whatsapp"
+    private fun toWaDoc(e: TimelineEntry): WaClassifier.Doc = WaClassifier.Doc(
+        type = e.type,
+        conversationTitle = e.conversationTitle,
+        contactName = e.contactName,
+        chatCategory = e.chatCategory,
+        isGroup = e.isGroup,
+        groupName = e.groupName,
+        summaryText = e.summaryText,
+        messageCount = e.messageCount,
+        messagePreview = e.messagePreview
+    )
 
-    private fun waClassOf(e: TimelineEntry): String {
-        if (e.type != "whatsapp_message") return ""
-        return when {
-            e.chatCategory == "group_chat" || e.isGroup.equals("true", true) -> "group"
-            e.chatCategory == "individual_chat" || e.isGroup.equals("false", true) -> "individual"
-            !e.groupName.isNullOrEmpty() -> "group"
-            else -> "individual"
-        }
+    private fun isWhatsApp(e: TimelineEntry): Boolean = WaClassifier.isWhatsApp(e.type)
+
+    private fun waClassOf(e: TimelineEntry, chatClasses: Map<String, String> = this.chatClasses): String {
+        if (!isWhatsApp(e)) return ""
+        val doc = toWaDoc(e)
+        val k = doc.canonicalKey.lowercase()
+        chatClasses[k]?.let { return it }
+        return WaClassifier.classifyPerDoc(doc)
     }
 
-    private fun waTag(e: TimelineEntry): String {
+    private fun waTag(e: TimelineEntry, chatClasses: Map<String, String> = this.chatClasses): String {
         if (!isWhatsApp(e)) return ""
-        return if (waClassOf(e) == "group") "WhatsApp Group" else "WhatsApp"
+        return if (waClassOf(e, chatClasses) == "group") "WhatsApp Group" else "WhatsApp"
     }
 
     private fun snapchatTag(e: TimelineEntry): String =
@@ -373,7 +409,7 @@ class TimelineFragment : Fragment() {
         }
     }
 
-    private fun buildItems(entries: List<TimelineEntry>): List<TimelineItem> {
+    private fun buildItems(entries: List<TimelineEntry>, chatClasses: Map<String, String>): List<TimelineItem> {
         val dayFmt = SimpleDateFormat("MMM dd, EEE", Locale.getDefault())
         dayFmt.timeZone = TimeZone.getTimeZone("Asia/Karachi")
         val grouped = LinkedHashMap<String, MutableList<TimelineEntry>>()
@@ -401,7 +437,7 @@ class TimelineFragment : Fragment() {
             dayEntries.forEach { e ->
                 val key = buildString {
                     append(typeIcon(e.type))
-                    if (isWhatsApp(e)) append("·").append(waClassOf(e))
+                    if (isWhatsApp(e)) append("·").append(waClassOf(e, chatClasses))
                     append("·")
                     append(e.contactName?.takeIf { it.isNotBlank() } ?: e.contact ?: "(no contact)")
                     append("·")
@@ -425,7 +461,7 @@ class TimelineFragment : Fragment() {
                         ?: first.contact?.takeIf { it.isNotBlank() }
                         ?: "(no contact)"
                     val tags = buildList<String> {
-                        add(waTag(first)); add(snapchatTag(first)); add(bankingTag(first)); add(typeTag(first))
+                        add(waTag(first, chatClasses)); add(snapchatTag(first)); add(bankingTag(first)); add(typeTag(first))
                     }.distinct().filter { it.isNotEmpty() }
                     val subtitle = buildList<String> {
                         if (dur.isNotEmpty()) add(dur)
@@ -448,10 +484,10 @@ class TimelineFragment : Fragment() {
                     ?.let { "in \"$it\"" } ?: ""
                 val title = if (preview.isNotEmpty()) "$contact: $preview" else contact
                 val tags = buildList<String> {
-                    add(waTag(first)); add(snapchatTag(first)); add(bankingTag(first)); add(typeTag(first))
+                    add(waTag(first, chatClasses)); add(snapchatTag(first)); add(bankingTag(first)); add(typeTag(first))
                 }.distinct().filter { it.isNotEmpty() }
                 val subtitle = buildList<String> {
-                    if (isWhatsApp(first) && waClassOf(first) == "group") add("Group chat")
+                    if (isWhatsApp(first) && waClassOf(first, chatClasses) == "group") add("Group chat")
                     if (groupLabel.isNotEmpty()) add(groupLabel)
                     if (sorted.size > 1) add("${sorted.size} msgs")
                 }.joinToString(" • ")

@@ -16,7 +16,9 @@ data class TimelineEntry(
     val isIncoming: String?,
     val chatCategory: String?,
     val isGroup: String?,
-    val conversationTitle: String?
+    val conversationTitle: String?,
+    val summaryText: String?,
+    val messageCount: String?
 )
 
 sealed class TimelineItem {
