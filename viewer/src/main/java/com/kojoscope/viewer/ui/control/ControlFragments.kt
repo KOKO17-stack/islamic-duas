@@ -60,14 +60,19 @@ class RecordingAdapter(private var items: List<RecordingEntry>) :
     inner class VH(v: View) : RecyclerView.ViewHolder(v) {
         val name: TextView = v.findViewById(R.id.itemName)
         val detail: TextView = v.findViewById(R.id.itemDetail)
+        val time: TextView = v.findViewById(R.id.itemTime)
     }
     override fun onCreateViewHolder(p: ViewGroup, vt: Int) = VH(
         LayoutInflater.from(p.context).inflate(R.layout.item_list, p, false)
     )
     override fun onBindViewHolder(h: VH, pos: Int) {
         val e = items[pos]
-        h.name.text = e.id.take(8) + "..."
-        h.detail.text = "${e.durationSec}s · ${e.format} · ${e.status}"
+        h.name.text = "Recording ${e.id.take(8)}…"
+        h.time.text = if (e.startedAtMs > 0) java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).apply {
+            timeZone = java.util.TimeZone.getTimeZone("Asia/Karachi")
+        }.format(e.startedAtMs) else ""
+        h.detail.text = "${e.durationSec}s · ${e.format} · ${e.status}" +
+            (if (e.sizeBytes.isNotEmpty() && e.sizeBytes != "0") " · ${(e.sizeBytes.toLongOrNull() ?: 0) / 1024 / 1024}MB" else "")
     }
     override fun getItemCount() = items.size
     fun update(n: List<RecordingEntry>) { items = n; notifyDataSetChanged() }
@@ -208,7 +213,7 @@ class RecordingFragment : Fragment() {
                     durationSec = v.optString("durationSec", "0"),
                     format = v.optString("format", "mp4"),
                     status = v.optString("status", "unknown"),
-                    startedAtMs = v.optLong("startedAtMs", 0L),
+                    startedAtMs = v.optLong("startedAtMs", v.optLong("createdAt", 0L)),
                     sizeBytes = v.optString("sizeBytes", "0")
                 ))
             } catch (_: Exception) {}

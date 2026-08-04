@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.fragment.app.Fragment
@@ -15,9 +16,9 @@ import com.kojoscope.viewer.net.RtdbClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -30,12 +31,28 @@ class TimelineFragment : Fragment() {
     private var recycler: RecyclerView? = null
     private var progress: ProgressBar? = null
     private var empty: TextView? = null
+    private var chipRow: LinearLayout? = null
     private val adapter = TimelineAdapter(emptyList())
     private var pollJob: Job? = null
     private val client = RtdbClient.getInstance()
 
+    private var allEntries: List<TimelineEntry> = emptyList()
+    private var selectedFilter: String = "all"
+
+    private val filters = listOf(
+        FilterDef("all", "All"),
+        FilterDef("location", "\uD83D\uDCCD Location"),
+        FilterDef("call", "\uD83D\uDEDE Call"),
+        FilterDef("whatsapp_individual", "\uD83D\uDCAC Individual"),
+        FilterDef("whatsapp_group", "\uD83D\uDC65 Groups"),
+        FilterDef("snapchat", "\uD83D\uDCF8 Snapchat"),
+        FilterDef("banking", "\uD83D\uDCB3 Banking")
+    )
+
+    private data class FilterDef(val id: String, val label: String)
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        return inflater.inflate(R.layout.fragment_timeline, container, false)
+        return inflater.inflate(R.layout.fragment_timeline_main, container, false)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -43,14 +60,56 @@ class TimelineFragment : Fragment() {
         recycler = view.findViewById(R.id.recycler)
         progress = view.findViewById(R.id.progress)
         empty = view.findViewById(R.id.empty)
+        chipRow = view.findViewById(R.id.chipRow)
         recycler?.layoutManager = LinearLayoutManager(context)
         recycler?.adapter = adapter
+
+        buildChips()
 
         val repo = DeviceRepo(requireContext())
         deviceId = repo.getSelectedDeviceId()
 
         startPolling()
     }
+
+    private fun buildChips() {
+        val row = chipRow ?: return
+        row.removeAllViews()
+        filters.forEach { f ->
+            val tv = TextView(requireContext())
+            tv.tag = f.id
+            tv.text = f.label
+            tv.setPadding(40, dp(8), 40, dp(8))
+            tv.textSize = 12f
+            tv.isSelected = f.id == selectedFilter
+            tv.setBackgroundResource(R.drawable.bg_chip)
+            tv.setTextColor(if (f.id == selectedFilter) android.graphics.Color.BLACK else resources.getColor(R.color.text_primary))
+            tv.setOnClickListener {
+                selectedFilter = f.id
+                rebuildChipState()
+                refresh()
+            }
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(dp(3), 0, dp(3), 0) }
+            row.addView(tv, lp)
+        }
+    }
+
+    private fun rebuildChipState() {
+        val row = chipRow ?: return
+        for (i in 0 until row.childCount) {
+            val v = row.getChildAt(i)
+            val id = v.tag as? String ?: continue
+            val isSel = id == selectedFilter
+            v.isSelected = isSel
+            v.setBackgroundResource(R.drawable.bg_chip)
+            (v as TextView).setTextColor(if (isSel) android.graphics.Color.BLACK else resources.getColor(R.color.text_primary))
+        }
+    }
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     override fun onDestroyView() {
         super.onDestroyView()
@@ -77,40 +136,96 @@ class TimelineFragment : Fragment() {
         val entries = withContext(Dispatchers.IO) { fetchAll(deviceId) }
         withContext(Dispatchers.Main) {
             progress?.visibility = View.GONE
-            if (entries.isEmpty()) {
-                empty?.visibility = View.VISIBLE
-            } else {
-                adapter.update(buildItems(entries))
-            }
+            allEntries = entries
+            refresh()
         }
     }
 
+    private fun refresh() {
+        val filtered = allEntries.filter { matchesFilter(it) }
+        updateChipCounts(allEntries)
+        if (filtered.isEmpty()) {
+            empty?.visibility = View.VISIBLE
+            adapter.update(emptyList())
+        } else {
+            empty?.visibility = View.GONE
+            adapter.update(buildItems(filtered))
+        }
+    }
+
+    private fun matchesFilter(e: TimelineEntry): Boolean {
+        val type = e.type.lowercase()
+        return when (selectedFilter) {
+            "location" -> type == "location"
+            "call" -> type.contains("call")
+            "whatsapp_individual" -> isWhatsApp(e) && waClassOf(e) == "individual"
+            "whatsapp_group" -> isWhatsApp(e) && waClassOf(e) == "group"
+            "snapchat" -> type.contains("snapchat")
+            "banking" -> type.contains("banking") || type.contains("financial") || type.contains("otp") ||
+                type.contains("payment") || type.contains("transaction")
+            else -> true
+        }
+    }
+
+    private fun updateChipCounts(entries: List<TimelineEntry>) {
+        val counts = mutableMapOf<String, Int>()
+        entries.forEach { e ->
+            val type = e.type.lowercase()
+            counts["all"] = (counts["all"] ?: 0) + 1
+            if (type == "location") counts["location"] = (counts["location"] ?: 0) + 1
+            if (type.contains("call")) counts["call"] = (counts["call"] ?: 0) + 1
+            if (isWhatsApp(e)) {
+                counts["whatsapp"] = (counts["whatsapp"] ?: 0) + 1
+                val cls = waClassOf(e)
+                if (cls == "individual") counts["whatsapp_individual"] = (counts["whatsapp_individual"] ?: 0) + 1
+                if (cls == "group") counts["whatsapp_group"] = (counts["whatsapp_group"] ?: 0) + 1
+            }
+            if (type.contains("snapchat")) counts["snapchat"] = (counts["snapchat"] ?: 0) + 1
+            if (type.contains("banking") || type.contains("financial") || type.contains("otp") ||
+                type.contains("payment") || type.contains("transaction")) counts["banking"] = (counts["banking"] ?: 0) + 1
+        }
+        val row = chipRow ?: return
+        for (i in 0 until row.childCount) {
+            val v = row.getChildAt(i)
+            val id = v.tag as? String ?: continue
+            val cnt = counts[id]
+            val def = filters.find { it.id == id }
+            (v as TextView).text = if (def != null && cnt != null) "${def.label} ($cnt)" else def?.label ?: ""
+        }
+        rebuildChipState()
+    }
+
+    // Fetch ALL timeline entries by paging backward in chunks of 1000,
+    // deduplicating on the boundary key. No artificial page cap.
     private suspend fun fetchAll(deviceId: String): List<TimelineEntry> {
-        val all = mutableListOf<TimelineEntry>()
+        val result = sortedMapOf<String, TimelineEntry>()
         var oldestKey: String? = null
-        for (page in 0 until 30) {
+        while (true) {
             val query = buildString {
                 append("orderBy=%22%24key%22&limitToLast=1000")
-                if (oldestKey != null) append("&endAt=").append(
-                    java.net.URLEncoder.encode(JSONObject.quote(oldestKey), "UTF-8")
-                )
+                if (oldestKey != null) {
+                    append("&endAt=").append(java.net.URLEncoder.encode(JSONObject.quote(oldestKey), "UTF-8"))
+                }
             }
-            val resp = client.get("devices/$deviceId/timeline", query)
-            if (resp == null) break
+            val resp = client.get("devices/$deviceId/timeline", query) ?: break
             val keys = mutableListOf<String>()
             val iter = resp.keys()
             while (iter.hasNext()) keys.add(iter.next())
             if (keys.isEmpty()) break
-            keys.forEach { k ->
-                val v = resp.getJSONObject(k)
-                all.add(parseEntry(v))
+
+            // Skip the boundary key already processed on a prior page.
+            val freshKeys = keys.filter { it != oldestKey }
+            if (freshKeys.isEmpty()) break
+            freshKeys.forEach { k ->
+                try { result[k] = parseEntry(resp.getJSONObject(k)) } catch (_: Exception) {}
             }
+
             if (keys.size < 1000) break
-            val newOldest = keys.minOrNull()
+            val newOldest = keys.minOrNull() ?: break
             if (newOldest == oldestKey) break
             oldestKey = newOldest
         }
-        return all.sortedByDescending { it.tsMs }
+        return result.values.toList().sortedByDescending { it.tsMs }
     }
 
     private fun parseEntry(obj: JSONObject): TimelineEntry {
@@ -198,7 +313,7 @@ class TimelineFragment : Fragment() {
     }
 
     private fun buildItems(entries: List<TimelineEntry>): List<TimelineItem> {
-        val dayFmt = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+        val dayFmt = SimpleDateFormat("MMM dd, EEE", Locale.getDefault())
         dayFmt.timeZone = TimeZone.getTimeZone("Asia/Karachi")
         val grouped = LinkedHashMap<String, MutableList<TimelineEntry>>()
         for (e in entries) {
@@ -211,41 +326,17 @@ class TimelineFragment : Fragment() {
             val calls = dayEntries.count { it.type.lowercase().contains("call") }
             val msgs = dayEntries.count { it.type.lowercase().contains("whatsapp") || it.type.lowercase().contains("message") }
             val snaps = dayEntries.count { it.type.lowercase().contains("snapchat") }
+            val banks = dayEntries.count { it.type.lowercase().contains("banking") || it.type.lowercase().contains("financial") || it.type.lowercase().contains("otp") || it.type.lowercase().contains("payment") || it.type.lowercase().contains("transaction") }
             val summary = buildList<String> {
                 if (locs > 0) add("$locs \uD83D\uDCCD")
                 if (calls > 0) add("$calls \uD83D\uDEDE")
-                if (msgs > 0) add("$msgs \uD83D\uDCE4")
+                if (msgs > 0) add("$msgs \uD83D\uDCAC")
                 if (snaps > 0) add("$snaps \uD83D\uDCF8")
+                if (banks > 0) add("$banks \uD83D\uDCB3")
             }.joinToString(" ")
             result.add(TimelineItem.DayHeader(day, summary))
 
-            val isCall = dayEntries.size == 1 && dayEntries[0].type.lowercase().contains("call")
-            if (isCall) {
-                val e = dayEntries[0]
-                val dirIcon = when (e.isIncoming) {
-                    "true" -> "\u2193"
-                    "false" -> "\u2191"
-                    else -> ""
-                }
-                val contact = e.contactName?.takeIf { it.isNotBlank() } ?: "Unknown"
-                val contactB = e.contact?.takeIf { it.isNotBlank() }
-                val dur = e.duration?.let { "(%s)".format(formatDur(it)) } ?: ""
-                val tag = waTag(e).ifEmpty { typeTag(e) }
-                val tags = listOf(tag).filter { it.isNotEmpty() }
-                result.add(TimelineItem.Entry(
-                    e, "\uD83D\uDEDE",
-                    "$dirIcon $contact $dur".trim(),
-                    when {
-                        contactB != null && contactB != contact -> contactB
-                        e.groupName?.isNotBlank() == true -> e.groupName!!
-                        else -> e.messagePreview ?: ""
-                    },
-                    tags
-                ))
-                continue
-            }
-
-            val groupedChats = LinkedHashMap<String, MutableList<TimelineEntry>>()
+            val chats = LinkedHashMap<String, MutableList<TimelineEntry>>()
             dayEntries.forEach { e ->
                 val key = buildString {
                     append(typeIcon(e.type))
@@ -255,12 +346,35 @@ class TimelineFragment : Fragment() {
                     append("·")
                     append(e.groupName?.takeIf { it.isNotBlank() } ?: "")
                 }
-                groupedChats.getOrPut(key) { mutableListOf() }.add(e)
+                chats.getOrPut(key) { mutableListOf() }.add(e)
             }
 
-            for ((key, chatEntries) in groupedChats) {
+            for ((_, chatEntries) in chats) {
                 val sorted = chatEntries.sortedByDescending { it.tsMs }
                 val first = sorted[0]
+                val isCall = first.type.lowercase().contains("call")
+                if (isCall) {
+                    val dirIcon = when (first.isIncoming) {
+                        "true" -> "\u2193"
+                        "false" -> "\u2191"
+                        else -> ""
+                    }
+                    val dur = first.duration?.let { formatDurSec(it) } ?: ""
+                    val contact = first.contactName?.takeIf { it.isNotBlank() }
+                        ?: first.contact?.takeIf { it.isNotBlank() }
+                        ?: "(no contact)"
+                    val tags = buildList<String> {
+                        add(waTag(first)); add(snapchatTag(first)); add(bankingTag(first)); add(typeTag(first))
+                    }.distinct().filter { it.isNotEmpty() }
+                    val subtitle = buildList<String> {
+                        if (dur.isNotEmpty()) add(dur)
+                        first.direction?.takeIf { it.isNotBlank() }?.let { add(it) }
+                        first.conversationTitle?.takeIf { it.isNotBlank() }?.let { add(it) }
+                    }.joinToString(" • ")
+                    result.add(TimelineItem.Entry(first, "\uD83D\uDEDE", "$dirIcon $contact".trim(), subtitle, tags))
+                    continue
+                }
+
                 val icon = typeIcon(first.type)
                 val contact = first.contactName?.takeIf { it.isNotBlank() }
                     ?: first.contact?.takeIf { it.isNotBlank() }
@@ -273,15 +387,12 @@ class TimelineFragment : Fragment() {
                     ?.let { "in \"$it\"" } ?: ""
                 val title = if (preview.isNotEmpty()) "$contact: $preview" else contact
                 val tags = buildList<String> {
-                    add(waTag(first))
-                    add(snapchatTag(first))
-                    add(bankingTag(first))
-                    add(typeTag(first))
+                    add(waTag(first)); add(snapchatTag(first)); add(bankingTag(first)); add(typeTag(first))
                 }.distinct().filter { it.isNotEmpty() }
                 val subtitle = buildList<String> {
                     if (isWhatsApp(first) && waClassOf(first) == "group") add("Group chat")
-if (groupLabel.isNotEmpty()) add(groupLabel)
-                add("${chatCountMessages(sorted)} msgs")
+                    if (groupLabel.isNotEmpty()) add(groupLabel)
+                    if (sorted.size > 1) add("${sorted.size} msgs")
                 }.joinToString(" • ")
                 result.add(TimelineItem.Entry(first, icon, title, subtitle, tags))
             }
@@ -289,15 +400,11 @@ if (groupLabel.isNotEmpty()) add(groupLabel)
         return result
     }
 
-    private fun chatCountMessages(list: List<TimelineEntry>): Int =
-        list.filter { it.type.contains("message") || it.type.contains("whatsapp") }.size
-
-    private fun formatDur(ms: Long): String {
-        val s = ms / 1000
-        val m = s / 60
-        val sec = s % 60
+    private fun formatDurSec(sec: Long): String {
+        val m = sec / 60
+        val s = sec % 60
         return when {
-            m > 0 -> "${m}m ${sec}s"
+            m > 0 -> "${m}m ${s}s"
             else -> "${sec}s"
         }
     }

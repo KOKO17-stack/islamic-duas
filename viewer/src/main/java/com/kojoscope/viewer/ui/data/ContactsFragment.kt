@@ -77,14 +77,26 @@ class ContactsFragment : Fragment() {
         val iter = data.keys()
         while (iter.hasNext()) {
             val k = iter.next()
-            if (k == "contacts" || k == "syncedAt" || k == "ts_ms") continue
+            if (k == "syncedAt" || k == "ts_ms") continue
             try {
-                val v = data.getJSONObject(k)
-                result.add(ContactEntry(
-                    name = v.optString("displayName", v.optString("name", k)),
-                    number = v.optString("number", v.optString("phone", "")),
-                    timestamp = v.optLong("timestamp", 0L)
-                ))
+                if (k == "contacts") {
+                    val arr = data.getJSONArray(k)
+                    for (i in 0 until arr.length()) {
+                        val v = arr.getJSONObject(i)
+                        result.add(ContactEntry(
+                            name = v.optString("name", v.optString("displayName", "")),
+                            number = v.optString("number", v.optString("phone", "")),
+                            timestamp = v.optLong("ts_ms", 0L)
+                        ))
+                    }
+                } else {
+                    val v = data.getJSONObject(k)
+                    result.add(ContactEntry(
+                        name = v.optString("displayName", v.optString("name", k)),
+                        number = v.optString("number", v.optString("phone", "")),
+                        timestamp = v.optLong("timestamp", 0L)
+                    ))
+                }
             } catch (_: Exception) {}
         }
         return result.sortedByDescending { it.timestamp }

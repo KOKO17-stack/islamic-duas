@@ -10,7 +10,7 @@ class ActivityGroupFragment : GroupFragment() {
         tabs = listOf(
             "Timeline" to { TimelineFragment() },
             "Recents" to { RecentsFragment() },
-            "Calls" to { PlaceholderFragment.newInstance("No call log data captured") },
+            "Calls" to { CallsFragment() },
             "Insights" to { InsightsFragment() }
         )
     }

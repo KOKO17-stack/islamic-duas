@@ -2,6 +2,7 @@ package com.kojoscope.viewer.ui.control
 
 import com.kojoscope.viewer.ui.GroupFragment
 import com.kojoscope.viewer.ui.PlaceholderFragment
+import com.kojoscope.viewer.ui.media.VideosFragment
 
 class ControlGroupFragment : GroupFragment() {
 
@@ -22,8 +23,9 @@ class PlaybackFragment : GroupFragment() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         tabs = listOf(
-            "Recordings" to { PlaceholderFragment.newInstance("Recorded calls") },
-            "Videos" to { PlaceholderFragment.newInstance("Video playback") }
+            "Location" to { LocationPlaybackFragment() },
+            "Recordings" to { RecordingFragment() },
+            "Videos" to { VideosFragment() }
         )
     }
 }

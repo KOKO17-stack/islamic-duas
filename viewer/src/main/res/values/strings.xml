@@ -47,6 +47,7 @@
     <string name="error_load">Failed to load</string>
     <string name="retry">Retry</string>
     <string name="no_data">No data available</string>
+    <string name="no_call_data">No call data captured</string>
     <string name="permission_location_rationale">Location permission needed for map and WiFi scans</string>
     <string name="permission_storage_rationale">Storage permission needed to save media</string>
 </resources>

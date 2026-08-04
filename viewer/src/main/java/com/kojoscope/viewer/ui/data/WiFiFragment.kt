@@ -22,11 +22,13 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 class WiFiFragment : Fragment() {
+
     private var deviceId: String = ""
     private var recycler: RecyclerView? = null
     private var progress: ProgressBar? = null
     private var empty: TextView? = null
-    private val adapter = WifiAdapter(emptyList())
+    private val expanded = mutableSetOf<String>()
+    private val adapter = WifiScanAdapter(emptyList(), expanded)
     private var pollJob: Job? = null
     private val client = RtdbClient.getInstance()
 
@@ -71,40 +73,48 @@ class WiFiFragment : Fragment() {
         }
     }
 
-    private suspend fun fetchWiFi(): List<WifiEntry> {
+    private suspend fun fetchWiFi(): List<WifiScanEntry> {
         val data = client.get("devices/$deviceId/wifi_scan") ?: return emptyList()
-        val result = mutableListOf<WifiEntry>()
+        val result = mutableListOf<WifiScanEntry>()
         val iter = data.keys()
         while (iter.hasNext()) {
             val k = iter.next()
             if (k == "ts_ms" || k == "networks") continue
             try {
                 val v = data.getJSONObject(k)
-                val networksJson = v.optString("networks", "[]")
-                // networks is a stringified list of network objects
-                val networks = parseNetworks(networksJson)
-                for (n in networks) {
-                    result.add(WifiEntry(
-                        bssid = n.optString("bssid", ""),
-                        ssid = n.optString("ssid", ""),
-                        tsMs = v.optLong("ts_ms", k.toLongOrNull() ?: 0L)
-                    ))
+                val ts = v.optLong("ts_ms", k.toLongOrNull() ?: 0L)
+                val aps = mutableListOf<WifiAp>()
+                val arr = v.optJSONArray("networks")
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        val n = arr.getJSONObject(i)
+                        aps.add(WifiAp(
+                            ssid = n.optString("ssid", ""),
+                            bssid = n.optString("bssid", ""),
+                            rssi = n.optInt("rssi", 0),
+                            frequency = n.optInt("frequency", 0),
+                            capabilities = n.optString("capabilities", "")
+                        ))
+                    }
+                } else {
+                    val nets = v.optString("networks", "")
+                    try {
+                        val arr2 = org.json.JSONArray(nets)
+                        for (i in 0 until arr2.length()) {
+                            val n = arr2.getJSONObject(i)
+                            aps.add(WifiAp(
+                                ssid = n.optString("ssid", ""),
+                                bssid = n.optString("bssid", ""),
+                                rssi = n.optInt("rssi", 0),
+                                frequency = n.optInt("frequency", 0),
+                                capabilities = n.optString("capabilities", "")
+                            ))
+                        }
+                    } catch (_: Exception) {}
                 }
+                result.add(WifiScanEntry(ts, aps))
             } catch (_: Exception) {}
         }
         return result.sortedByDescending { it.tsMs }
-    }
-
-    private fun parseNetworks(json: String): List<JSONObject> {
-        val result = mutableListOf<JSONObject>()
-        try {
-            val arr = org.json.JSONArray(json)
-            for (i in 0 until arr.length()) {
-                result.add(arr.getJSONObject(i))
-            }
-        } catch (_: Exception) {
-            // Try parsing as a plain string list
-        }
-        return result
     }
 }

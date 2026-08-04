@@ -33,10 +33,32 @@ data class AppSnapshot(
     val phoneTsMs: Long,
     val dashboardTsMs: Long,
     val hb: Boolean,
-    val idleTimeMs: Long?
+    val idleTimeMs: Long?,
+    val screenOffMs: Long?
 )
 
-class AppSnapshotAdapter(private var items: List<AppSnapshot>) :
+fun formatHms(ms: Long): String {
+    val totalSec = ms / 1000
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return when {
+        h > 0 -> "${h}h ${m}m ${s}s"
+        m > 0 -> "${m}m ${s}s"
+        else -> "${s}s"
+    }
+}
+
+private fun pkt12(ts: Long): String = java.text.SimpleDateFormat("hh:mm:ss a", java.util.Locale.getDefault()).apply {
+    timeZone = java.util.TimeZone.getTimeZone("Asia/Karachi")
+}.format(ts)
+
+sealed class RecentsRow {
+    data class Snap(val s: AppSnapshot) : RecentsRow()
+    data class ScreenOff(val wakeTs: Long, val offMs: Long) : RecentsRow()
+}
+
+class AppSnapshotAdapter(private var items: List<RecentsRow>) :
     RecyclerView.Adapter<AppSnapshotAdapter.VH>() {
     inner class VH(v: View) : RecyclerView.ViewHolder(v) {
         val name: TextView = v.findViewById(R.id.itemName)
@@ -47,28 +69,39 @@ class AppSnapshotAdapter(private var items: List<AppSnapshot>) :
         LayoutInflater.from(p.context).inflate(R.layout.item_list, p, false)
     )
     override fun onBindViewHolder(h: VH, pos: Int) {
-        val e = items[pos]
+        when (val item = items[pos]) {
+            is RecentsRow.Snap -> bindSnap(h, item.s)
+            is RecentsRow.ScreenOff -> bindOff(h, item)
+        }
+    }
+    private fun bindSnap(h: VH, e: AppSnapshot) {
         val rowTs = if (e.hb) e.dashboardTsMs else e.phoneTsMs
         h.name.text = e.appName
-        h.time.text = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).apply {
-            timeZone = java.util.TimeZone.getTimeZone("Asia/Karachi")
-        }.format(rowTs)
+        h.time.text = pkt12(rowTs)
         val status = buildString {
             if (e.batteryPct > 0) append("\uD83D\uDD0B ${e.batteryPct}%")
             if (e.isCharging) append(" \u26A1")
             append(" · ${e.networkType}")
             if (e.wifiSsid.isNotEmpty()) append(" (${e.wifiSsid})")
             if (!e.screenOn) append(" \uD83D\uDC64")
-            if (e.idleTimeMs != null && e.idleTimeMs > 0) {
-                val idleMin = e.idleTimeMs / 60000
-                append(" · \u23F3 ${idleMin}m idle")
-            }
+            if (e.idleTimeMs != null && e.idleTimeMs > 0) append(" · \u23F3 ${formatHms(e.idleTimeMs)} idle")
+            if (e.hb && e.screenOn) append(" · \uD83D\uDD11 alive")
         }
         h.detail.text = status
         h.detail.setTextColor(if (e.screenOn) Color.parseColor("#3fb950") else Color.parseColor("#8b949e"))
+        h.itemView.setBackgroundResource(R.drawable.bg_card)
+    }
+    private fun bindOff(h: VH, e: RecentsRow.ScreenOff) {
+        val offStartTs = e.wakeTs - e.offMs
+        h.name.text = "\uD83D\uDCF4 Screen Off"
+        h.name.setTextColor(Color.parseColor("#ffca28"))
+        h.time.text = pkt12(e.wakeTs)
+        h.detail.text = "off since ${pkt12(offStartTs)} · \u23F8 ${formatHms(e.offMs)}"
+        h.detail.setTextColor(Color.parseColor("#8b949e"))
+        h.itemView.setBackgroundResource(R.drawable.bg_card_alt)
     }
     override fun getItemCount() = items.size
-    fun update(n: List<AppSnapshot>) { items = n; notifyDataSetChanged() }
+    fun update(n: List<RecentsRow>) { items = n; notifyDataSetChanged() }
 }
 
 class RecentsFragment : Fragment() {
@@ -121,7 +154,7 @@ class RecentsFragment : Fragment() {
         }
     }
 
-    private suspend fun fetchRecents(): List<AppSnapshot> {
+    private suspend fun fetchRecents(): List<RecentsRow> {
         val data = client.get("devices/$deviceId/appSnapshots") ?: return emptyList()
         val result = mutableListOf<AppSnapshot>()
         val iter = data.keys()
@@ -140,10 +173,21 @@ class RecentsFragment : Fragment() {
                     phoneTsMs = v.optLong("phoneTsMs", 0L),
                     dashboardTsMs = v.optLong("dashboardTsMs", 0L),
                     hb = v.optString("hb", "false").toBoolean(),
-                    idleTimeMs = (v.opt("idleTimeMs") as? Number)?.toLong()
+                    idleTimeMs = (v.opt("idleTimeMs") as? Number)?.toLong(),
+                    screenOffMs = (v.opt("screenOffMs") as? Number)?.toLong()
                 ))
             } catch (_: Exception) {}
         }
-        return result.sortedByDescending { it.dashboardTsMs }
+        val sorted = result.sortedByDescending { if (it.hb) it.dashboardTsMs else it.phoneTsMs }
+        val rows = mutableListOf<RecentsRow>()
+        for (s in sorted) {
+            rows.add(RecentsRow.Snap(s))
+            val offMs = s.screenOffMs ?: 0
+            if (offMs > 0) {
+                val wakeTs = if (s.hb) s.dashboardTsMs else s.phoneTsMs
+                rows.add(RecentsRow.ScreenOff(wakeTs, offMs))
+            }
+        }
+        return rows
     }
 }
