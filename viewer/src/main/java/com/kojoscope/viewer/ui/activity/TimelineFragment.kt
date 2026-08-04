@@ -398,7 +398,7 @@ class TimelineFragment : Fragment() {
         val t = type.lowercase()
         return when {
             t.contains("snapchat") -> "\uD83D\uDCF8"
-            t.contains("whatsapp") -> "\uD83D\uDCE4"
+            t.contains("whatsapp") -> "\uD83D\uDCAC"
             t.contains("call") -> "\uD83D\uDEDE"
             t.contains("sms") || t.contains("message") -> "\uD83D\uDCEF"
             t.contains("banking") || t.contains("financial") || t.contains("otp") || t.contains("payment") || t.contains("transaction") -> "\uD83D\uDCB3"
@@ -412,14 +412,28 @@ class TimelineFragment : Fragment() {
     private fun buildItems(entries: List<TimelineEntry>, chatClasses: Map<String, String>): List<TimelineItem> {
         val dayFmt = SimpleDateFormat("MMM dd, EEE", Locale.getDefault())
         dayFmt.timeZone = TimeZone.getTimeZone("Asia/Karachi")
-        val grouped = LinkedHashMap<String, MutableList<TimelineEntry>>()
+
+        // Consecutive dedup within 60s (dashboard default with dedup toggle OFF):
+        // skip an entry if it matches the previous rendered entry's type + contact
+        // and is within the window.
+        val deduped = mutableListOf<TimelineEntry>()
         for (e in entries) {
-            val day = dayFmt.format(e.tsMs)
-            grouped.getOrPut(day) { mutableListOf() }.add(e)
+            val last = deduped.lastOrNull()
+            val sameContact = (e.contactName ?: e.contact ?: "") == (last?.contactName ?: last?.contact ?: "")
+            val skip = last != null &&
+                e.type.contains(last.type) &&
+                sameContact &&
+                kotlin.math.abs(e.tsMs - last.tsMs) < 60000
+            if (!skip) deduped.add(e)
+        }
+
+        val grouped = LinkedHashMap<String, MutableList<TimelineEntry>>()
+        for (e in deduped) {
+            grouped.getOrPut(dayFmt.format(e.tsMs)) { mutableListOf() }.add(e)
         }
         val result = mutableListOf<TimelineItem>()
         for ((day, dayEntries) in grouped) {
-            val locs = dayEntries.count { it.type.lowercase().contains("location") }
+            val locs = dayEntries.count { it.type.lowercase() == "location" }
             val calls = dayEntries.count { it.type.lowercase().contains("call") }
             val msgs = dayEntries.count { it.type.lowercase().contains("whatsapp") || it.type.lowercase().contains("message") }
             val snaps = dayEntries.count { it.type.lowercase().contains("snapchat") }
@@ -433,65 +447,31 @@ class TimelineFragment : Fragment() {
             }.joinToString(" ")
             result.add(TimelineItem.DayHeader(day, summary))
 
-            val chats = LinkedHashMap<String, MutableList<TimelineEntry>>()
-            dayEntries.forEach { e ->
-                val key = buildString {
-                    append(typeIcon(e.type))
-                    if (isWhatsApp(e)) append("·").append(waClassOf(e, chatClasses))
-                    append("·")
-                    append(e.contactName?.takeIf { it.isNotBlank() } ?: e.contact ?: "(no contact)")
-                    append("·")
-                    append(e.groupName?.takeIf { it.isNotBlank() } ?: "")
-                }
-                chats.getOrPut(key) { mutableListOf() }.add(e)
-            }
-
-            for ((_, chatEntries) in chats) {
-                val sorted = chatEntries.sortedByDescending { it.tsMs }
-                val first = sorted[0]
-                val isCall = first.type.lowercase().contains("call")
-                if (isCall) {
-                    val dirIcon = when (first.isIncoming) {
-                        "true" -> "\u2193"
-                        "false" -> "\u2191"
-                        else -> ""
-                    }
-                    val dur = first.duration?.let { formatDurSec(it) } ?: ""
-                    val contact = first.contactName?.takeIf { it.isNotBlank() }
-                        ?: first.contact?.takeIf { it.isNotBlank() }
-                        ?: "(no contact)"
-                    val tags = buildList<String> {
-                        add(waTag(first, chatClasses)); add(snapchatTag(first)); add(bankingTag(first)); add(typeTag(first))
-                    }.distinct().filter { it.isNotEmpty() }
-                    val subtitle = buildList<String> {
-                        if (dur.isNotEmpty()) add(dur)
-                        first.direction?.takeIf { it.isNotBlank() }?.let { add(it) }
-                        first.conversationTitle?.takeIf { it.isNotBlank() }?.let { add(it) }
-                    }.joinToString(" • ")
-                    result.add(TimelineItem.Entry(first, "\uD83D\uDEDE", "$dirIcon $contact".trim(), subtitle, tags))
-                    continue
-                }
-
-                val icon = typeIcon(first.type)
-                val contact = first.contactName?.takeIf { it.isNotBlank() }
-                    ?: first.contact?.takeIf { it.isNotBlank() }
+            // One row per entry, exactly like the web dashboard.
+            for (e in dayEntries) {
+                val icon = typeIcon(e.type)
+                val contact = e.contactName?.takeIf { it.isNotBlank() }
+                    ?: e.contact?.takeIf { it.isNotBlank() }
                     ?: "(no contact)"
-                val preview = first.messagePreview?.takeIf { it.isNotBlank() }
-                    ?: first.rawText?.takeIf { it.isNotBlank() }
-                    ?: first.conversationTitle?.takeIf { it.isNotBlank() }
+                val msg = e.messagePreview?.takeIf { it.isNotBlank() }
+                    ?: e.rawText?.takeIf { it.isNotBlank() }
                     ?: ""
-                val groupLabel = first.groupName?.takeIf { it.isNotBlank() }
-                    ?.let { "in \"$it\"" } ?: ""
-                val title = if (preview.isNotEmpty()) "$contact: $preview" else contact
-                val tags = buildList<String> {
-                    add(waTag(first, chatClasses)); add(snapchatTag(first)); add(bankingTag(first)); add(typeTag(first))
-                }.distinct().filter { it.isNotEmpty() }
+                val title = if (msg.isNotEmpty()) "$contact: $msg" else contact
+                val waCls = waClassOf(e, chatClasses)
+                val dur = e.duration?.takeIf { it > 0 }?.let { formatDurSec(it) }
+                val dir = e.direction?.takeIf { it.isNotBlank() }
+                val isLoc = e.type.lowercase() == "location"
                 val subtitle = buildList<String> {
-                    if (isWhatsApp(first) && waClassOf(first, chatClasses) == "group") add("Group chat")
-                    if (groupLabel.isNotEmpty()) add(groupLabel)
-                    if (sorted.size > 1) add("${sorted.size} msgs")
+                    dur?.let { add(it) }
+                    dir?.let { add("[$it]") }
+                    if (isLoc) add("\uD83D\uDCCD tap to view")
                 }.joinToString(" • ")
-                result.add(TimelineItem.Entry(first, icon, title, subtitle, tags))
+                val tags = buildList<String> {
+                    if (waCls == "group") add("Group")
+                    else if (waCls == "noise") add("System")
+                    add(waTag(e, chatClasses)); add(snapchatTag(e)); add(bankingTag(e)); add(typeTag(e))
+                }.distinct().filter { it.isNotEmpty() }
+                result.add(TimelineItem.Entry(e, icon, title, subtitle, tags))
             }
         }
         return result
