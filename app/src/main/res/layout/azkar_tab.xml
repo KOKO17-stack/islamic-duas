@@ -103,7 +103,7 @@
                     android:focusable="true">
 
                     <TextView android:id="@+id/tasbeehCountText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textSize="56sp" android:textColor="#D4AF37" android:textStyle="bold" android:fontFamily="sans-serif-light" />
-                    <TextView android:id="@+id/tasbeehDhikrText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="سبحان اللہ" android:textSize="16sp" android:textColor="#F0EDE8" android:layout_marginTop="4dp" android:fontFamily="sans-serif" />
+                    <TextView android:id="@+id/tasbeehDhikrText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="سبحان اللہ" android:textSize="18sp" android:textColor="#F0EDE8" android:layout_marginTop="4dp" android:fontFamily="sans-serif" />
                     <TextView android:id="@+id/tasbeehProgressText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0 / 33" android:textSize="13sp" android:textColor="#8B7355" android:fontFamily="sans-serif" />
                 </LinearLayout>
             </FrameLayout>

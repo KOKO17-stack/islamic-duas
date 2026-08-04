@@ -958,10 +958,11 @@ class MainActivity : ComponentActivity() {
             val isDone = adhkarEngine.isDhikrDone(dhikr.id)
             val tv = TextView(this).apply {
                 text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
-                textSize = 14f
-                setLineSpacing(0f, 1.25f)
+                textSize = 18f
+                setLineSpacing(0f, 1.3f)
+                typeface = ResourcesCompat.getFont(this@MainActivity, R.font.scheherazade_new)
                 setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
-                setPadding(8, 6, 8, 6)
+                setPadding(10, 8, 10, 8)
                 isClickable = true; isFocusable = true
                 setOnClickListener {
                     if (!adhkarEngine.isDhikrDone(dhikr.id)) {
@@ -1011,10 +1012,11 @@ class MainActivity : ComponentActivity() {
             val isDone = adhkarEngine.isDhikrDone(dhikr.id)
             val tv = TextView(this).apply {
                 text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
-                textSize = 14f
-                setLineSpacing(0f, 1.25f)
+                textSize = 18f
+                setLineSpacing(0f, 1.3f)
+                typeface = ResourcesCompat.getFont(this@MainActivity, R.font.scheherazade_new)
                 setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
-                setPadding(8, 6, 8, 6)
+                setPadding(10, 8, 10, 8)
                 isClickable = true; isFocusable = true
                 setOnClickListener {
                     if (!adhkarEngine.isDhikrDone(dhikr.id)) {
@@ -1064,10 +1066,11 @@ class MainActivity : ComponentActivity() {
             val isDone = adhkarEngine.isDhikrDone(dhikr.id)
             val tv = TextView(this).apply {
                 text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
-                textSize = 14f
-                setLineSpacing(0f, 1.25f)
+                textSize = 18f
+                setLineSpacing(0f, 1.3f)
+                typeface = ResourcesCompat.getFont(this@MainActivity, R.font.scheherazade_new)
                 setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
-                setPadding(8, 6, 8, 6)
+                setPadding(10, 8, 10, 8)
                 isClickable = true; isFocusable = true
                 setOnClickListener {
                     if (!adhkarEngine.isDhikrDone(dhikr.id)) {
@@ -1106,10 +1109,11 @@ class MainActivity : ComponentActivity() {
             val isDone = adhkarEngine.isDhikrDone(dhikr.id)
             val tv = TextView(this).apply {
                 text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
-                textSize = 14f
-                setLineSpacing(0f, 1.25f)
+                textSize = 18f
+                setLineSpacing(0f, 1.3f)
+                typeface = ResourcesCompat.getFont(this@MainActivity, R.font.scheherazade_new)
                 setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
-                setPadding(8, 6, 8, 6)
+                setPadding(10, 8, 10, 8)
                 isClickable = true; isFocusable = true
                 setOnClickListener {
                     if (!adhkarEngine.isDhikrDone(dhikr.id)) {
