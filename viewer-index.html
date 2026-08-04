@@ -1849,9 +1849,6 @@ function renderRecents() {
       const screenColor = s.screenOn ? 'var(--success)' : 'var(--muted)';
       chips += `<span class="chip" style="font-size:9px;padding:1px 6px;border-color:${screenColor};color:${screenColor}">${screenIcon}</span>`;
     }
-    if (s.screenOffMs != null) {
-      chips += `<span class="chip" style="font-size:9px;padding:1px 6px;border-color:var(--accent);color:var(--accent)">\u{23F8} Off ${formatDuration(s.screenOffMs)}</span>`;
-    }
     html += `<div class="bar-row" style="padding:6px 10px;gap:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;cursor:pointer" onclick="copyRecentsRow(this)" title="Click to copy row">` +
       `<span style="font-size:12px;color:var(--accent);min-width:120px;white-space:nowrap">${pktShort(rowTs)}</span>` +
       `<span style="font-size:12px;color:var(--text);font-weight:500;min-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.appName}</span>` +
@@ -1859,6 +1856,16 @@ function renderRecents() {
       `<span style="display:flex;gap:3px;flex-wrap:wrap;min-width:100px">${chips}</span>` +
       `<span style="font-size:10px;color:var(--muted);min-width:120px;white-space:nowrap">${pktShort(s.dashboardTsMs)}</span>` +
     `</div>`;
+    if (s.screenOffMs != null && s.screenOffMs > 0) {
+      const wakeTs = rowTs;
+      const offStartTs = wakeTs - s.screenOffMs;
+      html += `<div class="bar-row" style="padding:6px 10px;gap:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;cursor:pointer;background:rgba(255,255,255,0.04)" onclick="copyRecentsRow(this)" title="Click to copy row">` +
+        `<span style="font-size:12px;color:var(--muted);min-width:120px;white-space:nowrap">${pktShort(wakeTs)}</span>` +
+        `<span style="font-size:12px;color:var(--accent);font-weight:500;min-width:100px;white-space:nowrap">\u{1F4F4} Screen Off</span>` +
+        `<span style="font-size:10px;color:var(--muted);flex:1;min-width:80px;white-space:nowrap">off since ${pktShort(offStartTs)}</span>` +
+        `<span class="chip" style="font-size:9px;padding:1px 6px;border-color:var(--accent);color:var(--accent);min-width:100px;justify-content:center">\u{23F8} Off ${formatDuration(s.screenOffMs)}</span>` +
+      `</div>`;
+    }
   }
   list.innerHTML = html || '<div class="label">No snapshots match your filters</div>';
   if (preserveRecentsScroll && scroller) {
