@@ -30,6 +30,16 @@ Every instruction, code change, or step must be so precise and unambiguous that 
 3. Install APK manually on Samsung A26.
 4. Use Huawei (USB debugging) for development testing before deploying to Samsung.
 
+### 5aa. BUILD BOTH APKS AFTER EVERY CODE CHANGE (MANDATORY)
+After ANY app code change, ALWAYS build BOTH debug and release APKs before finishing:
+```bash
+cd /Users/apple/Documents/islamic-duas
+./gradlew :app:assembleDebug :app:assembleRelease
+```
+- Outputs: `app/build/outputs/apk/debug/app-debug.apk` and `app/build/outputs/apk/release/app-release.apk`
+- Debug APK → Huawei (USB testing). Release APK → Samsung A26 (via WhatsApp).
+- Never finish a session with only one APK built, and never skip building both when app code changed.
+
 ### 5a. SOURCE CODE SYNC WORKFLOW (manual — not automatic)
 After any local code changes, you MUST explicitly sync to GitHub:
 ```bash
