@@ -73,14 +73,16 @@ object WhatsAppCategorizer {
     val CONFIRMED_INDIVIDUAL_KEYS: Set<String> = setOf(
         "+92 319 8052748", "+92 334 1209199", "alhamdulillah", "+92 329 6611517",
         "+92 342 7740228", "+92 343 4045433", "mariamohsan40 and 1 other",
-        "mariamohsan40 and 3 others", "+92 304 4545967"
+        "mariamohsan40 and 3 others", "+92 304 4545967",
+        "api firdos", "mano bili", "mano bili and 1 other", "mano bili and 2 others"
     )
 
     // Canonical chat keys that the user confirmed are GROUP chats forever.
     val CONFIRMED_GROUP_KEYS: Set<String> = setOf(
         "شہزینہ نصیر میم تجوید🌹🌹", "شجعیہ قمر ناروال", "faze khan",
         "allah is calling for tahajjud...🍂", "~ sania ~•imani sis",
-        "~ sania ~•imani sis and 1 other", "حسینہ durani durrani"
+        "~ sania ~•imani sis and 1 other", "حسینہ durani durrani",
+        "umama fayyaz tajvid mam", "ceo of noor e huda inst"
     )
 
     /**

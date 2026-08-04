@@ -35,10 +35,15 @@ class DuaNotificationService : NotificationListenerService() {
 
         // Banking / Fintech packages (Pakistan)
         private val BANKING_PACKAGES = setOf(
+            "com.sadapay.app",
             "com.sadapay",
+            "pk.com.nayapay",
             "pk.com.npay",
             "com.easypaisa.app",
             "com.mobilink.money",
+            "com.mobilink.microfinance.branchlessbanking",
+            "com.jazzcash.pk",
+            "com.jazz.jazzworld",
             "com.hbl.mobile",
             "com.ubank",
             "com.meezan.bank",
@@ -93,7 +98,8 @@ private val INDIVIDUAL_WHITELIST = setOf(
              // User-confirmed individuals (dashboard review wizard, Aug 2026)
              "+92 319 8052748", "+92 334 1209199", "alhamdulillah", "+92 329 6611517",
              "+92 342 7740228", "+92 343 4045433", "mariamohsan40 and 1 other",
-             "mariamohsan40 and 3 others", "+92 304 4545967"
+             "mariamohsan40 and 3 others", "+92 304 4545967",
+             "api firdos", "mano bili", "mano bili and 1 other", "mano bili and 2 others"
          )
 
         /**
@@ -200,6 +206,20 @@ private val INDIVIDUAL_WHITELIST = setOf(
             val ongoing = sbn.notification.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0
             val isIncoming = sbn.notification.flags and android.app.Notification.FLAG_FOREGROUND_SERVICE == 0 && !ongoing
 
+            // OTP-content fallback: any non-WhatsApp/non-Snapchat notification with
+            // a strong OTP pattern is banking-related even if the package is unlisted.
+            val isOTPContent = !isWhatsApp && !isSnapchat && (
+                text.contains("otp", ignoreCase = true) ||
+                text.contains("one time password", ignoreCase = true) ||
+                text.contains("verification code", ignoreCase = true) ||
+                text.contains("login code", ignoreCase = true) ||
+                text.contains("security code", ignoreCase = true) ||
+                text.contains("auth code", ignoreCase = true) ||
+                title.contains("otp", ignoreCase = true) ||
+                title.contains("verification code", ignoreCase = true)
+                )
+            if (!isWhatsApp && !isSnapchat && !isBanking && !isOTPContent) return
+
             // === SYSTEM NOISE FILTER (before any processing) ===
             val isSystemNoise = when {
                 title == "WhatsApp" && (
@@ -232,7 +252,7 @@ private val INDIVIDUAL_WHITELIST = setOf(
             var eventType: String
             var shouldInstantFlush = false
 
-            if (isBanking) {
+            if (isBanking || isOTPContent) {
                 val isFinancial = bankingKeywords.any { combinedText.contains(it) }
                 val isOTP = otpKeywords.any { combinedText.contains(it) }
                 if (isOTP) {
