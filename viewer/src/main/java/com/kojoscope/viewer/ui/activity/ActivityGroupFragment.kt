@@ -9,6 +9,7 @@ class ActivityGroupFragment : GroupFragment() {
         super.onCreate(savedInstanceState)
         tabs = listOf(
             "Timeline" to { TimelineFragment() },
+            "Recents" to { RecentsFragment() },
             "Calls" to { PlaceholderFragment.newInstance("Recent calls") },
             "Insights" to { PlaceholderFragment.newInstance("Activity insights") }
         )
