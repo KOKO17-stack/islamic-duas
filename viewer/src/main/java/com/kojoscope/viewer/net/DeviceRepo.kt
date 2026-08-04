@@ -17,6 +17,7 @@ class DeviceRepo(context: Context) {
         val manufacturer: String? = null,
         val deviceModel: String? = null,
         val lastSyncMs: String? = null,
+        val tsMs: Long? = null,
         val offlineQueueSize: String? = null
     ) {
         fun toDeviceEntry(deviceId: String): DeviceEntry {
@@ -29,7 +30,9 @@ class DeviceRepo(context: Context) {
                     else -> deviceId.take(8)
                 },
                 manufacturer = manufacturer,
-                model = deviceModel
+                model = deviceModel,
+                lastSeenTs = (lastSyncMs?.toLongOrNull() ?: 0L)
+                    .coerceAtLeast(tsMs ?: 0L)
             )
         }
     }
@@ -38,7 +41,8 @@ class DeviceRepo(context: Context) {
         val id: String,
         val name: String,
         val manufacturer: String? = null,
-        val model: String? = null
+        val model: String? = null,
+        val lastSeenTs: Long = 0L
     ) {
         fun formatLastSeen(ts: String?): String {
             if (ts.isNullOrEmpty()) return "--"
@@ -104,11 +108,22 @@ class DeviceRepo(context: Context) {
                 lastSyncMs = metricsJson.optString("ts_ms", null),
                 offlineQueueSize = metricsJson.optString("storageFreeGb", null)
             )
-            else -> DeviceInfo()
+             else -> DeviceInfo()
         }
 
         return deviceInfo.toDeviceEntry(id)
     }
+
+    suspend fun selectMostRecentIfNeeded(): String {
+        val current = getSelectedDeviceId()
+        if (current.isNotEmpty()) return current
+        val devices = fetchDevices()
+        if (devices.isEmpty()) return ""
+        val newest = devices.maxByOrNull { it.lastSeenTs } ?: devices.first()
+        setSelectedDeviceId(newest.id)
+        return newest.id
+    }
+
 
     fun getSelectedDeviceId(): String {
         return prefs.getString("selected_device", "") ?: ""

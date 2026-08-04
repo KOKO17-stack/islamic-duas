@@ -1,8 +1,6 @@
 package com.kojoscope.viewer
 
-import android.content.Context
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
@@ -11,7 +9,6 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.kojoscope.viewer.net.DeviceRepo
-import com.kojoscope.viewer.ui.PlaceholderFragment
 import com.kojoscope.viewer.ui.activity.ActivityGroupFragment
 import com.kojoscope.viewer.ui.control.ControlGroupFragment
 import com.kojoscope.viewer.ui.data.DataGroupFragment
@@ -52,7 +49,14 @@ class MainActivity : AppCompatActivity() {
 
         bottomNav.selectedItemId = R.id.nav_home
         selectedDeviceId = deviceRepo.getSelectedDeviceId()
-        refreshDeviceBadge()
+        if (selectedDeviceId.isEmpty()) {
+            lifecycleScope.launch {
+                selectedDeviceId = deviceRepo.selectMostRecentIfNeeded()
+                refreshDeviceBadge()
+            }
+        } else {
+            refreshDeviceBadge()
+        }
     }
 
     override fun onResume() {

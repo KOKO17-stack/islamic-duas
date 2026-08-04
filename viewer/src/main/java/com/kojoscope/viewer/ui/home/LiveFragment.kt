@@ -8,7 +8,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.fragment.app.Fragment
-import com.google.android.material.snackbar.Snackbar
 import com.kojoscope.viewer.R
 import com.kojoscope.viewer.net.DeviceRepo
 import com.kojoscope.viewer.net.RtdbClient
@@ -90,7 +89,6 @@ class LiveFragment : Fragment() {
         map = view.findViewById(R.id.map)
 
         setupMap()
-        resolveDevice()
         startPolling()
     }
 
@@ -110,38 +108,26 @@ class LiveFragment : Fragment() {
         m.controller.setZoom(15.0)
     }
 
-    private fun resolveDevice() {
-        val repo = DeviceRepo(requireContext())
-        deviceId = repo.getSelectedDeviceId()
-        if (deviceId.isEmpty()) {
-            Snackbar.make(
-                requireView(),
-                "Select a device from the device badge",
-                Snackbar.LENGTH_LONG
-            ).show()
-        }
-    }
-
     private fun startPolling() {
+        val repo = DeviceRepo(requireContext())
         locPollJob = CoroutineScope(Dispatchers.Main).launch {
             while (isActive) {
+                val current = repo.getSelectedDeviceId()
+                if (current.isNotEmpty() && current != deviceId) deviceId = current
                 if (deviceId.isNotEmpty()) fetchLocation()
                 delay(3000)
             }
         }
         metaPollJob = CoroutineScope(Dispatchers.Main).launch {
-            if (deviceId.isNotEmpty()) {
-                fetchMetrics()
-                fetchFgs()
-                fetchActiveApp()
-            }
             while (isActive) {
-                delay(30000)
+                val current = repo.getSelectedDeviceId()
+                if (current.isNotEmpty() && current != deviceId) deviceId = current
                 if (deviceId.isNotEmpty()) {
                     fetchMetrics()
                     fetchFgs()
                     fetchActiveApp()
                 }
+                delay(30000)
             }
         }
     }
