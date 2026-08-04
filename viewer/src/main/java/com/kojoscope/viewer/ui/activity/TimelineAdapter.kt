@@ -13,12 +13,15 @@ data class TimelineEntry(
     val groupName: String?,
     val rawText: String?,
     val packageName: String?,
-    val isIncoming: String?
+    val isIncoming: String?,
+    val chatCategory: String?,
+    val isGroup: String?,
+    val conversationTitle: String?
 )
 
 sealed class TimelineItem {
     data class DayHeader(val day: String, val summary: String) : TimelineItem()
-    data class Entry(val entry: TimelineEntry, val icon: String, val title: String, val subtitle: String) : TimelineItem()
+    data class Entry(val entry: TimelineEntry, val icon: String, val title: String, val subtitle: String, val tags: List<String>) : TimelineItem()
 }
 
 class TimelineAdapter(
@@ -40,6 +43,7 @@ class TimelineAdapter(
         val time: android.widget.TextView = view.findViewById(R.id.entryTime)
         val title: android.widget.TextView = view.findViewById(R.id.entryTitle)
         val subtitle: android.widget.TextView = view.findViewById(R.id.entrySubtitle)
+        val tags: android.widget.TextView = view.findViewById(R.id.entryTags)
     }
 
     override fun getItemViewType(position: Int): Int = when (items[position]) {
@@ -65,6 +69,8 @@ class TimelineAdapter(
             holder.icon.text = item.icon
             holder.title.text = item.title
             holder.subtitle.text = item.subtitle
+            holder.tags.text = item.tags.joinToString("   ")
+            holder.tags.visibility = if (item.tags.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
             holder.time.text = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).apply {
                 timeZone = java.util.TimeZone.getTimeZone("Asia/Karachi")
             }.format(item.entry.tsMs)

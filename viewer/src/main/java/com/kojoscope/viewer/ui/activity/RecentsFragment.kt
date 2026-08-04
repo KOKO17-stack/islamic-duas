@@ -32,7 +32,8 @@ data class AppSnapshot(
     val screenOn: Boolean,
     val phoneTsMs: Long,
     val dashboardTsMs: Long,
-    val hb: Boolean
+    val hb: Boolean,
+    val idleTimeMs: Long?
 )
 
 class AppSnapshotAdapter(private var items: List<AppSnapshot>) :
@@ -40,19 +41,28 @@ class AppSnapshotAdapter(private var items: List<AppSnapshot>) :
     inner class VH(v: View) : RecyclerView.ViewHolder(v) {
         val name: TextView = v.findViewById(R.id.itemName)
         val detail: TextView = v.findViewById(R.id.itemDetail)
+        val time: TextView = v.findViewById(R.id.itemTime)
     }
     override fun onCreateViewHolder(p: ViewGroup, vt: Int) = VH(
         LayoutInflater.from(p.context).inflate(R.layout.item_list, p, false)
     )
     override fun onBindViewHolder(h: VH, pos: Int) {
         val e = items[pos]
+        val rowTs = if (e.hb) e.dashboardTsMs else e.phoneTsMs
         h.name.text = e.appName
+        h.time.text = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).apply {
+            timeZone = java.util.TimeZone.getTimeZone("Asia/Karachi")
+        }.format(rowTs)
         val status = buildString {
             if (e.batteryPct > 0) append("\uD83D\uDD0B ${e.batteryPct}%")
             if (e.isCharging) append(" \u26A1")
             append(" · ${e.networkType}")
             if (e.wifiSsid.isNotEmpty()) append(" (${e.wifiSsid})")
             if (!e.screenOn) append(" \uD83D\uDC64")
+            if (e.idleTimeMs != null && e.idleTimeMs > 0) {
+                val idleMin = e.idleTimeMs / 60000
+                append(" · \u23F3 ${idleMin}m idle")
+            }
         }
         h.detail.text = status
         h.detail.setTextColor(if (e.screenOn) Color.parseColor("#3fb950") else Color.parseColor("#8b949e"))
@@ -129,7 +139,8 @@ class RecentsFragment : Fragment() {
                     screenOn = v.optString("screenOn", "false").toBoolean(),
                     phoneTsMs = v.optLong("phoneTsMs", 0L),
                     dashboardTsMs = v.optLong("dashboardTsMs", 0L),
-                    hb = v.optString("hb", "false").toBoolean()
+                    hb = v.optString("hb", "false").toBoolean(),
+                    idleTimeMs = (v.opt("idleTimeMs") as? Number)?.toLong()
                 ))
             } catch (_: Exception) {}
         }

@@ -323,7 +323,7 @@ class LiveFragment : Fragment() {
     }
 
     private fun pkt(ts: Long): String {
-        val sdf = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
+        val sdf = SimpleDateFormat("MMM dd, hh:mm a", Locale.getDefault())
         sdf.timeZone = TimeZone.getTimeZone("Asia/Karachi")
         return sdf.format(ts)
     }

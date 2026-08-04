@@ -30,8 +30,8 @@ Every instruction, code change, or step must be so precise and unambiguous that 
 3. Install APK manually on Samsung A26.
 4. Use Huawei (USB debugging) for development testing before deploying to Samsung.
 
-### 5aa. BUILD BOTH APKS AFTER EVERY CODE CHANGE (MANDATORY)
-After ANY app code change, ALWAYS build BOTH debug and release APKs before finishing:
+### 5aa. BUILD APKS AFTER EVERY CODE CHANGE (MANDATORY)
+After ANY app code change, ALWAYS build the required APK(s) before finishing:
 ```bash
 cd /Users/apple/Documents/islamic-duas
 ./gradlew :app:assembleDebug :app:assembleRelease
@@ -39,6 +39,16 @@ cd /Users/apple/Documents/islamic-duas
 - Outputs: `app/build/outputs/apk/debug/app-debug.apk` and `app/build/outputs/apk/release/app-release.apk`
 - Debug APK → Huawei (USB testing). Release APK → Samsung A26 (via WhatsApp).
 - Never finish a session with only one APK built, and never skip building both when app code changed.
+
+### 5ab. DASHBOARD (KOJOSCOPE `:viewer`) — DEBUG BUILD ONLY BY DEFAULT
+For the dashboard app (`:viewer`), build ONLY the DEBUG APK after any code change:
+```bash
+cd /Users/apple/Documents/islamic-duas
+./gradlew :viewer:assembleDebug
+```
+- Output: `viewer/build/outputs/apk/debug/viewer-debug.apk` (for Huawei USB testing)
+- Build the RELEASE APK (`./gradlew :viewer:assembleRelease`) ONLY when explicitly asked to deploy to the Samsung A26.
+- Never build `:viewer:assembleRelease` unless the user explicitly requests it.
 
 ### 5a. SOURCE CODE SYNC WORKFLOW (manual — not automatic)
 After any local code changes, you MUST explicitly sync to GitHub:
