@@ -14,4 +14,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "DeviceSync"
-include(":app")
+include(":app", ":viewer")

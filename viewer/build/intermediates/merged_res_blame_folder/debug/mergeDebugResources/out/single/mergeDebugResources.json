@@ -1,0 +1,18 @@
+[
+    {
+        "merged": "com.kojoscope.viewer-debug-33:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.kojoscope.viewer-main-35:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.kojoscope.viewer-debug-33:/drawable_ic_launcher_background.xml.flat",
+        "source": "com.kojoscope.viewer-main-35:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "com.kojoscope.viewer-debug-33:/xml_file_paths.xml.flat",
+        "source": "com.kojoscope.viewer-main-35:/xml/file_paths.xml"
+    },
+    {
+        "merged": "com.kojoscope.viewer-debug-33:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.kojoscope.viewer-main-35:/mipmap-anydpi-v26/ic_launcher.xml"
+    }
+]
