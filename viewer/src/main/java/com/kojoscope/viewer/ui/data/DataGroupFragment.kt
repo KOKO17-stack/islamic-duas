@@ -8,10 +8,10 @@ class DataGroupFragment : GroupFragment() {
         super.onCreate(savedInstanceState)
         tabs = listOf(
             "Apps" to { AppsFragment() },
-            "Browser" to { com.kojoscope.viewer.ui.PlaceholderFragment.newInstance("Browser history") },
+            "Browser" to { BrowserFragment() },
             "Contacts" to { ContactsFragment() },
             "WiFi" to { WiFiFragment() },
-            "SMS" to { com.kojoscope.viewer.ui.PlaceholderFragment.newInstance("SMS logs") },
+            "SMS" to { SMSFragment() },
             "Permissions" to { PermissionsFragment() }
         )
     }
