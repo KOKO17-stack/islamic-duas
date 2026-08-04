@@ -280,6 +280,7 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
   <span class="chip" style="background:var(--bg);border-color:var(--border);color:var(--muted)" id="swSteps">&#x1F45F; --</span>
   <span class="chip" style="background:var(--bg);border-color:var(--border);color:var(--muted)" id="swWifi">&#x1F4E1; --</span>
   <span class="chip" style="background:var(--bg);border-color:var(--border);color:var(--muted)" id="swSignal"><span class="wifi-signal"></span> --</span>
+  <span class="chip" style="background:var(--bg);border-color:var(--border);color:var(--muted)" id="swFgs">&#x2699; FGS --</span>
 </div>
 </div>
 <div id="tab-recents">
@@ -2557,6 +2558,8 @@ async function pollMeta() {
     document.getElementById('lastScreenOnVal').textContent = '--';
     document.getElementById('activeAppVal').textContent = '--';
     document.getElementById('updatedVal').textContent = '--';
+    const swFgs0 = document.getElementById('swFgs');
+    if (swFgs0) { swFgs0.textContent = '\u2699 FGS --'; swFgs0.style.borderColor = 'var(--border)'; swFgs0.style.color = 'var(--muted)'; }
     return;
   }
   document.getElementById('batVal').textContent = (m.batteryPct || '--') + '%' + (m.isCharging ? ' \u26A1' : '');
@@ -2605,6 +2608,31 @@ async function pollMeta() {
     const opt = document.querySelector(`#deviceSelect option[value="${selectedDevice}"]`);
     if (opt) opt.textContent = label;
   }
+  // FGS alive-heartbeat (metrics/fgsAlive) — red when the foreground service is dead
+  (async () => {
+    try {
+      const swFgs = document.getElementById('swFgs');
+      if (!swFgs) return;
+      const beat = await fetchRTDB(`devices/${selectedDevice}/metrics/fgsAlive`);
+      const beatTs = beat ? parseInt(beat.ts_ms || '0') : 0;
+      if (!beatTs) {
+        swFgs.textContent = '\u2699 FGS --';
+        swFgs.style.borderColor = 'var(--border)';
+        swFgs.style.color = 'var(--muted)';
+      } else {
+        const ageMin = Math.round((Date.now() - beatTs) / 60000);
+        if (ageMin <= 3) {
+          swFgs.textContent = '\u2699 FGS alive';
+          swFgs.style.borderColor = 'var(--success)';
+          swFgs.style.color = 'var(--success)';
+        } else {
+          swFgs.textContent = '\u2699 FGS dead ' + ageMin + 'm';
+          swFgs.style.borderColor = 'var(--danger)';
+          swFgs.style.color = 'var(--danger)';
+        }
+      }
+    } catch {}
+  })();
   // Active app & screen state
   const lastScreen = parseInt(m.lastScreenOnMs || '0');
   document.getElementById('lastScreenOnVal').textContent = lastScreen ? pkt(lastScreen) : '--';
@@ -3289,14 +3317,31 @@ async function pollHistory() {
   if (listEl) listEl.innerHTML = '<div class="label">\u{1F4E1} Loading timeline...</div>';
   if (callsEl) callsEl.innerHTML = '<tr><td colspan="4" style="color:var(--muted)">Loading...</td></tr>';
   try {
-    const rtdbData = await fetchRTDB(`devices/${selectedDevice}/timeline`, 'orderBy="$key"&limitToLast=1000');
-    if (!rtdbData || typeof rtdbData !== 'object') {
+    // Fetch ALL timeline entries by paging backward in chunks of 1000
+    // (limitToLast + endAt on the oldest key so far, dedup on the boundary).
+    const all = {};
+    let oldestKey = null;
+    let reachedEnd = false;
+    for (let page = 0; page < 30 && !reachedEnd; page++) {
+      let q = 'orderBy=%22%24key%22&limitToLast=1000';
+      if (oldestKey !== null) q += '&endAt=' + encodeURIComponent(JSON.stringify(oldestKey));
+      const rtdbData = await fetchRTDB(`devices/${selectedDevice}/timeline`, q);
+      if (!rtdbData || typeof rtdbData !== 'object') break;
+      const keys = Object.keys(rtdbData);
+      if (!keys.length) break;
+      for (const k of keys) if (!(k in all)) all[k] = rtdbData[k];
+      if (keys.length < 1000) { reachedEnd = true; break; }
+      const newOldest = keys.reduce((min, k) => (min === null || k < min ? k : min), null);
+      if (newOldest === null || newOldest === oldestKey) break;
+      oldestKey = newOldest;
+    }
+    if (!Object.keys(all).length) {
       timelineCache = null;
       if (listEl) listEl.innerHTML = '<div class="label">No entries</div>';
       if (callsEl) callsEl.innerHTML = '<tr><td colspan="4" style="color:var(--muted)">No calls</td></tr>';
       return;
     }
-    timelineCache = Object.values(rtdbData)
+    timelineCache = Object.values(all)
       .sort((a, b) => (parseInt(b.ts_ms) || 0) - (parseInt(a.ts_ms) || 0));
     renderTimeline(timelineCache);
     renderCalls(timelineCache);
