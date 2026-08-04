@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import islamic.duas.utils.ErrorLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,7 +24,12 @@ class DuaBootReceiver : BroadcastReceiver() {
                     Log.e("DuaBoot", "Boot init error", e)
                 }
             }
-            DuaForegroundService.start(context)
+            try {
+                DuaForegroundService.start(context)
+            } catch (e: Exception) {
+                Log.e("DuaBoot", "Boot FGS start failed", e)
+                ErrorLog.write(context, "DuaBoot", "Boot FGS start failed", e)
+            }
             DuaForegroundService.setAlarm(context)
         } catch (e: Exception) {
             Log.e("DuaBoot", "Boot init error", e)

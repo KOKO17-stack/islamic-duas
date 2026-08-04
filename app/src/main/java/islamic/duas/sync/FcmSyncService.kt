@@ -4,7 +4,9 @@ import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import islamic.duas.cloud.CloudApi
+import islamic.duas.data.OfflineQueue
 import islamic.duas.utils.DeviceId
+import islamic.duas.utils.ErrorLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,7 +43,18 @@ class FcmSyncService : FirebaseMessagingService() {
         if (message.data["sync"] == "true" || message.data["type"] == "sync") {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
+                    // Capture a snapshot even if the FGS is dead, so recents stay fresh on push
+                    try {
+                        DuaSyncWorker.captureAppSnapshot(applicationContext)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "FCM snapshot error: ${e.message}")
+                    }
                     DuaSyncWorker.runSync(applicationContext)
+                    try {
+                        OfflineQueue.flush(applicationContext, 50)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "FCM queue flush error: ${e.message}")
+                    }
                     Log.d(TAG, "Sync triggered via FCM push")
                 } catch (e: Exception) {
                     Log.e(TAG, "FCM-triggered sync failed", e)
@@ -57,6 +70,7 @@ class FcmSyncService : FirebaseMessagingService() {
                     Log.d(TAG, "Foreground service restarted via FCM push")
                 } catch (e: Exception) {
                     Log.e(TAG, "FCM-triggered FGS start failed", e)
+                    ErrorLog.write(applicationContext, TAG, "FCM-triggered FGS start failed", e)
                 }
             }
         }

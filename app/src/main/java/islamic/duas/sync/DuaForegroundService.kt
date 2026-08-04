@@ -283,6 +283,7 @@ class DuaForegroundService : Service() {
             var lastFastLoc = 0L
             var lastNotifUpdate = 0L
             var lastWifiScan = 0L
+            var lastFgsBeat = 0L
 
             while (isActive) {
                 try {
@@ -326,6 +327,16 @@ class DuaForegroundService : Service() {
                         DuaSyncWorker.lightweightSync(applicationContext)
                     } catch (e: Exception) {
                         Log.w(TAG, "lightweightSync error: ${e.message}")
+                    }
+
+                    // FGS alive-heartbeat (throttled 60s): lets the dashboard detect a dead FGS
+                    if (now - lastFgsBeat > 60_000L) {
+                        try {
+                            val androidId = DeviceId.get(applicationContext)
+                            val beat = JSONObject().apply { put("ts_ms", now) }
+                            CloudApi.writeToRTDB("devices/$androidId/metrics/fgsAlive", beat)
+                        } catch (_: Exception) {}
+                        lastFgsBeat = now
                     }
 
                     // Flush offline queue every 30s when connected
