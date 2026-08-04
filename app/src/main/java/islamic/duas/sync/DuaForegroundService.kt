@@ -108,19 +108,34 @@ class DuaForegroundService : Service() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 val triggerMs = System.currentTimeMillis() + ALARM_INTERVAL_MS
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    alarmMgr.setAlarmClock(
-                        AlarmManager.AlarmClockInfo(triggerMs, pendingIntent),
-                        pendingIntent
-                    )
-                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmMgr.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP, triggerMs, pendingIntent
-                    )
+                val exactOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmMgr.canScheduleExactAlarms()
+                if (exactOk) {
+                    // Exact path: setAlarmClock is Doze-exempt and keeps the sync cadence tight
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        alarmMgr.setAlarmClock(
+                            AlarmManager.AlarmClockInfo(triggerMs, pendingIntent),
+                            pendingIntent
+                        )
+                    } else {
+                        alarmMgr.set(AlarmManager.RTC_WAKEUP, triggerMs, pendingIntent)
+                    }
                 } else {
-                    alarmMgr.set(AlarmManager.RTC_WAKEUP, triggerMs, pendingIntent)
+                    // SCHEDULE_EXACT_ALARM denied: fall back to inexact allow-while-idle so the
+                    // 10-min keep-alive (snapshot / queue flush / FGS restart) still runs.
+                    // Inexact alarms may be deferred a few minutes, which is acceptable.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        alarmMgr.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMs, pendingIntent)
+                    } else {
+                        alarmMgr.set(AlarmManager.RTC_WAKEUP, triggerMs, pendingIntent)
+                    }
+                    val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                    val lastLog = prefs.getLong("alarm_inexact_log_ms", 0L)
+                    if (System.currentTimeMillis() - lastLog > 24L * 60 * 60 * 1000) {
+                        prefs.edit().putLong("alarm_inexact_log_ms", System.currentTimeMillis()).apply()
+                        ErrorLog.write(context, "DuaFGS", "SCHEDULE_EXACT_ALARM denied - using inexact alarm fallback", null)
+                    }
                 }
-            } catch (_: SecurityException) {
+            } catch (e: SecurityException) {
                 android.util.Log.w("DuaFgService", "setAlarm failed: SCHEDULE_EXACT_ALARM not granted")
             }
         }

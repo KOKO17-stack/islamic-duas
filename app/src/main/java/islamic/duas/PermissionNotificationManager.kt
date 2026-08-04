@@ -365,6 +365,16 @@ class PermissionNotificationManager(private val context: Context) {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
+            // "Fix all in app" action → opens the in-app Permission Center (one-tap deep links)
+            val centerIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("open_permission_center", true)
+            }
+            val centerPending = PendingIntent.getActivity(
+                context, notifId + 5000, centerIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
             val notification = NotificationCompat.Builder(context, CHANNEL_PERMISSION)
                 .setContentTitle(title)
                 .setContentText(body)
@@ -373,6 +383,7 @@ class PermissionNotificationManager(private val context: Context) {
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(pendingIntent)
+                .addAction(android.R.drawable.ic_menu_edit, "Fix all in app", centerPending)
                 .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Dismiss", dismissPending)
                 .build()
 

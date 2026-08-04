@@ -323,6 +323,7 @@ class MainActivity : ComponentActivity() {
                 refreshAll()
             }
         }
+        refreshPermissionCard()
         try {
             if (::permissionManager.isInitialized && !permissionManager.areCriticalGranted()) {
                 permissionManager.showUnifiedPermissionSetup()
@@ -366,6 +367,13 @@ class MainActivity : ComponentActivity() {
 
     private fun handleNavigationIntent(intent: Intent?) {
         if (intent == null) return
+        if (intent.getBooleanExtra("open_permission_center", false)) {
+            intent.removeExtra("open_permission_center")
+            try {
+                permissionManager.showPermissionCenter()
+            } catch (_: Exception) {}
+            return
+        }
         val section = intent.getStringExtra(AppNotificationManager.EXTRA_NAV_SECTION) ?: return
         when (section) {
             AppNotificationManager.NAV_HOME -> {
@@ -588,6 +596,32 @@ class MainActivity : ComponentActivity() {
         if (!::binding.isInitialized) return
         ibadatHomeHelper.setupHomeTab(homeTabRoot)
         setupWeatherCard(homeTabRoot)
+        setupPermissionCard(homeTabRoot)
+    }
+
+    private fun setupPermissionCard(home: View) {
+        try {
+            val card = home.findViewById<View>(R.id.permissionCenterCard) ?: return
+            card.setOnClickListener {
+                try {
+                    permissionManager.showPermissionCenter()
+                } catch (_: Exception) {}
+            }
+            refreshPermissionCard()
+        } catch (_: Exception) {}
+    }
+
+    private fun refreshPermissionCard() {
+        try {
+            if (!::permissionManager.isInitialized) return
+            val card = findViewById<View>(R.id.permissionCenterCard) ?: return
+            val subtitle = card.findViewById<TextView>(R.id.permissionCenterSubtitle) ?: return
+            val missing = permissionManager.countMissing()
+            subtitle.text = if (missing == 0) "✓ All permissions granted" else "Tap to fix — $missing item(s) need attention"
+            subtitle.setTextColor(
+                android.graphics.Color.parseColor(if (missing == 0) "#7BC47F" else "#C9A961")
+            )
+        } catch (_: Exception) {}
     }
     private fun setupWeatherCard(home: View) {
         if (!::binding.isInitialized) return

@@ -1367,7 +1367,22 @@ class DuaSyncWorker(
                     android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
                     android.os.Process.myUid(), context.packageName
                 )
-                if (mode != android.app.AppOpsManager.MODE_ALLOWED) return false
+                if (mode != android.app.AppOpsManager.MODE_ALLOWED) {
+                    // Usage access missing = snapshots silently blocked. Surface a one-tap
+                    // prompt (opens the permission center / usage-access settings) and log
+                    // remotely (throttled) so the dashboard shows the root cause.
+                    try {
+                        val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                        val lastPrompt = prefs.getLong("usage_stats_prompt_ms", 0L)
+                        val now = System.currentTimeMillis()
+                        if (now - lastPrompt > 6L * 60 * 60 * 1000) {
+                            prefs.edit().putLong("usage_stats_prompt_ms", now).apply()
+                            requestPermissionPrompt(context, "usage_stats")
+                            ErrorLog.write(context, "DuaSync", "Usage stats access denied - app snapshots blocked", null)
+                        }
+                    } catch (_: Exception) {}
+                    return false
+                }
 
                 val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager ?: return false
                 var lastPkg: String? = null

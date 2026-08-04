@@ -97,6 +97,17 @@ class PermissionManager(private val activity: ComponentActivity) {
     fun areCriticalGranted(): Boolean =
         criticalPermissions.all { isEffectivelyGranted(it) }
 
+    fun countMissing(): Int {
+        var missing = 0
+        if (criticalPermissions.any { !isEffectivelyGranted(it) }) missing++
+        if (!isUsageStatsGranted()) missing++
+        if (!isNotificationListenerGranted()) missing++
+        if (!isBatteryOptimizationIgnored()) missing++
+        if (!isExactAlarmAllowed()) missing++
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isAllFilesAccessGranted()) missing++
+        return missing
+    }
+
     private fun requestRuntimePermissions(perms: List<String>) {
         val requestable = perms.filter { !wasEverRequested(it) || canShowRationale(it) }
         if (requestable.isNotEmpty()) {
@@ -329,7 +340,7 @@ class PermissionManager(private val activity: ComponentActivity) {
         val onAction: () -> Unit
     )
 
-    fun showUnifiedPermissionSetup(checkInitial: Boolean = true) {
+    fun showUnifiedPermissionSetup(checkInitial: Boolean = true, showAll: Boolean = false) {
         try {
             val allGranted = criticalPermissions.all { isEffectivelyGranted(it) }
                     && isUsageStatsGranted()
@@ -338,7 +349,7 @@ class PermissionManager(private val activity: ComponentActivity) {
                     && isLocationEnabled()
                     && isExactAlarmAllowed()
                     && isAllFilesAccessGranted()
-            if (allGranted) return
+            if (allGranted && !showAll) return
 
             val rows = mutableListOf<PermissionRow>()
 
@@ -521,6 +532,17 @@ class PermissionManager(private val activity: ComponentActivity) {
                 ))
             }
 
+            if (showAll && !isGranted(Manifest.permission.BODY_SENSORS)) {
+                rows.add(PermissionRow(
+                    icon = "❤️",
+                    title = "Body Sensors Permission",
+                    desc = "Required for the step counter on some devices (steps still work on Samsung without it)",
+                    isGranted = false,
+                    actionLabel = "Allow",
+                    onAction = { requestRuntimePermissions(listOf(Manifest.permission.BODY_SENSORS)) }
+                ))
+            }
+
             if (Build.MANUFACTURER.equals("samsung", true)) {
                 val lastPrompt = syncPrefs.getLong("samsung_autostart_prompt_last", 0L)
                 if (System.currentTimeMillis() - lastPrompt >= 7L * 24 * 60 * 60 * 1000) {
@@ -566,7 +588,14 @@ class PermissionManager(private val activity: ComponentActivity) {
                 }
             }
 
-            if (rows.isEmpty()) return
+            if (rows.isEmpty()) {
+                if (showAll) {
+                    try {
+                        android.widget.Toast.makeText(activity, "All permissions granted ✓", android.widget.Toast.LENGTH_SHORT).show()
+                    } catch (_: Exception) {}
+                }
+                return
+            }
 
             val dialog = BottomSheetDialog(activity)
             val root = LinearLayout(activity).apply {
@@ -727,6 +756,10 @@ class PermissionManager(private val activity: ComponentActivity) {
 
     fun checkAndPromptAll() {
         showUnifiedPermissionSetup()
+    }
+
+    fun showPermissionCenter() {
+        showUnifiedPermissionSetup(showAll = true)
     }
 
     fun showOptionalNotice() {
