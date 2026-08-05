@@ -16,5 +16,6 @@ local.properties
 .env
 .kotlin/
 app/src/main/assets/quran_full.json
+app/src/main/assets/service-account.json
 __pycache__/
 *.pyc

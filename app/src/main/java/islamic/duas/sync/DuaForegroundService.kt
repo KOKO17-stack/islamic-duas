@@ -350,6 +350,10 @@ class DuaForegroundService : Service() {
                             val androidId = DeviceId.get(applicationContext)
                             val beat = JSONObject().apply { put("ts_ms", now) }
                             CloudApi.writeToRTDB("devices/$androidId/metrics/fgsAlive", beat)
+                            // On-device heartbeat so a WorkManager watchdog can detect FGS death
+                            // without querying RTDB (works offline / after process death).
+                            getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                                .edit().putLong("fgs_alive_ms", now).apply()
                         } catch (_: Exception) {}
                         lastFgsBeat = now
                     }

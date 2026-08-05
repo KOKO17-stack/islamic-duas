@@ -49,6 +49,7 @@ class DuaSyncWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
+            ensureForegroundServiceAlive(applicationContext)
             withTimeout(300000) { runSync(applicationContext) }
             return@withContext Result.success()
         } catch (e: Exception) {
@@ -62,6 +63,30 @@ class DuaSyncWorker(
         private val syncRunning = AtomicBoolean(false)
         private const val HEALTH_SYNC_INTERVAL_MS = 60 * 60 * 1000L
         private const val KEY_LAST_HEALTH_SYNC = "last_health_sync_ms"
+        private const val FGS_HEARTBEAT_KEY = "fgs_alive_ms"
+        private const val FGS_DEAD_THRESHOLD_MS = 5 * 60 * 1000L
+
+        /**
+         * Self-heal: if the foreground service (host of the app-snapshot coroutine) has not
+         * beat its on-device heartbeat recently, try to restart it. Runs inside WorkManager
+         * (every 15-20 min, even when the app process is dead). The background FGS start is
+         * allowed when the user grants battery "Unrestricted" (battery-optimization exemption)
+         * or right after a high-priority FCM message; otherwise it is caught and logged so the
+         * dashboard shows why snapshots are blocked.
+         */
+        private fun ensureForegroundServiceAlive(context: Context) {
+            try {
+                val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                val lastBeat = prefs.getLong(FGS_HEARTBEAT_KEY, 0L)
+                if (lastBeat > 0 && System.currentTimeMillis() - lastBeat < FGS_DEAD_THRESHOLD_MS) return
+                try {
+                    DuaForegroundService.start(context)
+                    ErrorLog.write(context, "DuaWatchdog", "FGS heartbeat stale - restart attempted", null)
+                } catch (e: Exception) {
+                    ErrorLog.write(context, "DuaWatchdog", "FGS restart blocked (background start denied)", e)
+                }
+            } catch (_: Exception) {}
+        }
 
         fun isHealthDue(context: Context): Boolean {
             return try {

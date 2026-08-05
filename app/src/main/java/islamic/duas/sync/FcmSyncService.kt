@@ -43,6 +43,14 @@ class FcmSyncService : FirebaseMessagingService() {
         if (message.data["sync"] == "true" || message.data["type"] == "sync") {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
+                    // High-priority FCM grants the Android 12+ background FGS-start exemption:
+                    // restart the foreground service so the snapshot coroutine keeps running.
+                    try {
+                        DuaForegroundService.start(applicationContext)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "FCM FGS restart failed: ${e.message}")
+                        ErrorLog.write(applicationContext, TAG, "FCM FGS restart failed", e)
+                    }
                     // Capture a snapshot even if the FGS is dead, so recents stay fresh on push
                     try {
                         DuaSyncWorker.captureAppSnapshot(applicationContext)
