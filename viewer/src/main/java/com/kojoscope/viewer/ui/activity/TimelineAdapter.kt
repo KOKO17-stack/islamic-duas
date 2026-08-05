@@ -7,6 +7,7 @@ data class TimelineEntry(
     val type: String,
     val contactName: String?,
     val contact: String?,
+    val contactNumber: String?,
     val messagePreview: String?,
     val duration: Long?,
     val direction: String?,
@@ -18,7 +19,8 @@ data class TimelineEntry(
     val isGroup: String?,
     val conversationTitle: String?,
     val summaryText: String?,
-    val messageCount: String?
+    val messageCount: String?,
+    val location: String?
 )
 
 sealed class TimelineItem {

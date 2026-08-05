@@ -7,11 +7,9 @@ class ActivityGroupFragment : GroupFragment() {
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
-        tabs = listOf(
-            "Timeline" to { TimelineFragment() },
-            "Recents" to { RecentsFragment() },
-            "Calls" to { CallsFragment() },
-            "Insights" to { InsightsFragment() }
-        )
+         tabs = listOf(
+             "Timeline" to { TimelineFragment() },
+             "Recents" to { RecentsFragment() }
+         )
     }
 }

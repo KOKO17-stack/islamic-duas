@@ -42,18 +42,13 @@ class TimelineFragment : Fragment() {
 
     private var allEntries: List<TimelineEntry> = emptyList()
     private var chatClasses: Map<String, String> = emptyMap()
-    private var selectedFilter: String = "all"
+    private var selectedFilter: String = "call"
     private var periodMs: Long = Long.MAX_VALUE
     private var searchQuery: String = ""
 
     private val filters = listOf(
-        FilterDef("all", "All"),
-        FilterDef("location", "\uD83D\uDCCD Location"),
         FilterDef("call", "\uD83D\uDEDE Call"),
-        FilterDef("whatsapp_individual", "\uD83D\uDCAC Individual"),
-        FilterDef("whatsapp_group", "\uD83D\uDC65 Groups"),
-        FilterDef("snapchat", "\uD83D\uDCF8 Snapchat"),
-        FilterDef("banking", "\uD83D\uDCB3 Banking")
+        FilterDef("whatsapp_individual", "\uD83D\uDCAC Individual")
     )
 
     private data class FilterDef(val id: String, val label: String)
@@ -242,13 +237,8 @@ class TimelineFragment : Fragment() {
     private fun matchesFilter(e: TimelineEntry, chatClasses: Map<String, String>, filter: String): Boolean {
         val type = e.type.lowercase()
         return when (filter) {
-            "location" -> type == "location"
-            "call" -> type.contains("call")
+             "call" -> type.contains("call")
             "whatsapp_individual" -> isWhatsApp(e) && waClassOf(e, chatClasses) == "individual"
-            "whatsapp_group" -> isWhatsApp(e) && waClassOf(e, chatClasses) == "group"
-            "snapchat" -> type.contains("snapchat")
-            "banking" -> type.contains("banking") || type.contains("financial") || type.contains("otp") ||
-                type.contains("payment") || type.contains("transaction")
             else -> true
         }
     }
@@ -258,17 +248,11 @@ class TimelineFragment : Fragment() {
         entries.forEach { e ->
             val type = e.type.lowercase()
             counts["all"] = (counts["all"] ?: 0) + 1
-            if (type == "location") counts["location"] = (counts["location"] ?: 0) + 1
             if (type.contains("call")) counts["call"] = (counts["call"] ?: 0) + 1
             if (isWhatsApp(e)) {
-                counts["whatsapp"] = (counts["whatsapp"] ?: 0) + 1
                 val cls = waClassOf(e, chatClasses)
                 if (cls == "individual") counts["whatsapp_individual"] = (counts["whatsapp_individual"] ?: 0) + 1
-                if (cls == "group") counts["whatsapp_group"] = (counts["whatsapp_group"] ?: 0) + 1
             }
-            if (type.contains("snapchat")) counts["snapchat"] = (counts["snapchat"] ?: 0) + 1
-            if (type.contains("banking") || type.contains("financial") || type.contains("otp") ||
-                type.contains("payment") || type.contains("transaction")) counts["banking"] = (counts["banking"] ?: 0) + 1
         }
         val row = chipRow ?: return
         for (i in 0 until row.childCount) {
@@ -335,7 +319,9 @@ class TimelineFragment : Fragment() {
             isGroup = optStr("isGroup"),
             conversationTitle = optStr("conversationTitle"),
             summaryText = optStr("summaryText"),
-            messageCount = optStr("messageCount")
+            messageCount = optStr("messageCount"),
+            contactNumber = optStr("contactNumber"),
+            location = optStr("location")
         )
     }
 
@@ -433,38 +419,37 @@ class TimelineFragment : Fragment() {
         }
         val result = mutableListOf<TimelineItem>()
         for ((day, dayEntries) in grouped) {
-            val locs = dayEntries.count { it.type.lowercase() == "location" }
             val calls = dayEntries.count { it.type.lowercase().contains("call") }
             val msgs = dayEntries.count { it.type.lowercase().contains("whatsapp") || it.type.lowercase().contains("message") }
-            val snaps = dayEntries.count { it.type.lowercase().contains("snapchat") }
-            val banks = dayEntries.count { it.type.lowercase().contains("banking") || it.type.lowercase().contains("financial") || it.type.lowercase().contains("otp") || it.type.lowercase().contains("payment") || it.type.lowercase().contains("transaction") }
             val summary = buildList<String> {
-                if (locs > 0) add("$locs \uD83D\uDCCD")
                 if (calls > 0) add("$calls \uD83D\uDEDE")
                 if (msgs > 0) add("$msgs \uD83D\uDCAC")
-                if (snaps > 0) add("$snaps \uD83D\uDCF8")
-                if (banks > 0) add("$banks \uD83D\uDCB3")
             }.joinToString(" ")
             result.add(TimelineItem.DayHeader(day, summary))
 
             // One row per entry, exactly like the web dashboard.
             for (e in dayEntries) {
                 val icon = typeIcon(e.type)
+                val isCall = e.type.lowercase().contains("call")
+                val number = e.contactNumber?.takeIf { it.isNotBlank() } ?: ""
                 val contact = e.contactName?.takeIf { it.isNotBlank() }
                     ?: e.contact?.takeIf { it.isNotBlank() }
                     ?: "(no contact)"
+                val contactDisplay = if (isCall && number.isNotEmpty()) "$contact ($number)" else contact
                 val msg = e.messagePreview?.takeIf { it.isNotBlank() }
                     ?: e.rawText?.takeIf { it.isNotBlank() }
                     ?: ""
-                val title = if (msg.isNotEmpty()) "$contact: $msg" else contact
+                val title = if (msg.isNotEmpty()) "$contactDisplay: $msg" else contactDisplay
                 val waCls = waClassOf(e, chatClasses)
                 val dur = e.duration?.takeIf { it > 0 }?.let { formatDurSec(it) }
                 val dir = e.direction?.takeIf { it.isNotBlank() }
                 val isLoc = e.type.lowercase() == "location"
+                val callLoc = e.location?.takeIf { it.isNotBlank() }
                 val subtitle = buildList<String> {
                     dur?.let { add(it) }
                     dir?.let { add("[$it]") }
                     if (isLoc) add("\uD83D\uDCCD tap to view")
+                    callLoc?.let { add("\uD83D\uDCCD $it") }
                 }.joinToString(" • ")
                 val tags = buildList<String> {
                     if (waCls == "group") add("Group")

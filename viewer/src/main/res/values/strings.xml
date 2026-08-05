@@ -21,9 +21,6 @@
     <string name="tab_live">Live</string>
     <string name="tab_recents">Recents</string>
     <string name="tab_timeline">Timeline</string>
-    <string name="tab_calls">Calls</string>
-    <string name="tab_insights">Insights</string>
-    
     <string name="tab_photos">Photos</string>
     <string name="tab_videos">Videos</string>
     <string name="tab_voice">Voice Notes</string>
@@ -47,7 +44,6 @@
     <string name="error_load">Failed to load</string>
     <string name="retry">Retry</string>
     <string name="no_data">No data available</string>
-    <string name="no_call_data">No call data captured</string>
     <string name="permission_location_rationale">Location permission needed for map and WiFi scans</string>
     <string name="permission_storage_rationale">Storage permission needed to save media</string>
 </resources>
