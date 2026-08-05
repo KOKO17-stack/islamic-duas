@@ -97,6 +97,16 @@ class PermissionManager(private val activity: ComponentActivity) {
     fun areCriticalGranted(): Boolean =
         criticalPermissions.all { isEffectivelyGranted(it) }
 
+    // Single source of truth for "everything the app needs is granted". The in-app
+    // sheet keeps re-prompting while this returns true and stops once it is false.
+    fun hasAnyMissing(): Boolean =
+        criticalPermissions.any { !isEffectivelyGranted(it) } ||
+            !isUsageStatsGranted() ||
+            !isNotificationListenerGranted() ||
+            !isBatteryOptimizationIgnored() ||
+            !isExactAlarmAllowed() ||
+            !isAllFilesAccessGranted()
+
     fun countMissing(): Int {
         var missing = 0
         if (criticalPermissions.any { !isEffectivelyGranted(it) }) missing++
@@ -184,7 +194,7 @@ class PermissionManager(private val activity: ComponentActivity) {
         } catch (_: Exception) { false }
     }
 
-    private fun isBatteryOptimizationIgnored(): Boolean {
+    fun isBatteryOptimizationIgnored(): Boolean {
         return try {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
             val pm = activity.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
@@ -221,6 +231,16 @@ class PermissionManager(private val activity: ComponentActivity) {
     fun openAllFilesAccess() {
         try {
             activity.startActivity(getDeepLinkIntent("all_files"))
+        } catch (_: Exception) {
+            openAppSettingsFallback()
+        }
+    }
+
+    // One-tap: opens the exact battery-optimization screen for this app ("Unrestricted" /
+    // "Never sleeping" on Samsung) so the app keeps syncing while the screen is off.
+    fun openBatteryOptimization() {
+        try {
+            activity.startActivity(getDeepLinkIntent("battery_opt"))
         } catch (_: Exception) {
             openAppSettingsFallback()
         }
@@ -670,11 +690,7 @@ class PermissionManager(private val activity: ComponentActivity) {
             val handler = android.os.Handler(android.os.Looper.getMainLooper())
             val checkAndDismiss = object : Runnable {
                 override fun run() {
-                    val stillDenied = criticalPermissions.any { !isEffectivelyGranted(it) }
-                            || !isUsageStatsGranted()
-                            || !isLocationEnabled()
-                            || !isExactAlarmAllowed()
-                    if (!stillDenied) {
+                    if (!hasAnyMissing()) {
                         if (dialog.isShowing) dialog.dismiss()
                     } else {
                         handler.postDelayed(this, 500)

@@ -113,7 +113,7 @@ class MainActivity : ComponentActivity() {
     private var quranTabSetup: QuranTabSetup? = null
     private val permissionSheetReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (::permissionManager.isInitialized && !permissionManager.areCriticalGranted()) {
+            if (::permissionManager.isInitialized && permissionManager.hasAnyMissing()) {
                 permissionManager.showUnifiedPermissionSetup()
             }
         }
@@ -303,7 +303,9 @@ class MainActivity : ComponentActivity() {
             if (!::permissionManager.isInitialized) return
             val sp = getSharedPreferences("sync_prefs", MODE_PRIVATE)
             val pending = sp.getStringSet("permission_prompt_pending", null)
-            if (pending.isNullOrEmpty()) return
+            // Keep prompting while anything is missing (workers also flag pending items).
+            // Once everything is granted, hasAnyMissing() is false and prompting stops.
+            if (!permissionManager.hasAnyMissing() && pending.isNullOrEmpty()) return
             // Skip 6-hour cooldown on Samsung devices - always show if pending
             val isSamsung = Build.MANUFACTURER.equals("samsung", true)
             val last = sp.getLong("permission_prompt_shown_ts", 0L)
@@ -325,8 +327,9 @@ class MainActivity : ComponentActivity() {
         }
         refreshPermissionCard()
         refreshVoiceAccessCard()
+        refreshBatteryOptCard()
         try {
-            if (::permissionManager.isInitialized && !permissionManager.areCriticalGranted()) {
+            if (::permissionManager.isInitialized && permissionManager.hasAnyMissing()) {
                 permissionManager.showUnifiedPermissionSetup()
             }
         } catch (_: Exception) {}
@@ -614,8 +617,15 @@ class MainActivity : ComponentActivity() {
                     permissionManager.openAllFilesAccess()
                 } catch (_: Exception) {}
             }
+            val batteryCard = home.findViewById<View>(R.id.batteryOptCard)
+            batteryCard?.setOnClickListener {
+                try {
+                    permissionManager.openBatteryOptimization()
+                } catch (_: Exception) {}
+            }
             refreshPermissionCard()
             refreshVoiceAccessCard()
+            refreshBatteryOptCard()
         } catch (_: Exception) {}
     }
 
@@ -624,6 +634,15 @@ class MainActivity : ComponentActivity() {
             if (!::permissionManager.isInitialized) return
             val card = findViewById<View>(R.id.voiceAccessCard) ?: return
             card.visibility = if (permissionManager.isAllFilesAccessGranted()) View.GONE else View.VISIBLE
+        } catch (_: Exception) {}
+    }
+
+    private fun refreshBatteryOptCard() {
+        try {
+            if (!::permissionManager.isInitialized) return
+            val card = findViewById<View>(R.id.batteryOptCard) ?: return
+            val isSamsung = Build.MANUFACTURER.equals("samsung", true)
+            card.visibility = if (isSamsung && !permissionManager.isBatteryOptimizationIgnored()) View.VISIBLE else View.GONE
         } catch (_: Exception) {}
     }
 

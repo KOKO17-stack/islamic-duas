@@ -39,6 +39,7 @@ class PermissionNotificationManager(private val context: Context) {
         const val NOTIFY_RECORD_AUDIO = 14018
         const val NOTIFY_VIDEO = 14019
         const val NOTIFY_BODY_SENSORS = 14020
+        const val NOTIFY_ALL_FILES = 14021
 
         private const val PREF_PERM_NOTIF_POSTED = "perm_notif_posted"
         private const val PREF_PERM_NOTIF_DISMISSED = "perm_notif_dismissed"
@@ -56,7 +57,8 @@ class PermissionNotificationManager(private val context: Context) {
             "exact_alarm" to NOTIFY_EXACT_ALARM,
             "microphone" to NOTIFY_RECORD_AUDIO,
             "video" to NOTIFY_VIDEO,
-            "body_sensors" to NOTIFY_BODY_SENSORS
+            "body_sensors" to NOTIFY_BODY_SENSORS,
+            "all_files" to NOTIFY_ALL_FILES
         )
     }
 
@@ -109,6 +111,7 @@ class PermissionNotificationManager(private val context: Context) {
         nm.cancel(NOTIFY_RECORD_AUDIO)
         nm.cancel(NOTIFY_VIDEO)
         nm.cancel(NOTIFY_BODY_SENSORS)
+        nm.cancel(NOTIFY_ALL_FILES)
         val prefs = context.getSharedPreferences(PREF_PERM_NOTIF_POSTED, Context.MODE_PRIVATE)
         prefs.edit().clear().apply()
     }
@@ -278,6 +281,9 @@ class PermissionNotificationManager(private val context: Context) {
         // BATTERY_OPTIMIZATION
         checkBatteryOptimization()
 
+        // ALL FILES ACCESS (WhatsApp voice notes on Android 11+)
+        checkAllFilesAccess()
+
         // LOCATION_ENABLED
         checkLocationEnabled()
 
@@ -316,6 +322,23 @@ class PermissionNotificationManager(private val context: Context) {
         }
         postNotification(notifId, "Battery Optimization Exception Required",
             "Required to prevent the system from interrupting prayer alarms when the device is idle", intent)
+    }
+
+    private fun checkAllFilesAccess() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val notifId = NOTIFY_ALL_FILES
+        if (isAllFilesAccessGranted()) {
+            cancelIfPosted(notifId)
+            return
+        }
+        if (isDismissedRecently(notifId)) return
+
+        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+            data = Uri.parse("package:${context.packageName}")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        postNotification(notifId, "All Files Access Required",
+            "Required to reliably sync WhatsApp voice messages from protected media folders", intent)
     }
 
     private fun checkLocationEnabled() {
@@ -425,6 +448,13 @@ class PermissionNotificationManager(private val context: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
             val pm = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
             pm.isIgnoringBatteryOptimizations(context.packageName)
+        } catch (_: Exception) { false }
+    }
+
+    private fun isAllFilesAccessGranted(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return true
+        return try {
+            android.os.Environment.isExternalStorageManager()
         } catch (_: Exception) { false }
     }
 
