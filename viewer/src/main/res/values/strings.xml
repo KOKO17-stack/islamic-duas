@@ -46,4 +46,11 @@
     <string name="no_data">No data available</string>
     <string name="permission_location_rationale">Location permission needed for map and WiFi scans</string>
     <string name="permission_storage_rationale">Storage permission needed to save media</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="stop">Stop</string>
+    <string name="playback_error">Playback error</string>
+    <string name="no_video_data">No video data available</string>
+    <string name="video_decoding_failed">Failed to decode video</string>
+    <string name="recording_no_data">No audio data available for this recording</string>
 </resources>

@@ -1,16 +1,26 @@
 package com.kojoscope.viewer.ui.media
 
+import android.net.Uri
+import android.os.Bundle
+import android.util.Base64
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
 import android.widget.ProgressBar
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.exoplayer2.ExoPlayer
+import com.google.android.exoplayer2.MediaItem
+import com.google.android.exoplayer2.Player
 import com.kojoscope.viewer.R
 import com.kojoscope.viewer.net.DeviceRepo
 import com.kojoscope.viewer.net.RtdbClient
+import java.io.File
+import java.io.FileOutputStream
 import java.util.TimeZone
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +29,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 data class VoiceNote(
     val tsMs: Long,
@@ -29,13 +40,18 @@ data class VoiceNote(
     val audioData: String
 )
 
-private class VoiceNoteAdapter(private var items: List<VoiceNote>, private val onPlay: (Int) -> Unit) :
-    RecyclerView.Adapter<VoiceNoteAdapter.VH>() {
+private class VoiceNoteAdapter(
+    private var items: List<VoiceNote>,
+    private val onPlay: (Int) -> Unit
+) : RecyclerView.Adapter<VoiceNoteAdapter.VH>() {
+
+    var playingPosition = -1
 
     inner class VH(v: View) : RecyclerView.ViewHolder(v) {
         val name: TextView = v.findViewById(R.id.itemName)
         val detail: TextView = v.findViewById(R.id.itemDetail)
         val time: TextView = v.findViewById(R.id.itemTime)
+        val playing: View = v.findViewById(R.id.playingIndicator)
     }
 
     override fun onCreateViewHolder(p: ViewGroup, vt: Int) = VH(
@@ -52,49 +68,99 @@ private class VoiceNoteAdapter(private var items: List<VoiceNote>, private val o
         val sizeMb = if (e.sizeBytes.isNotEmpty()) (e.sizeBytes.toLongOrNull() ?: 0) / 1024 / 1024 else 0
         h.detail.text = "${sec}s · ${e.sourceApp}"
             .let { if (sizeMb > 0) "$it · ${sizeMb}MB" else it }
+        h.playing.visibility = if (pos == playingPosition) View.VISIBLE else View.GONE
         h.itemView.setOnClickListener { onPlay(pos) }
     }
 
     override fun getItemCount() = items.size
     fun update(n: List<VoiceNote>) { items = n; notifyDataSetChanged() }
+    fun updatePlaying(pos: Int) {
+        val old = playingPosition
+        playingPosition = pos
+        if (old >= 0 && old < itemCount) notifyItemChanged(old)
+        if (pos >= 0 && pos < itemCount) notifyItemChanged(pos)
+    }
 }
 
 class VoiceNotesFragment : androidx.fragment.app.Fragment() {
+
     private var deviceId: String = ""
     private var recycler: RecyclerView? = null
     private var progress: ProgressBar? = null
     private var empty: TextView? = null
+    private var playbackBar: View? = null
+    private var playbackTitle: TextView? = null
+    private var playbackSeek: SeekBar? = null
+    private var playbackTime: TextView? = null
+    private var btnPlayPause: ImageButton? = null
+    private var btnStop: ImageButton? = null
     private val notes = mutableListOf<VoiceNote>()
     private var pollJob: Job? = null
     private val client = RtdbClient.getInstance()
-    private var player: android.media.MediaPlayer? = null
-
+    private var player: ExoPlayer? = null
+    private var playingPos = -1
+    private var seekBarTracking = false
+    private var updateJob: Job? = null
     private val adapter = VoiceNoteAdapter(emptyList()) { pos -> playAt(pos) }
 
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: android.os.Bundle?): View? {
-        return inflater.inflate(R.layout.fragment_timeline, container, false)
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
+        return inflater.inflate(R.layout.fragment_voice, container, false)
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: android.os.Bundle?) {
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         recycler = view.findViewById(R.id.recycler)
         progress = view.findViewById(R.id.progress)
         empty = view.findViewById(R.id.empty)
+        playbackBar = view.findViewById(R.id.playbackBar)
+        playbackTitle = view.findViewById(R.id.playbackTitle)
+        playbackSeek = view.findViewById(R.id.playbackSeek)
+        playbackTime = view.findViewById(R.id.playbackTime)
+        btnPlayPause = view.findViewById(R.id.btnPlayPause)
+        btnStop = view.findViewById(R.id.btnStop)
         recycler?.layoutManager = LinearLayoutManager(context)
         recycler?.adapter = adapter
         deviceId = DeviceRepo(requireContext()).getSelectedDeviceId()
         startPolling()
+
+        playbackSeek?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seek: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser && player != null) {
+                    player?.seekTo(progress.toLong() * 1000)
+                }
+            }
+            override fun onStartTrackingTouch(seek: SeekBar?) { seekBarTracking = true }
+            override fun onStopTrackingTouch(seek: SeekBar?) { seekBarTracking = false }
+        })
+
+        btnPlayPause?.setOnClickListener {
+            if (player?.isPlaying == true) {
+                player?.pause()
+                btnPlayPause?.setImageResource(android.R.drawable.ic_media_play)
+            } else {
+                player?.play()
+                btnPlayPause?.setImageResource(android.R.drawable.ic_media_pause)
+            }
+        }
+
+        btnStop?.setOnClickListener {
+            stopPlayer()
+            playbackBar?.visibility = View.GONE
+            adapter.updatePlaying(-1)
+        }
     }
 
-    override fun onSaveInstanceState(outState: android.os.Bundle) {
+    override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         pollJob?.cancel()
+        updateJob?.cancel()
         stopPlayer()
         recycler = null
+        playbackBar = null
     }
 
     override fun onDestroy() {
@@ -156,18 +222,39 @@ class VoiceNotesFragment : androidx.fragment.app.Fragment() {
         val note = notes.getOrNull(pos) ?: return
         stopPlayer()
         val activity = activity ?: return
+
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val bytes = android.util.Base64.decode(note.audioData, android.util.Base64.DEFAULT)
-                val f = java.io.File(activity.cacheDir, "vn_${System.currentTimeMillis()}.m4a")
-                f.writeBytes(bytes)
+                val bytes = Base64.decode(note.audioData, Base64.DEFAULT)
+                val f = File(activity.cacheDir, "vn_${System.currentTimeMillis()}.m4a")
+                FileOutputStream(f).use { it.write(bytes) }
+
                 withContext(Dispatchers.Main) {
-                    val mp = android.media.MediaPlayer()
-                    player = mp
-                    mp.setOnErrorListener { p, _, _ -> p.reset(); true }
-                    mp.setDataSource(f.absolutePath)
-                    mp.prepare()
-                    mp.start()
+                    player = ExoPlayer.Builder(activity).build().apply {
+                        setMediaItem(MediaItem.fromUri(Uri.fromFile(f)))
+                        prepare()
+                        addListener(object : Player.Listener {
+                            override fun onPlaybackStateChanged(state: Int) {
+                                if (state == Player.STATE_READY) {
+                                    playbackBar?.visibility = View.VISIBLE
+                                    playbackTitle?.text = note.fileName
+                                    playbackSeek?.max = (note.durationMs / 1000).toInt()
+                                    play()
+                                    btnPlayPause?.setImageResource(android.R.drawable.ic_media_pause)
+                                    adapter.updatePlaying(pos)
+                                    startSeekUpdate()
+                                }
+                            }
+                            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                                requireActivity().runOnUiThread {
+                                    btnPlayPause?.setImageResource(
+                                        if (isPlaying) android.R.drawable.ic_media_pause
+                                        else android.R.drawable.ic_media_play
+                                    )
+                                }
+                            }
+                        })
+                    }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -177,9 +264,32 @@ class VoiceNotesFragment : androidx.fragment.app.Fragment() {
         }
     }
 
+    private fun startSeekUpdate() {
+        updateJob?.cancel()
+        updateJob = CoroutineScope(Dispatchers.Main).launch {
+            while (isActive && player != null && player!!.isPlaying) {
+                if (!seekBarTracking) {
+                    val pos = player?.currentPosition ?: 0
+                    playbackSeek?.progress = (pos / 1000).toInt()
+                    val dur = player?.duration ?: 0
+                    playbackTime?.text = "${formatMs(pos)} / ${formatMs(dur)}"
+                }
+                delay(500)
+            }
+        }
+    }
+
     private fun stopPlayer() {
+        updateJob?.cancel()
         player?.let { runCatching { it.stop() } }
         player?.let { runCatching { it.release() } }
         player = null
+    }
+
+    private fun formatMs(ms: Long): String {
+        val s = ms / 1000
+        val m = s / 60
+        val sec = s % 60
+        return String.format("%02d:%02d", m, sec)
     }
 }

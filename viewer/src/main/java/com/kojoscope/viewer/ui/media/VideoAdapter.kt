@@ -24,7 +24,8 @@ data class VideoEntry(
     val sizeBytes: Long,
     val source: String,
     val thumbB64: String,
-    val dataB64: String
+    val dataB64: String,
+    val key: String = ""
 )
 
 fun formatDurMs(ms: Long): String {
@@ -55,7 +56,7 @@ class VideoAdapter(private var items: List<VideoEntry>) :
         holder.itemView.setOnClickListener {
             val ctx = holder.itemView.context
             val intent = android.content.Intent(ctx, VideoViewerActivity::class.java)
-            intent.putExtra("data", e.dataB64)
+            intent.putExtra("key", e.key)
             intent.putExtra("name", e.fileName)
             ctx.startActivity(intent)
         }

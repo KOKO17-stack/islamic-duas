@@ -96,7 +96,8 @@ class VideosFragment : Fragment() {
                     sizeBytes = v.optLong("sizeBytes", 0L),
                     source = v.optString("source", ""),
                     thumbB64 = thumbB64,
-                    dataB64 = dataB64
+                    dataB64 = dataB64,
+                    key = k
                 ))
             } catch (_: Exception) {}
         }
