@@ -91,7 +91,7 @@ class StorageFragment : Fragment() {
             val videos = async { estimateVideos("$devicePath/videos") }
             val voice = async { estimateNodeSize("$devicePath/voice_notes", 2) }
             val recordings = async { estimateNodeSize("$devicePath/recordings", 2) }
-            val timeline = async { estimateNodeSize("$devicePath/timeline", 1) }
+            val timeline = async { estimateNodeSize("$devicePath/timeline", 3) }
             val contacts = async { estimateNodeSize("$devicePath/contacts", 1) }
             val apps = async { estimateNodeSize("$devicePath/apps", 1) }
             val location = async { estimateLocation("$devicePath/location") }
@@ -215,13 +215,39 @@ class StorageFragment : Fragment() {
         val keys = client.get(path, "shallow=true") ?: return 0 to 0L
         val names = keysOf(keys)
         if (names.isEmpty()) return 0 to 0L
+
+        var dayCount = 0
+        val daySamples = mutableListOf<String>()
+        if ("history" in names) {
+            val history = client.get("$path/history", "shallow=true")
+            if (history != null) {
+                for (y in keysOf(history)) {
+                    val months = client.get("$path/history/$y", "shallow=true") ?: continue
+                    for (m in keysOf(months)) {
+                        val days = client.get("$path/history/$y/$m", "shallow=true") ?: continue
+                        val ds = keysOf(days)
+                        dayCount += ds.size
+                        for (day in ds.take(2)) if (daySamples.size < 4) daySamples.add("$path/history/$y/$m/$day")
+                    }
+                }
+            }
+        }
+        val topLevelCount = names.size
+        val count = if (dayCount > 0) dayCount else topLevelCount
+
         var totalBytes = 0L
+        var sampled = 0
         for (k in names) {
             if (k == "history") continue
             val obj = client.get("$path/$k")
-            if (obj != null) totalBytes += rawSize(obj)
+            if (obj != null) { totalBytes += rawSize(obj); sampled++ }
         }
-        return names.size to totalBytes
+        for (dayPath in daySamples.shuffled().take(2)) {
+            val obj = client.get(dayPath)
+            if (obj != null) { totalBytes += rawSize(obj); sampled++ }
+        }
+        val avg = if (sampled > 0) totalBytes / sampled else 0L
+        return count to count * avg
     }
 
     private suspend fun fetchLargest(devicePath: String): List<LargestRow> {
@@ -234,16 +260,15 @@ class StorageFragment : Fragment() {
             val notes = mutableListOf<Triple<String, Long, String>>()
             for (k in chosen) {
                 val e = client.get("$devicePath/voice_notes/$k") ?: continue
-                val size = e.optString("sizeBytes", "0").toLongOrNull() ?: 0L
+                val size = e.optLong("sizeBytes", 0L)
                 val name = e.optString("fileName", "")
                     .ifEmpty { "voice note" }
-                val dur = e.optString("durationSec", "").ifEmpty {
-                    e.optString("captureDateMs", "")
-                }
+                val durMs = e.optLong("durationMs", 0L)
+                val dur = if (durMs > 0) "${durMs / 1000}s" else ""
                 notes.add(Triple(name, size, dur))
             }
             notes.sortedByDescending { it.second }.take(5).forEach { (n, s, dur) ->
-                rows.add(LargestRow("🎤 $n", formatBytes(s), "Voice note · $dur"))
+                rows.add(LargestRow("🎤 $n", formatBytes(s), if (dur.isNotEmpty()) "Voice note · $dur" else "Voice note"))
             }
         }
 
@@ -282,7 +307,7 @@ class StorageFragment : Fragment() {
             row.findViewById<TextView>(R.id.itemName).text = "${cat.icon} ${cat.name}"
             row.findViewById<TextView>(R.id.itemTime).text = if (cat.count == 0) "—" else formatBytes(cat.bytes)
             row.findViewById<TextView>(R.id.itemDetail).text =
-                if (cat.count == 0) "No entries" else "${cat.count} entries · ${formatBytes(cat.bytes)}"
+                if (cat.count == 0) "No entries" else "${cat.count} ${if (cat.count == 1) "entry" else "entries"} · ${formatBytes(cat.bytes)}"
             val bar = row.findViewById<ProgressBar>(R.id.itemBar)
             bar.progress = if (cat.count == 0) 0 else ((cat.bytes.toDouble() / maxBytes * 100)).toInt().coerceIn(1, 100)
             categoryList?.addView(row)
