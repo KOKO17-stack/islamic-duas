@@ -14,7 +14,7 @@ class ControlGroupFragment : GroupFragment() {
             "Geofence" to { PlaceholderFragment.newInstance("Geofences are client-side only (not synced to RTDB)") },
             "Sync" to { PlaceholderFragment.newInstance("Sync control — push/sync data to/from Firebase") },
             "Record" to { RecordingFragment() },
-            "Storage" to { PlaceholderFragment.newInstance("Media storage management") }
+            "Storage" to { StorageFragment() }
         )
     }
 }
