@@ -32,13 +32,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.TimeZone
 
-data class HealthEntry(
-    val date: String,
-    val steps: Int,
-    val goal: Int,
-    val tsMs: Long
-)
-
 data class RecordingEntry(
     val id: String,
     val durationSec: String,
@@ -48,24 +41,6 @@ data class RecordingEntry(
     val sizeBytes: String,
     val parts: List<String> = emptyList()
 )
-
-class HealthAdapter(private var items: List<HealthEntry>) :
-    RecyclerView.Adapter<HealthAdapter.VH>() {
-    inner class VH(v: View) : RecyclerView.ViewHolder(v) {
-        val name: TextView = v.findViewById(R.id.itemName)
-        val detail: TextView = v.findViewById(R.id.itemDetail)
-    }
-    override fun onCreateViewHolder(p: ViewGroup, vt: Int) = VH(
-        LayoutInflater.from(p.context).inflate(R.layout.item_list, p, false)
-    )
-    override fun onBindViewHolder(h: VH, pos: Int) {
-        val e = items[pos]
-        h.name.text = e.date
-        h.detail.text = "${e.steps}/${e.goal} steps"
-    }
-    override fun getItemCount() = items.size
-    fun update(n: List<HealthEntry>) { items = n; notifyDataSetChanged() }
-}
 
 class RecordingAdapter(var items: List<RecordingEntry>, private val onPlay: (Int) -> Unit) :
     RecyclerView.Adapter<RecordingAdapter.VH>() {
@@ -93,77 +68,6 @@ class RecordingAdapter(var items: List<RecordingEntry>, private val onPlay: (Int
     }
     override fun getItemCount() = items.size
     fun update(n: List<RecordingEntry>) { items = n; notifyDataSetChanged() }
-}
-
-class HealthFragment : Fragment() {
-    private var deviceId: String = ""
-    private var recycler: RecyclerView? = null
-    private var progress: ProgressBar? = null
-    private var empty: TextView? = null
-    private val adapter = HealthAdapter(emptyList())
-    private var pollJob: Job? = null
-    private val client = RtdbClient.getInstance()
-
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        return inflater.inflate(R.layout.fragment_timeline, container, false)
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        recycler = view.findViewById(R.id.recycler)
-        progress = view.findViewById(R.id.progress)
-        empty = view.findViewById(R.id.empty)
-        recycler?.layoutManager = LinearLayoutManager(context)
-        recycler?.adapter = adapter
-        deviceId = DeviceRepo(requireContext()).getSelectedDeviceId()
-        startPolling()
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        pollJob?.cancel()
-        recycler = null
-    }
-
-    private fun startPolling() {
-        pollJob = CoroutineScope(Dispatchers.Main).launch {
-            while (isActive) {
-                val current = DeviceRepo(requireContext()).getSelectedDeviceId()
-                if (current.isNotEmpty()) deviceId = current
-                if (deviceId.isNotEmpty()) loadHealth()
-                delay(30000)
-            }
-        }
-    }
-
-    private suspend fun loadHealth() {
-        withContext(Dispatchers.Main) { progress?.visibility = View.VISIBLE; empty?.visibility = View.GONE }
-        val entries = withContext(Dispatchers.IO) { fetchHealth() }
-        withContext(Dispatchers.Main) {
-            progress?.visibility = View.GONE
-            if (entries.isEmpty()) { empty?.visibility = View.VISIBLE } else { adapter.update(entries) }
-        }
-    }
-
-    private suspend fun fetchHealth(): List<HealthEntry> {
-        val result = mutableListOf<HealthEntry>()
-        val cal = java.util.Calendar.getInstance()
-        for (i in 0 until 7) {
-            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-            val date = sdf.format(cal.time)
-            val steps = client.get("devices/$deviceId/steps/$date")
-            if (steps != null && steps.has("steps")) {
-                result.add(HealthEntry(
-                    date = date,
-                    steps = steps.optInt("steps", 0),
-                    goal = steps.optInt("goal", 8000),
-                    tsMs = steps.optLong("ts_ms", 0L)
-                ))
-            }
-            cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
-        }
-        return result.sortedByDescending { it.date }
-    }
 }
 
 class RecordingFragment : Fragment() {
@@ -288,14 +192,14 @@ class RecordingFragment : Fragment() {
     }
 
     private suspend fun fetchParts(recId: String): List<String> {
-        val partsData = client.get("devices/$deviceId/recordings/$recId/parts") ?: return emptyList()
+        val partsKeys = client.get("devices/$deviceId/recordings/$recId/parts", "shallow=true") ?: return emptyList()
         val out = mutableListOf<String>()
-        val iter = partsData.keys()
+        val iter = partsKeys.keys()
         while (iter.hasNext()) {
             val pk = iter.next()
             try {
-                val p = partsData.optJSONObject(pk) ?: continue
-                val d = p.optString("data", "")
+                val partData = client.get("devices/$deviceId/recordings/$recId/parts/$pk") ?: continue
+                val d = partData.optString("data", "")
                 if (d.isNotEmpty()) out.add(d)
             } catch (_: Exception) {}
         }
@@ -329,6 +233,7 @@ class RecordingFragment : Fragment() {
 
                 withContext(Dispatchers.Main) {
                     player = ExoPlayer.Builder(act).build().apply {
+                        playWhenReady = true
                         setMediaItem(MediaItem.fromUri(Uri.fromFile(tmp)))
                         prepare()
                         addListener(object : Player.Listener {
@@ -337,7 +242,6 @@ class RecordingFragment : Fragment() {
                                     playbackBar?.visibility = View.VISIBLE
                                     playbackTitle?.text = "Recording ${entry.id.take(8)}…"
                                     playbackSeek?.max = (entry.durationSec.toIntOrNull() ?: 0)
-                                    play()
                                     btnPlayPause?.setImageResource(android.R.drawable.ic_media_pause)
                                     startSeekUpdate()
                                 }

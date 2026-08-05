@@ -13,7 +13,7 @@
 
         <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="280dp"
+            android:layout_height="350dp"
             android:background="@color/bg_card">
 
             <org.osmdroid.views.MapView
@@ -53,6 +53,15 @@
                 android:textSize="12sp" />
 
             <TextView
+                android:id="@+id/percentText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/accent"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:text="0%" />
+
+            <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Speed: "
@@ -80,13 +89,28 @@
 
             <TextView
                 android:id="@+id/stPoints"
-                style="@style/PbStat" android:text="0 pts" />
+                style="@style/PbStat"
+                android:text="0 pts" />
             <TextView
                 android:id="@+id/stDuration"
-                style="@style/PbStat" android:text="--" />
+                style="@style/PbStat"
+                android:text="--" />
             <TextView
                 android:id="@+id/stDistance"
-                style="@style/PbStat" android:text="--" />
+                style="@style/PbStat"
+                android:text="--" />
+            <TextView
+                android:id="@+id/stMaxSpeed"
+                style="@style/PbStat"
+                android:text="Max --" />
+            <TextView
+                android:id="@+id/stAvgSpeed"
+                style="@style/PbStat"
+                android:text="Avg --" />
+            <TextView
+                android:id="@+id/stAltGain"
+                style="@style/PbStat"
+                android:text="Alt +0m" />
         </LinearLayout>
 
         <TextView
@@ -97,6 +121,100 @@
             android:paddingBottom="6dp"
             android:textColor="@color/accent"
             android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+
+            <Button
+                android:id="@+id/btnDateRange"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_chip"
+                android:padding="6dp"
+                android:text="All dates"
+                android:textColor="@color/text_primary"
+                android:textSize="11sp" />
+
+            <ImageButton
+                android:id="@+id/btnClearDate"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:scaleType="centerInside"
+                android:contentDescription="Clear date filter"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+
+            <ImageButton
+                android:id="@+id/btnExport"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_share"
+                android:scaleType="centerInside"
+                android:contentDescription="Export" />
+
+            <ImageButton
+                android:id="@+id/btnLoop"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_media_ff"
+                android:scaleType="centerInside"
+                android:contentDescription="Loop" />
+
+            <ImageButton
+                android:id="@+id/btnFollow"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_compass"
+                android:scaleType="centerInside"
+                android:contentDescription="Auto-follow" />
+
+            <ImageButton
+                android:id="@+id/btnEnd"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_media_ff"
+                android:scaleType="centerInside"
+                android:contentDescription="Jump to end" />
+
+            <ImageButton
+                android:id="@+id/btnMapType"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_mapmode"
+                android:scaleType="centerInside"
+                android:contentDescription="Map type" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Playback controls"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:gravity="end" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"
@@ -113,5 +231,6 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingBottom="12dp" />
+
     </LinearLayout>
 </ScrollView>

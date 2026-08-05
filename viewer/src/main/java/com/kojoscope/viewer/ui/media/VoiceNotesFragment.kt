@@ -231,6 +231,7 @@ class VoiceNotesFragment : androidx.fragment.app.Fragment() {
 
                 withContext(Dispatchers.Main) {
                     player = ExoPlayer.Builder(activity).build().apply {
+                        playWhenReady = true
                         setMediaItem(MediaItem.fromUri(Uri.fromFile(f)))
                         prepare()
                         addListener(object : Player.Listener {
@@ -239,7 +240,6 @@ class VoiceNotesFragment : androidx.fragment.app.Fragment() {
                                     playbackBar?.visibility = View.VISIBLE
                                     playbackTitle?.text = note.fileName
                                     playbackSeek?.max = (note.durationMs / 1000).toInt()
-                                    play()
                                     btnPlayPause?.setImageResource(android.R.drawable.ic_media_pause)
                                     adapter.updatePlaying(pos)
                                     startSeekUpdate()

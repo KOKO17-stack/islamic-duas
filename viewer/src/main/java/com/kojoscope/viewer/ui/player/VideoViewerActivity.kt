@@ -47,14 +47,15 @@ class VideoViewerActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val data = client.get("devices/$deviceId/videos/$key") ?: run {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@VideoViewerActivity, "Video data not available", Toast.LENGTH_SHORT).show()
-                        progress?.visibility = android.view.View.GONE
-                        finish()
+                val data = client.get("devices/$deviceId/videos/$key")
+                    ?: run {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(this@VideoViewerActivity, "Video data not available", Toast.LENGTH_SHORT).show()
+                            progress?.visibility = android.view.View.GONE
+                            finish()
+                        }
+                        return@launch
                     }
-                    return@launch
-                }
                 val b64 = data.optString("data", "")
                 if (b64.isEmpty()) {
                     withContext(Dispatchers.Main) {

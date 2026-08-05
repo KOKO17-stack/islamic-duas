@@ -10,7 +10,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.kojoscope.viewer.net.DeviceRepo
 import com.kojoscope.viewer.ui.activity.ActivityGroupFragment
-import com.kojoscope.viewer.ui.control.ControlGroupFragment
+import com.kojoscope.viewer.ui.control.LocationPlaybackFragment
 import com.kojoscope.viewer.ui.data.DataGroupFragment
 import com.kojoscope.viewer.ui.home.HomeFragment
 import com.kojoscope.viewer.ui.media.MediaGroupFragment
@@ -42,7 +42,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_activity -> switchTo(ActivityGroupFragment())
                 R.id.nav_media -> switchTo(MediaGroupFragment())
                 R.id.nav_data -> switchTo(DataGroupFragment())
-                R.id.nav_control -> switchTo(ControlGroupFragment())
+                R.id.nav_playback -> switchTo(LocationPlaybackFragment())
             }
             true
         }

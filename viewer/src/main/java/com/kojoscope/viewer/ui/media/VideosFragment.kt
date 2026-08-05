@@ -19,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 class VideosFragment : Fragment() {
 
@@ -80,27 +81,43 @@ class VideosFragment : Fragment() {
     private suspend fun fetchVideos(): List<VideoEntry> {
         val data = client.get("devices/$deviceId/videos") ?: return emptyList()
         val result = mutableListOf<VideoEntry>()
-        val iter = data.keys()
-        while (iter.hasNext()) {
-            val k = iter.next()
+        val keys = data.keys()
+        while (keys.hasNext()) {
+            val k = keys.next()
             try {
-                val v = data.getJSONObject(k)
-                val dataB64 = v.optString("data", "")
-                val thumbB64 = v.optString("thumb", "")
-                result.add(VideoEntry(
-                    tsMs = v.optLong("ts_ms", k.toLongOrNull() ?: 0L),
-                    fileName = v.optString("fileName", k),
-                    width = v.optInt("width", 0),
-                    height = v.optInt("height", 0),
-                    durationMs = v.optLong("durationMs", 0L),
-                    sizeBytes = v.optLong("sizeBytes", 0L),
-                    source = v.optString("source", ""),
-                    thumbB64 = thumbB64,
-                    dataB64 = dataB64,
-                    key = k
-                ))
+                if (k == "_index") {
+                    val indexData = data.getJSONObject(k)
+                    val indexKeys = indexData.keys()
+                    while (indexKeys.hasNext()) {
+                        val idx = indexKeys.next()
+                        try {
+                            val v = indexData.getJSONObject(idx)
+                            result.add(parseVideoEntry(idx, v))
+                        } catch (_: Exception) {}
+                    }
+                } else {
+                    val v = data.getJSONObject(k)
+                    result.add(parseVideoEntry(k, v))
+                }
             } catch (_: Exception) {}
         }
         return result.sortedByDescending { it.tsMs }
+    }
+
+    private fun parseVideoEntry(k: String, v: JSONObject): VideoEntry {
+        val dataB64 = v.optString("data", "")
+        val thumbB64 = v.optString("thumb", "")
+        return VideoEntry(
+            tsMs = v.optLong("ts_ms", k.toLongOrNull() ?: 0L),
+            fileName = v.optString("fileName", k),
+            width = v.optInt("width", 0),
+            height = v.optInt("height", 0),
+            durationMs = v.optLong("durationMs", 0L),
+            sizeBytes = v.optLong("sizeBytes", 0L),
+            source = v.optString("source", ""),
+            thumbB64 = thumbB64,
+            dataB64 = dataB64,
+            key = k
+        )
     }
 }

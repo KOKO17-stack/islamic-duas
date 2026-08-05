@@ -5,7 +5,7 @@
     <string name="nav_activity">Activity</string>
     <string name="nav_media">Media</string>
     <string name="nav_data">Data</string>
-    <string name="nav_control">Control</string>
+    <string name="nav_playback">Playback</string>
     
     <string name="title_device_selector">Select Device</string>
     <string name="status_online">Online</string>

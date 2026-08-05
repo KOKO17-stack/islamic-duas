@@ -1,6 +1,8 @@
 package com.kojoscope.viewer.ui.control
 
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.LayoutInflater
@@ -8,12 +10,15 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 import androidx.fragment.app.Fragment
+import com.google.android.material.datepicker.MaterialDatePicker
 import com.kojoscope.viewer.R
 import com.kojoscope.viewer.net.DeviceRepo
 import com.kojoscope.viewer.net.RtdbClient
@@ -36,7 +41,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-data class PlayPoint(val lat: Double, val lng: Double, val ts: Long, val accuracy: Double, val speed: Double)
+data class PlayPoint(val lat: Double, val lng: Double, val ts: Long, val accuracy: Double, val speed: Double, val altitude: Double)
 
 class LocationPlaybackFragment : Fragment() {
 
@@ -45,24 +50,44 @@ class LocationPlaybackFragment : Fragment() {
     private var progress: ProgressBar? = null
     private var playBtn: Button? = null
     private var countText: TextView? = null
+    private var percentText: TextView? = null
     private var speedSpinner: Spinner? = null
     private var scrubber: SeekBar? = null
     private var stPoints: TextView? = null
     private var stDuration: TextView? = null
     private var stDistance: TextView? = null
+    private var stMaxSpeed: TextView? = null
+    private var stAvgSpeed: TextView? = null
+    private var stAltGain: TextView? = null
     private var pbRange: TextView? = null
     private var pointList: LinearLayout? = null
+    private var btnExport: ImageButton? = null
+    private var btnLoop: ImageButton? = null
+    private var btnFollow: ImageButton? = null
+    private var btnEnd: ImageButton? = null
+    private var btnDateRange: Button? = null
+    private var btnClearDate: ImageButton? = null
+    private var btnMapType: ImageButton? = null
     private val client = RtdbClient.getInstance()
 
     private var points: List<PlayPoint> = emptyList()
+    private var filteredPoints: List<PlayPoint> = emptyList()
+    private var dateRangeStart: Long? = null
+    private var dateRangeEnd: Long? = null
+    private var isSatellite = false
     private var playing = false
     private var playbackJob: Job? = null
     private var pollJob: Job? = null
-    private var marker: Marker? = null
+    private var playheadMarker: Marker? = null
     private var trail: Polyline? = null
+    private var gradientTrail: Polyline? = null
+    private var waypointMarkers: MutableList<Marker> = mutableListOf()
     private var segFrom = 0
     private var segTo = 1
     private var segStartElapsed = 0L
+    private var loopMode = false
+    private var autoFollow = true
+    private var totalDurationMs: Long = 0L
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         Configuration.getInstance().load(
@@ -78,20 +103,39 @@ class LocationPlaybackFragment : Fragment() {
         progress = view.findViewById(R.id.progress)
         playBtn = view.findViewById(R.id.playBtn)
         countText = view.findViewById(R.id.countText)
+        percentText = view.findViewById(R.id.percentText)
         speedSpinner = view.findViewById(R.id.speedSpinner)
         scrubber = view.findViewById(R.id.scrubber)
         stPoints = view.findViewById(R.id.stPoints)
         stDuration = view.findViewById(R.id.stDuration)
         stDistance = view.findViewById(R.id.stDistance)
+        stMaxSpeed = view.findViewById(R.id.stMaxSpeed)
+        stAvgSpeed = view.findViewById(R.id.stAvgSpeed)
+        stAltGain = view.findViewById(R.id.stAltGain)
         pbRange = view.findViewById(R.id.pbRange)
         pointList = view.findViewById(R.id.pointList)
+        btnExport = view.findViewById(R.id.btnExport)
+        btnLoop = view.findViewById(R.id.btnLoop)
+        btnFollow = view.findViewById(R.id.btnFollow)
+        btnEnd = view.findViewById(R.id.btnEnd)
+        btnDateRange = view.findViewById(R.id.btnDateRange)
+        btnClearDate = view.findViewById(R.id.btnClearDate)
+        btnMapType = view.findViewById(R.id.btnMapType)
 
         setupMap()
-        val speeds = arrayOf("1x", "2x", "4x", "8x", "16x", "32x")
+        val speeds = arrayOf("1x", "2x", "4x", "8x", "16x", "32x", "64x", "128x")
         speedSpinner?.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, speeds)
         speedSpinner?.setSelection(2)
 
         playBtn?.setOnClickListener { togglePlay() }
+        btnEnd?.setOnClickListener { jumpToEnd() }
+        btnExport?.setOnClickListener { exportTrail() }
+        btnLoop?.setOnClickListener { toggleLoop() }
+        btnFollow?.setOnClickListener { toggleFollow() }
+        btnMapType?.setOnClickListener { toggleMapType() }
+        btnDateRange?.setOnClickListener { showDateRangePicker() }
+        btnClearDate?.setOnClickListener { clearDateRange() }
+
         scrubber?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
                 if (fromUser && points.size >= 2) {
@@ -112,11 +156,12 @@ class LocationPlaybackFragment : Fragment() {
     }
 
     private fun togglePlay() {
-        if (points.size < 2) return
+        val pts = getDisplayPoints()
+        if (pts.size < 2) return
         playing = !playing
         if (playing) {
-            if (segFrom >= points.size - 1) { segFrom = 0; segTo = 1 }
-            segStartElapsed = SystemClock.elapsedRealtime()
+            if (segFrom >= pts.size - 1) { segFrom = 0; segTo = 1; segStartElapsed = SystemClock.elapsedRealtime(); totalDurationMs = 0L }
+            segStartElapsed = SystemClock.elapsedRealtime() - totalDurationMs
             startPlaybackLoop()
             playBtn?.text = "\u23F8 Pause"
         } else {
@@ -125,13 +170,125 @@ class LocationPlaybackFragment : Fragment() {
         }
     }
 
+    private fun getDisplayPoints(): List<PlayPoint> = if (filteredPoints.isNotEmpty()) filteredPoints else points
+
+    private fun jumpToEnd() {
+        val pts = getDisplayPoints()
+        if (pts.size < 2) return
+        stopPlaybackLoop()
+        playing = false
+        segFrom = pts.size - 2
+        segTo = pts.size - 1
+        segStartElapsed = SystemClock.elapsedRealtime()
+        totalDurationMs = pts.last().ts - pts.first().ts
+        updateMarkerTo(pts.last())
+        playBtn?.text = "\u25B6 Play"
+    }
+
+    private fun toggleLoop() {
+        loopMode = !loopMode
+        btnLoop?.setColorFilter(if (loopMode) android.graphics.Color.parseColor("#ffca28") else android.graphics.Color.parseColor("#8b949e"), android.graphics.PorterDuff.Mode.SRC_IN)
+        Toast.makeText(context, if (loopMode) "Loop mode ON" else "Loop mode OFF", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun toggleFollow() {
+        autoFollow = !autoFollow
+        btnFollow?.setColorFilter(if (autoFollow) android.graphics.Color.parseColor("#ffca28") else android.graphics.Color.parseColor("#8b949e"), android.graphics.PorterDuff.Mode.SRC_IN)
+        Toast.makeText(context, if (autoFollow) "Auto-follow ON" else "Auto-follow OFF", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun toggleMapType() {
+        isSatellite = !isSatellite
+        val map = map ?: return
+        if (isSatellite) {
+            map.setTileSource(object : org.osmdroid.tileprovider.tilesource.XYTileSource(
+                "Satellite", 0, 20, 256, ".jpg",
+                arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/")
+            ) {
+                override fun getTileURLString(p: Long): String {
+                    val x = p % 256
+                    val y = (p / 256) % 256
+                    val z = p / (256 * 256)
+                    return "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$z/$y/$x"
+                }
+            })
+        } else {
+            map.setTileSource(org.osmdroid.tileprovider.tilesource.TileSourceFactory.MAPNIK)
+        }
+        map.invalidate()
+        btnMapType?.setColorFilter(if (isSatellite) android.graphics.Color.parseColor("#ffca28") else android.graphics.Color.parseColor("#8b949e"), android.graphics.PorterDuff.Mode.SRC_IN)
+        Toast.makeText(context, if (isSatellite) "Satellite view" else "Map view", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showDateRangePicker() {
+        val picker = MaterialDatePicker.Builder.dateRangePicker()
+            .setTitleText("Select date range")
+            .build()
+        picker.addOnPositiveButtonClickListener { selection ->
+            dateRangeStart = selection.first
+            dateRangeEnd = selection.second
+            updateDateRangeButton()
+            applyDateFilter()
+        }
+        picker.show(parentFragmentManager, "date_range_picker")
+    }
+
+    private fun clearDateRange() {
+        dateRangeStart = null
+        dateRangeEnd = null
+        updateDateRangeButton()
+        applyDateFilter()
+    }
+
+    private fun updateDateRangeButton() {
+        val btn = btnDateRange ?: return
+        if (dateRangeStart != null && dateRangeEnd != null) {
+            val sdf = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+            val start = sdf.format(java.util.Date(dateRangeStart!!))
+            val end = sdf.format(java.util.Date(dateRangeEnd!!))
+            btn.text = "$start \u2192 $end"
+            btn.visibility = View.VISIBLE
+            btnClearDate?.visibility = View.VISIBLE
+        } else {
+            btn.text = "All dates"
+            btnClearDate?.visibility = View.GONE
+        }
+    }
+
+    private fun applyDateFilter() {
+        if (points.isEmpty()) return
+        filteredPoints = if (dateRangeStart != null && dateRangeEnd != null) {
+            points.filter { it.ts >= dateRangeStart!! && it.ts <= dateRangeEnd!! }
+        } else {
+            points
+        }
+        renderPlayback()
+        Toast.makeText(context, "${filteredPoints.size} of ${points.size} points shown", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun exportTrail() {
+        if (points.isEmpty()) return
+        val gpx = buildString {
+            appendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+            appendLine("<gpx version=\"1.1\" creator=\"KojoScope\">")
+            appendLine("<trk><name>Location Playback</name><trkseg>")
+            for (p in points) {
+                appendLine("<trkpt lat=\"${p.lat}\" lon=\"${p.lng}\"><ele>${p.altitude}</ele><time>${p.ts}</time></trkpt>")
+            }
+            appendLine("</trkseg></trk></gpx>")
+        }
+        val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("GPX Trail", gpx))
+        Toast.makeText(context, "GPX trail copied to clipboard (${points.size} points)", Toast.LENGTH_SHORT).show()
+    }
+
     private fun startPlaybackLoop() {
         stopPlaybackLoop()
+        val pts = getDisplayPoints()
         playbackJob = CoroutineScope(Dispatchers.Main).launch {
             while (isActive && playing) {
                 val speed = speedMultiplier()
                 val elapsed = (SystemClock.elapsedRealtime() - segStartElapsed) * speed
-                val pts = points
                 if (pts.size < 2) break
                 var gap = pts[segTo].ts - pts[segFrom].ts
                 if (gap <= 0) gap = 1000
@@ -142,8 +299,14 @@ class LocationPlaybackFragment : Fragment() {
                     segTo = (segTo + 1).coerceAtMost(pts.size - 1)
                     if (segFrom >= pts.size - 1) {
                         updatePlaybackDisplay(pts.last(), pts.size - 1, 1.0)
-                        segFrom = 0; segTo = 1; segStartElapsed = SystemClock.elapsedRealtime(); t = 0.0
-                        continue
+                        if (loopMode) {
+                            segFrom = 0; segTo = 1; segStartElapsed = SystemClock.elapsedRealtime(); t = 0.0; totalDurationMs = 0L
+                            continue
+                        } else {
+                            playing = false
+                            playBtn?.text = "\u25B6 Play"
+                            break
+                        }
                     }
                     segStartElapsed = SystemClock.elapsedRealtime()
                     t = 0.0
@@ -155,27 +318,40 @@ class LocationPlaybackFragment : Fragment() {
     }
 
     private fun updatePlaybackDisplay(from: PlayPoint, idx: Int, frac: Double) {
-        val pts = points
+        val pts = getDisplayPoints()
         val to = pts[(idx + 1).coerceAtMost(pts.size - 1)]
         val lat = lerp(from.lat, to.lat, frac)
         val lng = lerp(from.lng, to.lng, frac)
         val geo = GeoPoint(lat, lng)
-        marker?.position = geo
-        countText?.text = "${idx + 1}/${pts.size}"
-        scrubber?.progress = ((idx + frac) / (pts.size - 1) * 1000).toInt()
-        panIfNeeded(geo)
+        playheadMarker?.position = geo
+        if (autoFollow) panIfNeeded(geo)
+        val totalPts = pts.size
+        val currentPoint = idx + 1
+        val percent = if (totalPts > 1) ((currentPoint + frac) / totalPts * 100).toInt() else 0
+        countText?.text = "$currentPoint/$totalPts"
+        percentText?.text = "$percent%"
+        scrubber?.progress = ((currentPoint + frac) / totalPts * 1000).toInt()
+        val elapsed = pts[idx].ts - pts.first().ts
+        val remaining = pts.last().ts - pts[idx].ts
+        pbRange?.text = "${formatDurHms(elapsed)} / ${formatDurHms(pts.last().ts - pts.first().ts)} (${percent}%)"
     }
 
     private fun updateMarkerTo(p: PlayPoint) {
-        marker?.position = GeoPoint(p.lat, p.lng)
-        countText?.text = "${points.indexOf(p) + 1}/${points.size}"
-        val i = points.indexOf(p)
-        if (i >= 0 && points.size > 1) scrubber?.progress = (i.toDouble() / (points.size - 1) * 1000).toInt()
-        panIfNeeded(GeoPoint(p.lat, p.lng))
+        playheadMarker?.position = GeoPoint(p.lat, p.lng)
+        val pts = getDisplayPoints()
+        val idx = pts.indexOf(p)
+        val totalPts = pts.size
+        val currentPoint = idx + 1
+        val percent = if (totalPts > 1) (currentPoint.toDouble() / totalPts * 100).toInt() else 0
+        countText?.text = "$currentPoint/$totalPts"
+        percentText?.text = "$percent%"
+        if (idx >= 0 && pts.size > 1) scrubber?.progress = (idx.toDouble() / (pts.size - 1) * 1000).toInt()
+        if (autoFollow) panIfNeeded(GeoPoint(p.lat, p.lng))
+        pbRange?.text = "${formatDurHms(p.ts - pts.first().ts)} / ${formatDurHms(pts.last().ts - pts.first().ts)} (${percent}%)"
     }
 
     private fun panIfNeeded(geo: GeoPoint) {
-        map?.controller?.animateTo(geo)
+        if (autoFollow) map?.controller?.animateTo(geo)
     }
 
     private fun speedMultiplier(): Long {
@@ -215,15 +391,27 @@ class LocationPlaybackFragment : Fragment() {
     }
 
     private fun renderPlayback() {
-        val pts = points
+        val pts = getDisplayPoints()
+        clearWaypoints()
         if (pts.isEmpty()) {
             countText?.text = "No history"
+            percentText?.text = "0%"
             pointList?.removeAllViews()
             return
         }
+
+        val totalDist = totalDistance(pts)
+        val avgSpeed = if (totalDist > 0 && pts.size > 1) totalDist / ((pts.last().ts - pts.first().ts) / 1000.0) else 0.0
+        val maxSpeed = pts.maxOfOrNull { it.speed } ?: 0.0
+        val altGain = calcAltitudeGain(pts)
+
         stPoints?.text = "${pts.size} pts"
         stDuration?.text = formatDurHms(pts.last().ts - pts.first().ts)
-        stDistance?.text = formatKm(totalDistance(pts))
+        stDistance?.text = formatKm(totalDist)
+        stMaxSpeed?.text = String.format("Max %.1f km/h", maxSpeed * 3.6)
+        stAvgSpeed?.text = String.format("Avg %.1f km/h", avgSpeed * 3.6)
+        stAltGain?.text = String.format("+%.1fm", altGain)
+
         val first = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).apply {
             timeZone = java.util.TimeZone.getTimeZone("Asia/Karachi")
         }.format(pts.first().ts)
@@ -232,8 +420,10 @@ class LocationPlaybackFragment : Fragment() {
         }.format(pts.last().ts)
         pbRange?.text = "$first \u2192 $last"
 
-        drawTrail(pts)
-        addMarker(pts.first())
+        drawGradientTrail(pts)
+        addWaypointMarker(pts.first(), R.color.success, "Start")
+        addWaypointMarker(pts.last(), R.color.danger, "End")
+        addPlayheadMarker(pts.first())
 
         pointList?.removeAllViews()
         val dayFmt = java.text.SimpleDateFormat("MMM dd, EEE", java.util.Locale.getDefault()).apply {
@@ -256,45 +446,115 @@ class LocationPlaybackFragment : Fragment() {
             val time = java.text.SimpleDateFormat("hh:mm:ss a", java.util.Locale.getDefault()).apply {
                 timeZone = java.util.TimeZone.getTimeZone("Asia/Karachi")
             }.format(p.ts)
+            val spd = if (p.speed > 0) String.format("%.1f km/h", p.speed * 3.6) else "--"
+            val alt = if (p.altitude != 0.0) String.format("%.1fm", p.altitude) else "--"
             row.text = buildString {
                 append(time)
-                if (p.speed > 0) append(" · ${String.format("%.1f", p.speed * 3.6)}km/h")
-                if (p.accuracy > 0) append(" · ±${p.accuracy.toInt()}m")
+                append(" \u2022 $spd")
+                append(" \u2022 $alt")
+                if (p.accuracy > 0) append(" \u2022 \u00B1${p.accuracy.toInt()}m")
             }
             row.setTextColor(resources.getColor(R.color.text_secondary))
             row.textSize = 12f
             row.setPadding(dp(4), dp(2), 0, dp(2))
+            val idx = i
+            row.setOnClickListener {
+                updateMarkerTo(pts[idx])
+                if (autoFollow) panIfNeeded(GeoPoint(pts[idx].lat, pts[idx].lng))
+            }
             pointList?.addView(row)
         }
     }
 
-    private fun countInDay(pts: List<PlayPoint>, day: String, fmt: java.text.SimpleDateFormat): Int {
-        return pts.count { fmt.format(it.ts) == day }
-    }
-
-    private fun drawTrail(pts: List<PlayPoint>) {
-        map?.overlays?.removeAll { it is Polyline && it === trail }
-        val poly = Polyline().apply {
-            setPoints(pts.map { GeoPoint(it.lat, it.lng) })
-            color = android.graphics.Color.parseColor("#ffca28")
-            width = 6f
+    private fun drawGradientTrail(pts: List<PlayPoint>) {
+        map?.overlays?.removeAll { it is Polyline && (it === trail || it === gradientTrail) }
+        if (pts.size < 2) return
+        val totalSegs = pts.size - 1
+        for (i in 0 until totalSegs) {
+            val t = i.toFloat() / totalSegs
+            val color = lerpColor(0xFF3FB950.toInt(), 0xFFF85149.toInt(), t)
+            val seg = Polyline().apply {
+                setPoints(listOf(GeoPoint(pts[i].lat, pts[i].lng), GeoPoint(pts[i + 1].lat, pts[i + 1].lng)))
+                this.color = color
+                this.width = 5f
+            }
+            map?.overlays?.add(seg)
         }
-        trail = poly
-        map?.overlays?.add(poly)
         map?.invalidate()
     }
 
-    private fun addMarker(p: PlayPoint) {
-        marker?.let { map?.overlays?.remove(it) }
+    private fun addPlayheadMarker(p: PlayPoint) {
+        playheadMarker?.let { map?.overlays?.remove(it) }
+        val pin = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(android.graphics.Color.parseColor("#ff0000"))
+            setSize(30, 30)
+        }
         val mk = Marker(map).apply {
             position = GeoPoint(p.lat, p.lng)
             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+            icon = pin
             infoWindow = null
         }
-        marker = mk
+        playheadMarker = mk
         map?.overlays?.add(mk)
-        map?.controller?.setCenter(GeoPoint(p.lat, p.lng))
         map?.invalidate()
+    }
+
+    private fun addWaypointMarker(p: PlayPoint, colorRes: Int, label: String) {
+        val color = resources.getColor(colorRes)
+        val pin = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(color)
+            setSize(24, 24)
+        }
+        val mk = Marker(map).apply {
+            position = GeoPoint(p.lat, p.lng)
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+            icon = pin
+            infoWindow = null
+        }
+        map?.overlays?.add(mk)
+        waypointMarkers.add(mk)
+        map?.invalidate()
+    }
+
+    private fun clearWaypoints() {
+        waypointMarkers.forEach { map?.overlays?.remove(it) }
+        waypointMarkers.clear()
+        map?.overlays?.remove(trail)
+        map?.overlays?.remove(gradientTrail)
+        map?.overlays?.remove(playheadMarker)
+        trail = null
+        gradientTrail = null
+        playheadMarker = null
+        map?.invalidate()
+    }
+
+    private fun lerpColor(start: Int, end: Int, t: Float): Int {
+        val sr = (start shr 16) and 0xFF
+        val sg = (start shr 8) and 0xFF
+        val sb = start and 0xFF
+        val er = (end shr 16) and 0xFF
+        val eg = (end shr 8) and 0xFF
+        val eb = end and 0xFF
+        val r = (sr + (er - sr) * t).toInt()
+        val g = (sg + (eg - sg) * t).toInt()
+        val b = (sb + (eb - sb) * t).toInt()
+        return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+    }
+
+    private fun calcAltitudeGain(pts: List<PlayPoint>): Double {
+        var gain = 0.0
+        for (i in 1 until pts.size) {
+            val diff = pts[i].altitude - pts[i - 1].altitude
+            if (diff > 0) gain += diff
+        }
+        return gain
+    }
+
+    private fun countInDay(pts: List<PlayPoint>, day: String, fmt: java.text.SimpleDateFormat): Int {
+        return pts.count { fmt.format(it.ts) == day }
     }
 
     private suspend fun fetchHistory(): List<PlayPoint> {
@@ -323,7 +583,8 @@ class LocationPlaybackFragment : Fragment() {
                             lng = v.getDouble("lng"),
                             ts = ts,
                             accuracy = v.optDouble("accuracy", 0.0),
-                            speed = v.optDouble("speed", 0.0)
+                            speed = v.optDouble("speed", 0.0),
+                            altitude = v.optDouble("altitude", 0.0)
                         ))
                     } else {
                         collectLeafs(v, out)
@@ -379,7 +640,7 @@ class LocationPlaybackFragment : Fragment() {
         playing = false
         stopPlaybackLoop()
         pollJob?.cancel()
-        map?.overlays?.clear()
+        clearWaypoints()
         map?.onDetach()
         map = null
     }
