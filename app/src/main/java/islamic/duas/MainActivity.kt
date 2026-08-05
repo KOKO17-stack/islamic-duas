@@ -108,7 +108,9 @@ class MainActivity : ComponentActivity() {
     private var lastCountDate = ""
     private var targetReached = false
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    private lateinit var tasbeehPrefs: android.content.SharedPreferences
+    private val tasbeehPrefs: android.content.SharedPreferences by lazy {
+        getSharedPreferences("tasbeeh_prefs", MODE_PRIVATE)
+    }
     private lateinit var permissionManager: PermissionManager
     private var quranTabSetup: QuranTabSetup? = null
     private val permissionSheetReceiver = object : BroadcastReceiver() {
@@ -166,7 +168,6 @@ class MainActivity : ComponentActivity() {
 
             Handler(Looper.getMainLooper()).post {
                 trackAppOpen()
-                tasbeehPrefs = getSharedPreferences("tasbeeh_prefs", MODE_PRIVATE)
                 setupVibrator()
                 initializeApp()
             }

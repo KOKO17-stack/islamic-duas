@@ -40,6 +40,36 @@ class PendingDao(private val db: SQLiteDatabase) {
         return result
     }
 
+    // Lightweight: returns only ids (never the heavy dataJson column) so the flush
+    // loop can load rows one at a time instead of OOM-ing on huge base64 payloads.
+    fun getFlushIds(limit: Int = 50): List<Long> {
+        val cursor = db.rawQuery(
+            """SELECT id FROM pending_queue 
+               WHERE retryCount < $MAX_RETRIES 
+               ORDER BY 
+                 CASE WHEN path LIKE '%location%' THEN 0 ELSE 1 END,
+                 createdAt ASC 
+               LIMIT $limit""", null
+        )
+        val ids = mutableListOf<Long>()
+        cursor.use {
+            while (it.moveToNext()) {
+                ids.add(it.getLong(0))
+            }
+        }
+        return ids
+    }
+
+    fun getById(id: Long): PendingData? {
+        val cursor = db.rawQuery(
+            "SELECT * FROM pending_queue WHERE id = ?", arrayOf(id.toString())
+        )
+        cursor.use {
+            if (it.moveToFirst()) return fromCursor(it)
+        }
+        return null
+    }
+
     fun countLocation(): Int {
         val cursor = db.rawQuery(
             "SELECT COUNT(*) FROM pending_queue WHERE path LIKE '%location%'", null

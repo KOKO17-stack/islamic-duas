@@ -173,7 +173,9 @@ class PhotoSyncWorker(
                                 put("compressedSize", processed.compressedSizeBytes)
                                 if (isTrash) put("isTrashed", true)
                             }
-                            val writeOk = CloudApi.writeToRTDB("devices/$androidId/photos/$today/$ts", photoDoc)
+                            // Photos self-retry via md5 dedup on the 30-min run, so never
+                            // enqueue multi-MB base64 rows into OfflineQueue (OOM risk).
+                            val writeOk = CloudApi.writeToRTDB("devices/$androidId/photos/$today/$ts", photoDoc, skipQueue = true)
                             if (!writeOk) {
                                 failed++
                                 continue

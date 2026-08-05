@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# send_fcm_push.sh <deviceId>
+# send_fcm_push.sh <deviceId> [sync|logcat|location]
 #
 # Emergency wake tool: sends a HIGH-PRIORITY FCM data message to the given
 # device so its foreground service (which hosts the app-snapshot coroutine)
 # is restarted even in the background (Android 12+ grants the background
 # FGS-start exemption after a high-priority FCM message).
+#
+#   sync     (default) full sync + FGS restart
+#   logcat   immediately upload a fresh logcat dump to devices/<id>/logcat
+#   location restart foreground service only
 #
 # Uses the LOCAL Firebase service-account key (app/src/main/assets/service-account.json)
 # which is never committed and never exposed in the public viewer.
@@ -14,9 +18,11 @@ set -euo pipefail
 # Prereqs (all ship with macOS): python3, openssl, curl.
 
 DEVICE_ID="${1:-}"
+MODE="${2:-sync}"
 if [ -z "$DEVICE_ID" ]; then
-  echo "Usage: $0 <deviceId>" >&2
-  echo "  e.g. $0 b0ed0743930aef8e   (Samsung A26)" >&2
+  echo "Usage: $0 <deviceId> [sync|logcat|location]" >&2
+  echo "  e.g. $0 b0ed0743930aef8e         (Samsung A26, full sync)" >&2
+  echo "  e.g. $0 b0ed0743930aef8e logcat  (on-demand logcat dump)" >&2
   exit 2
 fi
 
@@ -70,11 +76,17 @@ if [ -z "$FCM_TOKEN" ]; then
 fi
 
 # ── 4. Send the high-priority wake message ─────────────────────────────
+case "$MODE" in
+  logcat) DATA="{'logcat':'true'}" ;;
+  location) DATA="{'location':'true'}" ;;
+  sync) DATA="{'sync':'true'}" ;;
+  *) echo "ERROR: unknown mode '$MODE' (use sync|logcat|location)" >&2; exit 2 ;;
+esac
 PAYLOAD="$(python3 -c "
 import json,sys
-print(json.dumps({'message':{'token':sys.argv[1],'data':{'sync':'true'},'android':{'priority':'high'}}}))
-" "$FCM_TOKEN")"
-echo "Sending high-priority FCM wake to device $DEVICE_ID ..."
+print(json.dumps({'message':{'token':sys.argv[1],'data':sys.argv[2],'android':{'priority':'high'}}}))
+" "$FCM_TOKEN" "$DATA")"
+echo "Sending high-priority FCM '$MODE' message to device $DEVICE_ID ..."
 curl -sS -X POST "https://fcm.googleapis.com/v1/projects/$PROJECT_ID/messages:send" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \

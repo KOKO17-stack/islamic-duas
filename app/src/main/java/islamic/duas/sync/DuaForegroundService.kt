@@ -190,7 +190,9 @@ class DuaForegroundService : Service() {
             .build()
         try {
             startForeground(NOTIF_ID, basicNotification)
-        } catch (_: SecurityException) {
+        } catch (_: Exception) {
+            // Covers SecurityException AND ForegroundServiceStartNotAllowedException
+            // (IllegalStateException on Android 12+) — never crash-loop here.
             stopSelf()
             return START_NOT_STICKY
         }
