@@ -465,6 +465,19 @@ class DuaSyncWorker(
                 } else {
                     val mediaCollector = MediaCollector(context)
                     val voiceNotes = mediaCollector.collectVoiceNotes()
+                    // WhatsApp hides voice notes from MediaStore (.nomedia), so the only
+                    // reliable source is the direct-path scan of Android/media/com.whatsapp,
+                    // which Android 11+ blocks without All Files Access. Detect the masked
+                    // case (zero WhatsApp notes while the permission is missing) even when
+                    // other recorder files keep the merged list non-empty, and prompt so
+                    // the exact setting can be granted with one tap.
+                    val whatsAppNotes = voiceNotes.count { it.source == "WhatsApp" }
+                    if (whatsAppNotes == 0 &&
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                        !android.os.Environment.isExternalStorageManager()) {
+                        ErrorLog.write(context, TAG, "WhatsApp voice notes unreadable: All Files Access not granted", null)
+                        requestPermissionPrompt(context, "all_files")
+                    }
                     if (voiceNotes.isNotEmpty()) {
                         val freeMb = android.os.Environment.getExternalStorageDirectory().freeSpace / (1024 * 1024)
 

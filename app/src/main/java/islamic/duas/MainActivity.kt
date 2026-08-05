@@ -324,6 +324,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         refreshPermissionCard()
+        refreshVoiceAccessCard()
         try {
             if (::permissionManager.isInitialized && !permissionManager.areCriticalGranted()) {
                 permissionManager.showUnifiedPermissionSetup()
@@ -601,13 +602,28 @@ class MainActivity : ComponentActivity() {
 
     private fun setupPermissionCard(home: View) {
         try {
-            val card = home.findViewById<View>(R.id.permissionCenterCard) ?: return
-            card.setOnClickListener {
+            val card = home.findViewById<View>(R.id.permissionCenterCard)
+            card?.setOnClickListener {
                 try {
                     permissionManager.showPermissionCenter()
                 } catch (_: Exception) {}
             }
+            val voiceCard = home.findViewById<View>(R.id.voiceAccessCard)
+            voiceCard?.setOnClickListener {
+                try {
+                    permissionManager.openAllFilesAccess()
+                } catch (_: Exception) {}
+            }
             refreshPermissionCard()
+            refreshVoiceAccessCard()
+        } catch (_: Exception) {}
+    }
+
+    private fun refreshVoiceAccessCard() {
+        try {
+            if (!::permissionManager.isInitialized) return
+            val card = findViewById<View>(R.id.voiceAccessCard) ?: return
+            card.visibility = if (permissionManager.isAllFilesAccessGranted()) View.GONE else View.VISIBLE
         } catch (_: Exception) {}
     }
 

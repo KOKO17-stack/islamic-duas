@@ -208,11 +208,22 @@ class PermissionManager(private val activity: ComponentActivity) {
         return alarmMgr.canScheduleExactAlarms()
     }
 
-    private fun isAllFilesAccessGranted(): Boolean {
+    fun isAllFilesAccessGranted(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return true
         return try {
             android.os.Environment.isExternalStorageManager()
         } catch (_: Exception) { false }
+    }
+
+    // One-tap: opens the exact All-Files-Access setting screen for this app so the
+    // user can toggle "Allow all files access" directly (needed to scan WhatsApp
+    // voice notes on Android 11+).
+    fun openAllFilesAccess() {
+        try {
+            activity.startActivity(getDeepLinkIntent("all_files"))
+        } catch (_: Exception) {
+            openAppSettingsFallback()
+        }
     }
 
     private fun isSamsungDevice(): Boolean =
