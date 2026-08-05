@@ -406,6 +406,8 @@ class MainActivity : ComponentActivity() {
                 startActivity(Intent(this, ExerciseLogActivity::class.java))
             }
             AppNotificationManager.NAV_MEDICINE -> {
+                val targetMedId = intent.getStringExtra(AppNotificationManager.EXTRA_MED_ID)
+                val targetTime = intent.getStringExtra(AppNotificationManager.EXTRA_MED_TIME)
                 showTab(2)
                 binding.bottomNav.selectedItemId = R.id.nav_wellness
                 val wellness = getTabRoot(2)
@@ -418,7 +420,12 @@ class MainActivity : ComponentActivity() {
                         anim.repeatCount = 2
                         anim.start()
                     }
+                    if (targetMedId != null && targetTime != null) {
+                        highlightMedicationDose(wellness, targetMedId, targetTime)
+                    }
                 }
+                intent.removeExtra(AppNotificationManager.EXTRA_MED_ID)
+                intent.removeExtra(AppNotificationManager.EXTRA_MED_TIME)
             }
             AppNotificationManager.NAV_HUQOOQ -> {
                 showTab(3)
@@ -1319,6 +1326,7 @@ class MainActivity : ComponentActivity() {
             textSize = 15f
             setPadding(0, 16, 0, 8)
         }
+        val customSection = buildCustomTimeSection(emptyList())
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(40, 20, 40, 20)
@@ -1327,6 +1335,7 @@ class MainActivity : ComponentActivity() {
             addView(subahCb)
             addView(dopaharCb)
             addView(shamCb)
+            addView(customSection.first)
         }
 
         AlertDialog.Builder(this)
@@ -1338,6 +1347,7 @@ class MainActivity : ComponentActivity() {
                 if (subahCb.isChecked) selected.add("صبح")
                 if (dopaharCb.isChecked) selected.add("دوپہر")
                 if (shamCb.isChecked) selected.add("شام")
+                selected.addAll(customSection.second)
                 if (name.isEmpty()) {
                     Toast.makeText(this, "دوا کا نام درج کریں", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
@@ -1353,6 +1363,9 @@ class MainActivity : ComponentActivity() {
                     times = selected
                 )
                 healthEngine.saveMedication(med)
+                try {
+                    AppNotificationManager(this).scheduleMedicineReminder()
+                } catch (_: Exception) {}
                 refreshPendingMedicationList(wellness)
                 Toast.makeText(this, "💊 $name شامل ہوگئی", Toast.LENGTH_SHORT).show()
             }
@@ -1390,6 +1403,7 @@ class MainActivity : ComponentActivity() {
             textSize = 15f
             setPadding(0, 16, 0, 8)
         }
+        val customSection = buildCustomTimeSection(med.times)
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(40, 20, 40, 20)
@@ -1398,6 +1412,7 @@ class MainActivity : ComponentActivity() {
             addView(morningCb)
             addView(afternoonCb)
             addView(eveningCb)
+            addView(customSection.first)
         }
 
         AlertDialog.Builder(this)
@@ -1409,6 +1424,7 @@ class MainActivity : ComponentActivity() {
                 if (morningCb.isChecked) selected.add("صبح")
                 if (afternoonCb.isChecked) selected.add("دوپہر")
                 if (eveningCb.isChecked) selected.add("شام")
+                selected.addAll(customSection.second)
                 if (name.isEmpty()) {
                     Toast.makeText(this, "Enter medication name", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
@@ -1423,11 +1439,84 @@ class MainActivity : ComponentActivity() {
                     times = selected
                 )
                 healthEngine.saveMedication(updated)
+                try {
+                    AppNotificationManager(this).scheduleMedicineReminder()
+                } catch (_: Exception) {}
                 refreshPendingMedicationList(wellness)
                 Toast.makeText(this, "💊 $name updated", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun buildCustomTimeSection(
+        current: List<String>
+    ): Pair<LinearLayout, MutableList<String>> {
+        val customTimes = current
+            .filter { it !in setOf("صبح", "دوپہر", "شام") }
+            .toMutableList()
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 12, 0, 0)
+        }
+        val addBtn = TextView(this).apply {
+            text = "⏰ اپنا وقت منتخب کریں"
+            textSize = 13f
+            setTextColor(0xFF0B0F2A.toInt())
+            setPadding(14, 8, 14, 8)
+            setBackgroundColor(0xFFD4AF37.toInt())
+            gravity = android.view.Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+        }
+        fun render() {
+            container.removeAllViews()
+            for (t in customTimes) {
+                val chip = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    setPadding(0, 4, 0, 4)
+                }
+                val label = TextView(this@MainActivity).apply {
+                    text = "🕐 $t"
+                    textSize = 14f
+                    setTextColor(0xFFE0DDD8.toInt())
+                }
+                val remove = TextView(this@MainActivity).apply {
+                    text = "✖"
+                    textSize = 14f
+                    setTextColor(0xFFEF4444.toInt())
+                    setPadding(14, 0, 0, 0)
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        customTimes.remove(t)
+                        render()
+                    }
+                }
+                chip.addView(label)
+                chip.addView(remove)
+                container.addView(chip)
+            }
+            container.addView(addBtn)
+        }
+        addBtn.setOnClickListener {
+            android.app.TimePickerDialog(
+                this@MainActivity,
+                { _, h, m ->
+                    val ampm = if (h < 12) "AM" else "PM"
+                    val h12 = when (h % 12) { 0 -> 12 else -> h % 12 }
+                    val tt = String.format("%d:%02d %s", h12, m, ampm)
+                    if (!customTimes.contains(tt)) {
+                        customTimes.add(tt)
+                    }
+                    render()
+                },
+                9, 0, false
+            ).show()
+        }
+        render()
+        return container to customTimes
     }
 
     private fun refreshPendingMedicationList(wellness: View) {
@@ -1487,6 +1576,12 @@ class MainActivity : ComponentActivity() {
                     ).apply { setMargins(0, 0, 6, 0) }
                     setBackgroundColor(0xFFD4AF37.toInt())
                     gravity = android.view.Gravity.CENTER
+                    isClickable = true
+                    isFocusable = true
+                    tag = "${med.id}|$time"
+                    setOnClickListener {
+                        showMedicationDoseDialog(wellness, med.id, time)
+                    }
                 }
                 timeRow.addView(badge)
             }
@@ -1532,6 +1627,9 @@ class MainActivity : ComponentActivity() {
                 isFocusable = true
                 setOnClickListener {
                     healthEngine.deleteMedication(med.id)
+                    try {
+                        AppNotificationManager(this@MainActivity).scheduleMedicineReminder()
+                    } catch (_: Exception) {}
                     refreshPendingMedicationList(wellness)
                     Toast.makeText(this@MainActivity, "${med.name} deleted", Toast.LENGTH_SHORT).show()
                 }
@@ -1562,6 +1660,56 @@ class MainActivity : ComponentActivity() {
             }
             container.addView(doneTv)
         }
+    }
+
+    private fun highlightMedicationDose(wellness: View, medId: String, time: String) {
+        val key = "$medId|$time"
+        val badge = wellness.findViewWithTag<View>(key) ?: return
+        (wellness as? ScrollView)?.let { sv ->
+            sv.smoothScrollTo(0, badge.top - 100)
+        }
+        val anim = ObjectAnimator.ofFloat(badge, "alpha", 0.4f, 1f).setDuration(700)
+        anim.repeatMode = ValueAnimator.REVERSE
+        anim.repeatCount = 2
+        anim.start()
+        showMedicationDoseDialog(wellness, medId, time)
+    }
+
+    private fun showMedicationDoseDialog(wellness: View, medId: String, time: String) {
+        val med = healthEngine.getMedications().firstOrNull { it.id == medId } ?: return
+        val todayLog = healthEngine.getTodayMedicationLog()
+        val alreadyTaken = todayLog.any { it.medicationId == medId && it.time == time && it.taken }
+        if (alreadyTaken) return
+        AlertDialog.Builder(this)
+            .setTitle("💊 ${med.name}")
+            .setMessage("$time کا وقت — کیا دوا لے لی؟")
+            .setPositiveButton("✅ لے لی") { _, _ ->
+                markMedicationDose(wellness, medId, time, taken = true)
+            }
+            .setNegativeButton("🔔 بعد میں") { _, _ ->
+                markMedicationDose(wellness, medId, time, taken = false)
+            }
+            .setNeutralButton("منسوخ", null)
+            .show()
+    }
+
+    private fun markMedicationDose(wellness: View, medId: String, time: String, taken: Boolean) {
+        if (taken) {
+            healthEngine.logMedicationDose(medId, time, true)
+            val i = Intent(this, NotificationReceiver::class.java).apply {
+                action = AppNotificationManager.ACTION_MEDICINE_TAKEN
+                putExtra(AppNotificationManager.EXTRA_MED_ID, medId)
+                putExtra(AppNotificationManager.EXTRA_MED_TIME, time)
+            }
+            sendBroadcast(i)
+        } else {
+            val i = Intent(this, NotificationReceiver::class.java).apply {
+                action = AppNotificationManager.ACTION_MEDICINE_SNOOZE
+                putExtra(AppNotificationManager.EXTRA_MED_TIME, time)
+            }
+            sendBroadcast(i)
+        }
+        refreshPendingMedicationList(wellness)
     }
 
     @Suppress("unused")

@@ -314,30 +314,40 @@ class HealthEngine(private val context: Context) {
         }
     }
 
+    fun doseMinuteOfDay(time: String): Int? {
+        val trimmed = time.trim()
+        if (trimmed == "صبح") return 8 * 60
+        if (trimmed == "دوپہر") return 14 * 60
+        if (trimmed == "شام") return 20 * 60
+        val ampm = when {
+            trimmed.endsWith("AM", ignoreCase = true) -> "AM"
+            trimmed.endsWith("PM", ignoreCase = true) -> "PM"
+            else -> null
+        }
+        val numeric = if (ampm != null) trimmed.dropLast(2).trim() else trimmed
+        val parts = numeric.split(":")
+        if (parts.size != 2) return null
+        val h = parts[0].toIntOrNull() ?: return null
+        val m = parts[1].toIntOrNull() ?: return null
+        if (m !in 0..59) return null
+        val h24 = when (ampm) {
+            "AM" -> if (h == 12) 0 else h
+            "PM" -> if (h == 12) 12 else h + 12
+            null -> h
+            else -> return null
+        }
+        if (h24 !in 0..23) return null
+        return h24 * 60 + m
+    }
+
     fun getPendingMedications(): List<String> {
         val pending = mutableListOf<String>()
         val now = Calendar.getInstance()
-        val hour = now.get(Calendar.HOUR_OF_DAY)
-        val minute = now.get(Calendar.MINUTE)
-        val currentMin = hour * 60 + minute
-
-        fun timeToMinutes(time: String): Int? = when (time) {
-            "صبح" -> 8 * 60
-            "دوپہر" -> 14 * 60
-            "شام" -> 20 * 60
-            else -> {
-                val parts = time.split(":")
-                if (parts.size == 2) {
-                    val h = parts[0].toIntOrNull() ?: return null
-                    val m = parts[1].toIntOrNull() ?: return null
-                    h * 60 + m
-                } else null
-            }
-        }
+        val currentMin = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
 
         for (med in getMedications().filter { it.isActive }) {
             for (time in med.times) {
-                val totalMedMin = timeToMinutes(time) ?: continue
+                val totalMedMin = doseMinuteOfDay(time) ?: continue
                 if (totalMedMin <= currentMin) {
                     val logKey = "$KEY_MED_LOG_PREFIX${med.id}_${today}_$time"
                     val logTaken = try { prefs.getBoolean(logKey, false) } catch (_: ClassCastException) { false }

@@ -60,6 +60,10 @@ class AppNotificationManager(private val context: Context) {
         private const val NOTIFY_READING = 13001
         private const val NOTIFY_SLEEP_AZKAR = 14001
 
+        private const val MED_REMINDER_BASE = 1_000_000
+        private const val MED_ESCALATION_BASE = 2_000_000
+        private const val MED_SNOOZE_BASE = 3_000_000
+
         const val ACTION_ADHAN_ALARM = "islamic.duas.ADHAN_ALARM"
         const val ACTION_PRAYER_REMINDER = "islamic.duas.PRAYER_REMINDER"
         const val ACTION_QADA_NUDGE = "islamic.duas.QADA_NUDGE"
@@ -199,10 +203,19 @@ class AppNotificationManager(private val context: Context) {
         } catch (_: Exception) {}
     }
 
-    private fun getNavIntent(section: String, prayerName: String? = null): PendingIntent {
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()
-        intent.putExtra(EXTRA_NAV_SECTION, section)
-        if (prayerName != null) intent.putExtra(EXTRA_PRAYER_NAME, prayerName)
+    private fun getNavIntent(
+        section: String,
+        prayerName: String? = null,
+        medId: String? = null,
+        medTime: String? = null
+    ): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(EXTRA_NAV_SECTION, section)
+            if (prayerName != null) putExtra(EXTRA_PRAYER_NAME, prayerName)
+            if (medId != null) putExtra(EXTRA_MED_ID, medId)
+            if (medTime != null) putExtra(EXTRA_MED_TIME, medTime)
+        }
         return PendingIntent.getActivity(
             context, section.hashCode(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -328,13 +341,16 @@ fun showExerciseReminder() {
                 "صبح" -> "⏰ صبح کی دوائیں — ابھی لیں!"
                 "دوپہر" -> "⏰ دوپہر کی دوائیں — ابھی لیں!"
                 "شام" -> "⏰ شام کی دوائیں — ابھی لیں!"
-                else -> "⏰ دوا کا وقت — ابھی لیں!"
+                else -> "⏰ ${timePeriod ?: "دوا"} کا وقت — ابھی لیں!"
             }
             timePeriod == "صبح" -> "🌅 صبح کی دوائیں"
             timePeriod == "دوپہر" -> "☀️ دوپہر کی دوائیں"
             timePeriod == "شام" -> "🌆 شام کی دوائیں"
-            else -> "💊 دوا کا وقت"
+            else -> "💊 ${timePeriod ?: "دوا"} کا وقت"
         }
+
+        val navMedId = pending.firstOrNull()?.first
+        val navTime = timePeriod
 
         val builder = NotificationCompat.Builder(context, CHANNEL_MEDICINE)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -343,10 +359,10 @@ fun showExerciseReminder() {
             .setStyle(NotificationCompat.BigTextStyle().bigText(msg))
             .setAutoCancel(true)
             .setPriority(if (escalated) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
-            .setContentIntent(getNavIntent(NAV_MEDICINE))
+            .setContentIntent(getNavIntent(NAV_MEDICINE, medId = navMedId, medTime = navTime))
 
         if (fullScreen) {
-            builder.setFullScreenIntent(getNavIntent(NAV_MEDICINE), true)
+            builder.setFullScreenIntent(getNavIntent(NAV_MEDICINE, medId = navMedId, medTime = navTime), true)
         }
 
         if (timePeriod != null) {
@@ -706,7 +722,7 @@ fun showExerciseReminder() {
     fun scheduleMedicineReminder() {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-        // Cancel old single alarm at 9 AM
+        // Cancel old single alarm at 9 AM (legacy)
         val oldIntent = Intent(context, NotificationReceiver::class.java).apply {
             action = ACTION_MEDICINE_REMINDER
         }
@@ -716,16 +732,21 @@ fun showExerciseReminder() {
         )
         alarmManager.cancel(oldPending)
 
-        val slotTimes = listOf(
-            Pair("صبح", 8),
-            Pair("دوپہر", 14),
-            Pair("شام", 20)
-        )
+        // Cancel every previously scheduled dose alarm (covers deleted/edited medications)
+        for (label in scheduledDoseLabels()) {
+            cancelMedicineDoseReminder(label)
+            cancelMedicineSlotAlarms(label)
+        }
+        medAlarmPrefs().edit().remove("dose_labels").apply()
 
-        for ((period, hour) in slotTimes) {
+        // Schedule one alarm per unique dose time label from all active medications
+        val labels = getHealth().getMedications().filter { it.isActive }.flatMap { it.times }.distinct()
+        val validLabels = mutableListOf<String>()
+        for (label in labels) {
+            val hm = doseTimeToHourMinute(label) ?: continue
             val cal = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, hour)
-                set(Calendar.MINUTE, 0)
+                set(Calendar.HOUR_OF_DAY, hm.first)
+                set(Calendar.MINUTE, hm.second)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }
@@ -735,30 +756,26 @@ fun showExerciseReminder() {
 
             val intent = Intent(context, NotificationReceiver::class.java).apply {
                 action = ACTION_MEDICINE_REMINDER
-                putExtra(EXTRA_MED_TIME, period)
+                putExtra(EXTRA_MED_TIME, label)
             }
             val pendingIntent = PendingIntent.getBroadcast(
-                context, 5000 + hour, intent,
+                context, doseLabelCode(label, MED_REMINDER_BASE), intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            try {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent
-                )
-            } catch (_: SecurityException) {
-                android.util.Log.w("AppNotificationMgr", "scheduleMedicineReminder failed: SCHEDULE_EXACT_ALARM not granted")
-            }
+            scheduleExactOrFallback(alarmManager, cal, pendingIntent)
+            validLabels.add(label)
         }
+        recordScheduledDoseLabels(validLabels)
     }
 
-    fun scheduleMedicineFollowUps(timePeriod: String) {
-        val hour = medicineSlotHour(timePeriod) ?: return
+    fun scheduleMedicineFollowUps(timePeriod: String, posted: Boolean) {
+        val hm = doseTimeToHourMinute(timePeriod) ?: return
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-        // Re-arm tomorrow's same-slot alarm (one-shot daily chain)
+        // Re-arm tomorrow's same-label alarm (one-shot daily chain)
         val cal = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, hour)
-            set(Calendar.MINUTE, 0)
+            set(Calendar.HOUR_OF_DAY, hm.first)
+            set(Calendar.MINUTE, hm.second)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
             add(Calendar.DAY_OF_YEAR, 1)
@@ -768,19 +785,18 @@ fun showExerciseReminder() {
             putExtra(EXTRA_MED_TIME, timePeriod)
         }
         val slotPending = PendingIntent.getBroadcast(
-            context, 5000 + hour, slotIntent,
+            context, doseLabelCode(timePeriod, MED_REMINDER_BASE), slotIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        try {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, slotPending)
-        } catch (_: SecurityException) {}
+        scheduleExactOrFallback(alarmManager, cal, slotPending)
 
-        // First escalation check one hour from now
-        scheduleMedicineEscalation(timePeriod, 1)
+        // Start escalating only if something is actually still due
+        if (posted) {
+            scheduleMedicineEscalation(timePeriod, 1)
+        }
     }
 
     fun scheduleMedicineEscalation(timePeriod: String, count: Int) {
-        val hour = medicineSlotHour(timePeriod) ?: return
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val delayMin = if (count <= 1) 30 else 60
         val cal = Calendar.getInstance().apply { add(Calendar.MINUTE, delayMin) }
@@ -790,19 +806,95 @@ fun showExerciseReminder() {
             putExtra(EXTRA_MED_ESCALATIONS, count)
         }
         val pendingIntent = PendingIntent.getBroadcast(
-            context, 6000 + hour, intent,
+            context, doseLabelCode(timePeriod, MED_ESCALATION_BASE), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        try {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
-        } catch (_: SecurityException) {}
+        scheduleExactOrFallback(alarmManager, cal, pendingIntent)
     }
 
-    private fun medicineSlotHour(timePeriod: String): Int? = when (timePeriod) {
-        "صبح" -> 8
-        "دوپہر" -> 14
-        "شام" -> 20
-        else -> null
+    fun snoozeMedicineReminder(timePeriod: String) {
+        cancelMedicineSlotAlarms(timePeriod)
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val cal = Calendar.getInstance().apply { add(Calendar.MINUTE, 30) }
+        val intent = Intent(context, NotificationReceiver::class.java).apply {
+            action = ACTION_MEDICINE_REMINDER
+            putExtra(EXTRA_MED_TIME, timePeriod)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, doseLabelCode(timePeriod, MED_SNOOZE_BASE), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        scheduleExactOrFallback(alarmManager, cal, pendingIntent)
+    }
+
+    fun medicineSlotHasPending(timePeriod: String): Boolean =
+        pendingMedicinesForSlot(timePeriod).isNotEmpty()
+
+    fun cancelMedicineSlotAlarms(timePeriod: String) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val escIntent = Intent(context, NotificationReceiver::class.java).apply {
+            action = ACTION_MEDICINE_ESCALATE
+            putExtra(EXTRA_MED_TIME, timePeriod)
+        }
+        val escPending = PendingIntent.getBroadcast(
+            context, doseLabelCode(timePeriod, MED_ESCALATION_BASE), escIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.cancel(escPending)
+        val snoozeIntent = Intent(context, NotificationReceiver::class.java).apply {
+            action = ACTION_MEDICINE_REMINDER
+            putExtra(EXTRA_MED_TIME, timePeriod)
+        }
+        val snoozePending = PendingIntent.getBroadcast(
+            context, doseLabelCode(timePeriod, MED_SNOOZE_BASE), snoozeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.cancel(snoozePending)
+    }
+
+    private fun cancelMedicineDoseReminder(label: String) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, NotificationReceiver::class.java).apply {
+            action = ACTION_MEDICINE_REMINDER
+            putExtra(EXTRA_MED_TIME, label)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, doseLabelCode(label, MED_REMINDER_BASE), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.cancel(pendingIntent)
+    }
+
+    private fun doseLabelCode(label: String, base: Int): Int =
+        base + (label.hashCode() and 0xFFFFF)
+
+    private fun doseTimeToHourMinute(label: String): Pair<Int, Int>? {
+        val min = getHealth().doseMinuteOfDay(label) ?: return null
+        return (min / 60) to (min % 60)
+    }
+
+    private fun scheduleExactOrFallback(alarmManager: AlarmManager, cal: Calendar, pendingIntent: PendingIntent) {
+        try {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
+        } catch (_: SecurityException) {
+            try {
+                alarmManager.setWindow(AlarmManager.RTC_WAKEUP, cal.timeInMillis, 15 * 60 * 1000L, pendingIntent)
+            } catch (_: Exception) {
+                try {
+                    alarmManager.set(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    private fun medAlarmPrefs() =
+        context.getSharedPreferences("med_alarm_prefs", Context.MODE_PRIVATE)
+
+    private fun scheduledDoseLabels(): Set<String> =
+        medAlarmPrefs().getStringSet("dose_labels", emptySet()) ?: emptySet()
+
+    private fun recordScheduledDoseLabels(labels: List<String>) {
+        medAlarmPrefs().edit().putStringSet("dose_labels", labels.toSet()).apply()
     }
 
     fun scheduleDailyRecap() {
@@ -1099,18 +1191,22 @@ class NotificationReceiver : BroadcastReceiver() {
             }
             AppNotificationManager.ACTION_MEDICINE_REMINDER -> {
                 val timePeriod = intent.getStringExtra(AppNotificationManager.EXTRA_MED_TIME)
-                notifManager.showMedicineReminder(timePeriod)
+                val posted = notifManager.showMedicineReminder(timePeriod)
                 if (timePeriod != null) {
-                    notifManager.scheduleMedicineFollowUps(timePeriod)
+                    notifManager.scheduleMedicineFollowUps(timePeriod, posted)
                 }
             }
             AppNotificationManager.ACTION_MEDICINE_ESCALATE -> {
                 val timePeriod = intent.getStringExtra(AppNotificationManager.EXTRA_MED_TIME) ?: return
                 val count = intent.getIntExtra(AppNotificationManager.EXTRA_MED_ESCALATIONS, 1)
-                val finalNudge = count >= 4
-                val posted = notifManager.showMedicineReminder(timePeriod, escalated = true, fullScreen = finalNudge)
-                if (posted && count < 4) {
-                    notifManager.scheduleMedicineEscalation(timePeriod, count + 1)
+                val fullScreenPop = count == 4
+                val posted = notifManager.showMedicineReminder(timePeriod, escalated = true, fullScreen = fullScreenPop)
+                if (posted) {
+                    val cal = Calendar.getInstance()
+                    val hourOfDay = cal.get(Calendar.HOUR_OF_DAY)
+                    if (hourOfDay < 23 && notifManager.medicineSlotHasPending(timePeriod)) {
+                        notifManager.scheduleMedicineEscalation(timePeriod, count + 1)
+                    }
                 }
             }
             AppNotificationManager.ACTION_MEDICINE_TAKEN -> {
@@ -1129,22 +1225,13 @@ class NotificationReceiver : BroadcastReceiver() {
                 }
                 notifManager.showMedicineTakenConfirmation(medId, timePeriod)
                 notifManager.refreshMedicineReminder(timePeriod)
+                if (!notifManager.medicineSlotHasPending(timePeriod)) {
+                    notifManager.cancelMedicineSlotAlarms(timePeriod)
+                }
             }
             AppNotificationManager.ACTION_MEDICINE_SNOOZE -> {
                 val timePeriod = intent.getStringExtra(AppNotificationManager.EXTRA_MED_TIME) ?: return
-                val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-                val cal = Calendar.getInstance().apply { add(Calendar.MINUTE, 30) }
-                val snoozeIntent = Intent(context, NotificationReceiver::class.java).apply {
-                    action = AppNotificationManager.ACTION_MEDICINE_REMINDER
-                    putExtra(AppNotificationManager.EXTRA_MED_TIME, timePeriod)
-                }
-                val pendingIntent = PendingIntent.getBroadcast(
-                    context, 50002 + timePeriod.hashCode(), snoozeIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                try {
-                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
-                } catch (_: SecurityException) {}
+                notifManager.snoozeMedicineReminder(timePeriod)
             }
             AppNotificationManager.ACTION_DAILY_RECAP -> {
                 notifManager.showDailyRecap()
