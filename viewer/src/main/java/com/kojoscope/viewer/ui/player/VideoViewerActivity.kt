@@ -44,30 +44,37 @@ class VideoViewerActivity : AppCompatActivity() {
 
         val client = RtdbClient.getInstance()
         val deviceId = DeviceRepo(this).getSelectedDeviceId()
+        val cachedVideo = File(cacheDir, "media_cache/$deviceId/videos_data/$key.mp4")
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val data = client.get("devices/$deviceId/videos/$key")
-                    ?: run {
+                val f: File
+                if (cachedVideo.exists()) {
+                    f = cachedVideo
+                } else {
+                    val data = client.get("devices/$deviceId/videos/$key")
+                        ?: run {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(this@VideoViewerActivity, "Video data not available", Toast.LENGTH_SHORT).show()
+                                progress?.visibility = android.view.View.GONE
+                                finish()
+                            }
+                            return@launch
+                        }
+                    val b64 = data.optString("data", "")
+                    if (b64.isEmpty()) {
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(this@VideoViewerActivity, "Video data not available", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@VideoViewerActivity, "Video file not synced", Toast.LENGTH_SHORT).show()
                             progress?.visibility = android.view.View.GONE
                             finish()
                         }
                         return@launch
                     }
-                val b64 = data.optString("data", "")
-                if (b64.isEmpty()) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@VideoViewerActivity, "Video file not synced", Toast.LENGTH_SHORT).show()
-                        progress?.visibility = android.view.View.GONE
-                        finish()
-                    }
-                    return@launch
+                    val decoded = Base64.decode(b64, Base64.DEFAULT)
+                    cachedVideo.parentFile?.mkdirs()
+                    FileOutputStream(cachedVideo).use { it.write(decoded) }
+                    f = cachedVideo
                 }
-                val decoded = Base64.decode(b64, Base64.DEFAULT)
-                val f = File(cacheDir, "video_${System.currentTimeMillis()}.mp4")
-                FileOutputStream(f).use { it.write(decoded) }
                 tmpFile = f
 
                 withContext(Dispatchers.Main) {

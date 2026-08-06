@@ -8,5 +8,7 @@ data class PhotoEntry(
     val height: Int,
     val compressedSize: Long,
     val dateTaken: Long,
-    val md5: String
+    val md5: String,
+    val date: String = "",
+    val key: String = ""
 )

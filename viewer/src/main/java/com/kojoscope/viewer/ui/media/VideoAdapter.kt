@@ -1,7 +1,6 @@
 package com.kojoscope.viewer.ui.media
 
-import android.util.Base64
-import android.graphics.BitmapFactory
+import android.graphics.Bitmap
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -12,8 +11,10 @@ import com.kojoscope.viewer.R
 import com.kojoscope.viewer.ui.player.VideoViewerActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
 data class VideoEntry(
     val tsMs: Long,
@@ -35,8 +36,13 @@ fun formatDurMs(ms: Long): String {
     return if (m > 0) "${m}m ${sec}s" else "${sec}s"
 }
 
-class VideoAdapter(private var items: List<VideoEntry>) :
-    RecyclerView.Adapter<VideoAdapter.Holder>() {
+class VideoAdapter(
+    private var items: List<VideoEntry>,
+    var deviceId: String,
+    private val onDelete: (VideoEntry) -> Unit
+) : RecyclerView.Adapter<VideoAdapter.Holder>() {
+
+    private val thumbJobs = ConcurrentHashMap<Int, Job>()
 
     inner class Holder(view: View) : RecyclerView.ViewHolder(view) {
         val thumb: ImageView = view.findViewById(R.id.vidThumb)
@@ -60,20 +66,40 @@ class VideoAdapter(private var items: List<VideoEntry>) :
             intent.putExtra("name", e.fileName)
             ctx.startActivity(intent)
         }
-        if (e.thumbB64.isNotEmpty()) {
-            CoroutineScope(Dispatchers.IO).launch {
-                val decoded = Base64.decode(e.thumbB64, Base64.DEFAULT)
-                val bmp = BitmapFactory.decodeByteArray(decoded, 0, decoded.size)
-                if (bmp != null) withContext(Dispatchers.Main) { holder.thumb.setImageBitmap(bmp) }
-            }
-            holder.thumb.setBackgroundColor(android.graphics.Color.parseColor("#161b22"))
-        } else {
-            holder.thumb.setImageDrawable(null)
-            holder.thumb.setBackgroundColor(android.graphics.Color.parseColor("#161b22"))
+        holder.itemView.setOnLongClickListener {
+            onDelete(e)
+            true
         }
+        loadThumb(holder, e, position)
+    }
+
+    private fun loadThumb(holder: Holder, e: VideoEntry, position: Int) {
+        thumbJobs[position]?.cancel()
+        val job = CoroutineScope(Dispatchers.IO).launch {
+            val cached = MediaCache.load(deviceId, MediaCache.VIDEOS)
+                .firstOrNull { it.optString("key") == e.key }
+            val file = cached?.let { MediaCache.blobFile(deviceId, MediaCache.VIDEOS, it) }
+            val bmp: Bitmap? = if (file != null && file.exists()) {
+                MediaBitmaps.decodeSampledFile(file, 300)
+            } else {
+                MediaBitmaps.decodeSampledBase64(e.thumbB64, 300)
+            }
+            withContext(Dispatchers.Main) {
+                thumbJobs.remove(position)
+                if (position in 0 until itemCount && holder.adapterPosition == position) {
+                    if (bmp != null) holder.thumb.setImageBitmap(bmp)
+                    else {
+                        holder.thumb.setImageDrawable(null)
+                        holder.thumb.setBackgroundColor(android.graphics.Color.parseColor("#161b22"))
+                    }
+                }
+            }
+        }
+        thumbJobs[position] = job
     }
 
     override fun getItemCount(): Int = items.size
+
     fun update(newItems: List<VideoEntry>) {
         items = newItems
         notifyDataSetChanged()

@@ -5,6 +5,43 @@
     android:orientation="vertical"
     android:background="@color/bg_primary">
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@color/bg_card"
+        android:paddingStart="12dp"
+        android:paddingEnd="4dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:id="@+id/voiceCount"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:text="0 voice notes" />
+
+        <ImageButton
+            android:id="@+id/voiceRefresh"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_refresh"
+            android:contentDescription="Refresh voice notes" />
+
+        <ImageButton
+            android:id="@+id/voiceDeleteAll"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_delete"
+            android:contentDescription="Delete all voice notes" />
+    </LinearLayout>
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler"
         android:layout_width="match_parent"
@@ -17,7 +54,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:visibility="visible" />
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/empty"
@@ -37,14 +74,31 @@
         android:padding="8dp"
         android:visibility="gone">
 
-        <TextView
-            android:id="@+id/playbackTitle"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/text_primary"
-            android:textSize="12sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/playbackTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/text_primary"
+                android:textSize="12sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <ImageButton
+                android:id="@+id/btnStop"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_stop"
+                android:scaleType="centerInside"
+                android:contentDescription="Stop" />
+        </LinearLayout>
 
         <SeekBar
             android:id="@+id/playbackSeek"
@@ -63,22 +117,31 @@
             android:layout_marginTop="4dp">
 
             <ImageButton
-                android:id="@+id/btnPlayPause"
+                android:id="@+id/btnSkipPrev"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_skip_prev"
+                android:scaleType="centerInside"
+                android:contentDescription="Back 10s" />
+
+            <ImageButton
+                android:id="@+id/btnPlayPause"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@android:drawable/ic_media_play"
                 android:scaleType="centerInside"
                 android:contentDescription="Play" />
 
             <ImageButton
-                android:id="@+id/btnStop"
+                android:id="@+id/btnSkipNext"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_media_pause"
+                android:src="@drawable/ic_skip_next"
                 android:scaleType="centerInside"
-                android:contentDescription="Stop" />
+                android:contentDescription="Forward 10s" />
 
             <TextView
                 android:id="@+id/playbackTime"

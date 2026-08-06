@@ -10,6 +10,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
+import android.widget.AdapterView
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -18,10 +19,13 @@ import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.ScrollView
 import androidx.fragment.app.Fragment
 import com.kojoscope.viewer.R
 import com.kojoscope.viewer.net.DeviceRepo
 import com.kojoscope.viewer.net.RtdbClient
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,9 +33,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import org.osmdroid.config.Configuration
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
@@ -40,7 +46,16 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-data class PlayPoint(val lat: Double, val lng: Double, val ts: Long, val accuracy: Double, val speed: Double, val altitude: Double)
+data class PlayPoint(
+    val lat: Double,
+    val lng: Double,
+    val ts: Long,
+    val accuracy: Double,
+    val speed: Double,
+    val altitude: Double,
+    val source: String = "",
+    val isHighAccuracy: Boolean = false
+)
 
 class LocationPlaybackFragment : Fragment() {
 
@@ -51,6 +66,7 @@ class LocationPlaybackFragment : Fragment() {
     private var countText: TextView? = null
     private var percentText: TextView? = null
     private var speedSpinner: Spinner? = null
+    private var accuracySpinner: Spinner? = null
     private var scrubber: SeekBar? = null
     private var playheadTimeDisplay: TextView? = null
     private var stPoints: TextView? = null
@@ -84,16 +100,32 @@ class LocationPlaybackFragment : Fragment() {
         R.string.time_filter_all to null
     )
 
+    private data class AccuracyOption(val labelRes: Int, val gpsOnly: Boolean, val maxAccuracy: Int?)
+
+    private val accuracyOptions = listOf(
+        AccuracyOption(R.string.accuracy_filter_gps, true, null),
+        AccuracyOption(R.string.accuracy_filter_all, false, null),
+        AccuracyOption(R.string.accuracy_filter_10m, false, 10),
+        AccuracyOption(R.string.accuracy_filter_20m, false, 20),
+        AccuracyOption(R.string.accuracy_filter_30m, false, 30),
+        AccuracyOption(R.string.accuracy_filter_50m, false, 50),
+        AccuracyOption(R.string.accuracy_filter_100m, false, 100)
+    )
+
+    private val gpsSources = setOf("high_accuracy_gps", "gps", "away_tracker", "call_snapshot")
+
+    private fun isGpsPoint(p: PlayPoint): Boolean = p.isHighAccuracy || p.source in gpsSources
+
     private var points: List<PlayPoint> = emptyList()
     private var filteredPoints: List<PlayPoint> = emptyList()
     private var timeWindowMs: Long? = null
+    private var gpsOnly = false
+    private var maxAccuracyM: Int? = null
     private var isSatellite = false
     private var playing = false
     private var playbackJob: Job? = null
     private var pollJob: Job? = null
     private var playheadMarker: Marker? = null
-    private var trail: Polyline? = null
-    private var gradientTrail: Polyline? = null
     private var waypointMarkers: MutableList<Marker> = mutableListOf()
     private var segFrom = 0
     private var segTo = 1
@@ -101,8 +133,28 @@ class LocationPlaybackFragment : Fragment() {
     private var loopMode = false
     private var autoFollow = true
     private var totalDurationMs: Long = 0L
+    private var userPanned = false
+    private var pointListExpanded = false
+    private var pointListScroll: ScrollView? = null
+    private var pointListHeader: TextView? = null
+    private var roadMatched = false
+    private var roadGeometry: List<GeoPoint> = emptyList()
+    private var roadCum = DoubleArray(0)
+    private var anchorPos = DoubleArray(0)
+    private var anchorTs = LongArray(0)
+    private var lastMatchSig = ""
+    private var renderSeq = 0
+    private var trailOverlays: MutableList<Polyline> = mutableListOf()
+
+    private data class RoadMatch(
+        val geometry: List<GeoPoint>,
+        val cum: DoubleArray,
+        val anchorPos: DoubleArray,
+        val anchorTimes: LongArray
+    )
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
+        Configuration.getInstance().userAgentValue = "KojoScope/1.0 (Android)"
         Configuration.getInstance().load(
             requireContext(),
             requireContext().getSharedPreferences("osm_preferences", Context.MODE_PRIVATE)
@@ -120,6 +172,7 @@ class LocationPlaybackFragment : Fragment() {
         speedSpinner = view.findViewById(R.id.speedSpinner)
         scrubber = view.findViewById(R.id.scrubber)
         playheadTimeDisplay = view.findViewById(R.id.playheadTimeDisplay)
+        accuracySpinner = view.findViewById(R.id.accuracyFilterSpinner)
         stPoints = view.findViewById(R.id.stPoints)
         stDuration = view.findViewById(R.id.stDuration)
         stDistance = view.findViewById(R.id.stDistance)
@@ -128,6 +181,8 @@ class LocationPlaybackFragment : Fragment() {
         stAltGain = view.findViewById(R.id.stAltGain)
         pbRange = view.findViewById(R.id.pbRange)
         pointList = view.findViewById(R.id.pointList)
+        pointListScroll = view.findViewById(R.id.pointListScroll)
+        pointListHeader = view.findViewById(R.id.pointListHeader)
         btnExport = view.findViewById(R.id.btnExport)
         btnLoop = view.findViewById(R.id.btnLoop)
         btnFollow = view.findViewById(R.id.btnFollow)
@@ -140,6 +195,19 @@ class LocationPlaybackFragment : Fragment() {
         val speeds = arrayOf("1x", "2x", "4x", "8x", "16x", "32x", "64x", "128x")
         speedSpinner?.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, speeds)
         speedSpinner?.setSelection(2)
+
+        val accLabels = accuracyOptions.map { getString(it.labelRes) }.toTypedArray()
+        accuracySpinner?.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, accLabels)
+        accuracySpinner?.setSelection(1)
+        accuracySpinner?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val opt = accuracyOptions[position]
+                gpsOnly = opt.gpsOnly
+                maxAccuracyM = opt.maxAccuracy
+                applyFilters()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
         playBtn?.setOnClickListener { togglePlay() }
         btnEnd?.setOnClickListener { jumpToEnd() }
@@ -218,13 +286,13 @@ class LocationPlaybackFragment : Fragment() {
         val map = map ?: return
         if (isSatellite) {
             map.setTileSource(object : org.osmdroid.tileprovider.tilesource.XYTileSource(
-                "Satellite", 0, 20, 256, ".jpg",
+                "KojoSatellite", 0, 20, 256, ".jpg",
                 arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/")
             ) {
                 override fun getTileURLString(p: Long): String {
-                    val x = p % 256
-                    val y = (p / 256) % 256
-                    val z = p / (256 * 256)
+                    val z = MapTileIndex.getZoom(p)
+                    val x = MapTileIndex.getX(p)
+                    val y = MapTileIndex.getY(p)
                     return "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$z/$y/$x"
                 }
             })
@@ -245,8 +313,14 @@ class LocationPlaybackFragment : Fragment() {
                 val (_, window) = timeWindows[which]
                 timeWindowMs = window
                 dialog.dismiss()
-                updateTimeWindowButton()
-                applyTimeFilter()
+        updateTimeWindowButton()
+
+        setPointListHeight()
+        pointListHeader?.setOnClickListener {
+            pointListExpanded = !pointListExpanded
+            setPointListHeight()
+        }
+                applyFilters()
             }
             .setNegativeButton("Cancel", null)
             .show()
@@ -255,7 +329,7 @@ class LocationPlaybackFragment : Fragment() {
     private fun clearTimeWindow() {
         timeWindowMs = null
         updateTimeWindowButton()
-        applyTimeFilter()
+        applyFilters()
     }
 
     private fun updateTimeWindowButton() {
@@ -266,14 +340,24 @@ class LocationPlaybackFragment : Fragment() {
         btnClearDate?.visibility = if (timeWindowMs == null) View.GONE else View.VISIBLE
     }
 
-    private fun applyTimeFilter() {
+    private fun applyFilters(showToast: Boolean = true) {
         if (points.isEmpty()) return
-        filteredPoints = timeWindowMs?.let { win ->
-            val cutoff = System.currentTimeMillis() - win
-            points.filter { it.ts >= cutoff }
-        } ?: points
+        val now = System.currentTimeMillis()
+        filteredPoints = points.filter { p ->
+            val inWindow = timeWindowMs == null || p.ts >= now - timeWindowMs!!
+            val inAccuracy = if (gpsOnly) {
+                isGpsPoint(p)
+            } else {
+                val max = maxAccuracyM
+                max == null || (p.accuracy > 0 && p.accuracy <= max)
+            }
+            inWindow && inAccuracy
+        }
+        userPanned = false
         renderPlayback()
-        Toast.makeText(context, "${filteredPoints.size} of ${points.size} points shown", Toast.LENGTH_SHORT).show()
+        if (showToast) {
+            Toast.makeText(context, "${filteredPoints.size} of ${points.size} points shown", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun exportTrail() {
@@ -334,9 +418,10 @@ class LocationPlaybackFragment : Fragment() {
         val lng = lerp(from.lng, to.lng, frac)
         val ts = lerp(from.ts.toDouble(), to.ts.toDouble(), frac).toLong()
         val geo = GeoPoint(lat, lng)
-        playheadMarker?.position = geo
+        val target = roadGeoFor(ts, geo)
+        playheadMarker?.position = target
         updatePlayheadTime(ts)
-        if (autoFollow) panIfNeeded(geo)
+        if (autoFollow) panIfNeeded(target)
         val totalPts = pts.size
         val currentPoint = idx + 1
         val percent = if (totalPts > 1) ((currentPoint + frac) / totalPts * 100).toInt() else 0
@@ -349,7 +434,7 @@ class LocationPlaybackFragment : Fragment() {
     }
 
     private fun updateMarkerTo(p: PlayPoint) {
-        playheadMarker?.position = GeoPoint(p.lat, p.lng)
+        playheadMarker?.position = roadGeoFor(p.ts, GeoPoint(p.lat, p.lng))
         updatePlayheadTime(p.ts)
         val pts = getDisplayPoints()
         val idx = pts.indexOf(p)
@@ -389,6 +474,15 @@ class LocationPlaybackFragment : Fragment() {
         m.setMultiTouchControls(true)
         m.setBuiltInZoomControls(true)
         m.controller.setZoom(14.0)
+        m.addMapListener(org.osmdroid.events.DelayedMapListener(object : org.osmdroid.events.MapListener {
+            override fun onScroll(event: org.osmdroid.events.ScrollEvent): Boolean {
+                userPanned = true
+                return false
+            }
+            override fun onZoom(event: org.osmdroid.events.ZoomEvent): Boolean {
+                return false
+            }
+        }, 100))
     }
 
     private fun startPolling() {
@@ -408,11 +502,12 @@ class LocationPlaybackFragment : Fragment() {
         withContext(Dispatchers.Main) {
             progress?.visibility = View.GONE
             points = pts
-            renderPlayback()
+            applyFilters(showToast = false)
         }
     }
 
     private fun renderPlayback() {
+        val seq = ++renderSeq
         val pts = getDisplayPoints()
         clearWaypoints()
         if (pts.isEmpty()) {
@@ -420,6 +515,9 @@ class LocationPlaybackFragment : Fragment() {
             percentText?.text = "0%"
             pointList?.removeAllViews()
             return
+        }
+        if (!userPanned) {
+            map?.controller?.setCenter(GeoPoint(pts.last().lat, pts.last().lng))
         }
 
         stopPlaybackLoop()
@@ -491,14 +589,24 @@ class LocationPlaybackFragment : Fragment() {
             val idx = i
             row.setOnClickListener {
                 updateMarkerTo(pts[idx])
-                if (autoFollow) panIfNeeded(GeoPoint(pts[idx].lat, pts[idx].lng))
+                if (autoFollow) panIfNeeded(roadGeoFor(pts[idx].ts, GeoPoint(pts[idx].lat, pts[idx].lng)))
             }
             pointList?.addView(row)
+        }
+
+        val sig = "${pts.size}|${pts.first().ts}|${pts.last().ts}"
+        if (sig != lastMatchSig) {
+            lastMatchSig = sig
+            roadMatched = false
+            roadGeometry = emptyList()
+            roadCum = DoubleArray(0)
+            userPanned = false
+            matchRoadsAsync(pts, seq)
         }
     }
 
     private fun drawGradientTrail(pts: List<PlayPoint>) {
-        map?.overlays?.removeAll { it is Polyline && (it === trail || it === gradientTrail) }
+        removeTrailOverlays()
         if (pts.size < 2) return
         val totalSegs = pts.size - 1
         for (i in 0 until totalSegs) {
@@ -509,9 +617,43 @@ class LocationPlaybackFragment : Fragment() {
                 this.color = color
                 this.width = 5f
             }
+            trailOverlays.add(seg)
             map?.overlays?.add(seg)
         }
         map?.invalidate()
+    }
+
+    private fun drawRoadTrail() {
+        val g = roadGeometry
+        removeTrailOverlays()
+        if (g.size < 2) return
+        val total = g.size - 1
+        var i = 0
+        while (i < total) {
+            val end = (i + 60).coerceAtMost(total)
+            val color = lerpColor(0xFF3FB950.toInt(), 0xFFF85149.toInt(), ((i + end) / 2.0 / total).toFloat())
+            val seg = Polyline().apply {
+                setPoints(g.subList(i, end + 1))
+                this.color = color
+                this.width = 5f
+            }
+            trailOverlays.add(seg)
+            map?.overlays?.add(seg)
+            i = end
+        }
+        map?.invalidate()
+    }
+
+    private fun removeTrailOverlays() {
+        trailOverlays.forEach { map?.overlays?.remove(it) }
+        trailOverlays.clear()
+    }
+
+    private fun setPointListHeight() {
+        val h = dp(if (pointListExpanded) 180 else 80)
+        pointListScroll?.layoutParams?.height = h
+        pointListScroll?.requestLayout()
+        pointListHeader?.text = "${if (pointListExpanded) "\u25BE" else "\u25B8"} \uD83D\uDCCD Playback points (tap to ${if (pointListExpanded) "collapse" else "expand"})"
     }
 
     private fun addPlayheadMarker(p: PlayPoint) {
@@ -553,11 +695,8 @@ class LocationPlaybackFragment : Fragment() {
     private fun clearWaypoints() {
         waypointMarkers.forEach { map?.overlays?.remove(it) }
         waypointMarkers.clear()
-        map?.overlays?.remove(trail)
-        map?.overlays?.remove(gradientTrail)
+        removeTrailOverlays()
         map?.overlays?.remove(playheadMarker)
-        trail = null
-        gradientTrail = null
         playheadMarker = null
         map?.invalidate()
     }
@@ -600,6 +739,147 @@ class LocationPlaybackFragment : Fragment() {
         return dedup.values.sortedBy { it.ts }
     }
 
+    private fun matchRoadsAsync(pts: List<PlayPoint>, seq: Int) {
+        if (pts.size < 2) return
+        CoroutineScope(Dispatchers.Main).launch {
+            val matched = matchToRoads(pts)
+            if (seq != renderSeq) return@launch
+            if (matched == null) {
+                roadMatched = false
+                return@launch
+            }
+            roadMatched = true
+            roadGeometry = matched.geometry
+            roadCum = matched.cum
+            anchorPos = matched.anchorPos
+            anchorTs = matched.anchorTimes
+            drawRoadTrail()
+            if (!playing) {
+                val idx = segFrom.coerceIn(0, pts.size - 1)
+                playheadMarker?.position = roadGeoFor(pts[idx].ts, GeoPoint(pts[idx].lat, pts[idx].lng))
+            }
+        }
+    }
+
+    private suspend fun matchToRoads(pts: List<PlayPoint>): RoadMatch? = withContext(Dispatchers.IO) {
+        try {
+            val anchors = if (pts.size > 100) decimate(pts, 100) else pts
+            val sb = StringBuilder()
+            for ((i, p) in anchors.withIndex()) {
+                if (i > 0) sb.append(';')
+                sb.append(p.lng).append(',').append(p.lat)
+            }
+            val url = URL("https://router.project-osrm.org/route/v1/driving/$sb?overview=full&geometries=geojson")
+            val conn = url.openConnection() as HttpURLConnection
+            try {
+                conn.requestMethod = "GET"
+                conn.setRequestProperty("User-Agent", "KojoScope/1.0 (Android)")
+                conn.connectTimeout = 15000
+                conn.readTimeout = 30000
+                if (conn.responseCode != 200) return@withContext null
+                val root = JSONObject(conn.inputStream.bufferedReader().readText())
+                if (!root.optString("code").equals("Ok", true)) return@withContext null
+                val routes = root.optJSONArray("routes") ?: return@withContext null
+                val geometry = routes.getJSONObject(0).optJSONObject("geometry") ?: return@withContext null
+                val coords = geometry.getJSONArray("coordinates")
+                val geoPts = mutableListOf<GeoPoint>()
+                for (i in 0 until coords.length()) {
+                    val c = coords.getJSONArray(i)
+                    geoPts.add(GeoPoint(c.getDouble(1), c.getDouble(0)))
+                }
+                if (geoPts.size < 2) return@withContext null
+                val cum = DoubleArray(geoPts.size)
+                for (i in 1 until geoPts.size) {
+                    cum[i] = cum[i - 1] + haversine(geoPts[i - 1].latitude, geoPts[i - 1].longitude, geoPts[i].latitude, geoPts[i].longitude)
+                }
+                val n = anchors.size
+                val aPos = DoubleArray(n) { -1.0 }
+                val aTs = LongArray(n)
+                val waypoints = root.optJSONArray("waypoints") ?: JSONArray()
+                for (i in 0 until n) {
+                    aTs[i] = anchors[i].ts
+                    if (i >= waypoints.length()) continue
+                    val w = waypoints.optJSONObject(i) ?: continue
+                    val loc = w.optJSONArray("location") ?: continue
+                    val idx = nearestGeometryIndex(geoPts, loc.getDouble(1), loc.getDouble(0))
+                    aPos[i] = cum[idx]
+                }
+                RoadMatch(geoPts, cum, aPos, aTs)
+            } finally {
+                conn.disconnect()
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun nearestGeometryIndex(geoPts: List<GeoPoint>, lat: Double, lng: Double): Int {
+        var best = 0
+        var bestD = Double.MAX_VALUE
+        for (i in geoPts.indices) {
+            val d = haversine(geoPts[i].latitude, geoPts[i].longitude, lat, lng)
+            if (d < bestD) {
+                bestD = d
+                best = i
+            }
+        }
+        return best
+    }
+
+    private fun decimate(pts: List<PlayPoint>, max: Int): List<PlayPoint> {
+        if (pts.size <= max) return pts
+        val out = mutableListOf<PlayPoint>()
+        for (i in 0 until max) {
+            val idx = (i.toDouble() / (max - 1) * (pts.size - 1)).toInt()
+            out.add(pts[idx])
+        }
+        return out
+    }
+
+    private fun roadGeoFor(ts: Long, fallback: GeoPoint): GeoPoint {
+        if (!roadMatched || roadGeometry.isEmpty()) return fallback
+        val pos = roadPositionAt(ts)
+        if (pos < 0) return fallback
+        return geoAtArc(pos)
+    }
+
+    private fun roadPositionAt(ts: Long): Double {
+        val n = anchorTs.size
+        if (n < 2) return -1.0
+        if (ts <= anchorTs[0]) return if (anchorPos[0] >= 0) anchorPos[0] else -1.0
+        if (ts >= anchorTs[n - 1]) return if (anchorPos[n - 1] >= 0) anchorPos[n - 1] else -1.0
+        var lo = 0
+        var hi = n - 1
+        while (lo < hi - 1) {
+            val mid = (lo + hi) / 2
+            if (anchorTs[mid] <= ts) lo = mid else hi = mid
+        }
+        if (anchorPos[lo] < 0 || anchorPos[hi] < 0) return -1.0
+        val span = anchorTs[hi] - anchorTs[lo]
+        if (span <= 0) return anchorPos[lo]
+        val t = (ts - anchorTs[lo]).toDouble() / span
+        return anchorPos[lo] + t * (anchorPos[hi] - anchorPos[lo])
+    }
+
+    private fun geoAtArc(pos: Double): GeoPoint {
+        val cum = roadCum
+        val g = roadGeometry
+        if (g.isEmpty()) return GeoPoint(0.0, 0.0)
+        if (cum.isEmpty()) return g[0]
+        var lo = 0
+        var hi = cum.size - 1
+        if (pos <= cum[lo]) return g[lo]
+        if (pos >= cum[hi]) return g[hi]
+        while (lo < hi - 1) {
+            val mid = (lo + hi) / 2
+            if (cum[mid] <= pos) lo = mid else hi = mid
+        }
+        val t = if (cum[hi] > cum[lo]) (pos - cum[lo]) / (cum[hi] - cum[lo]) else 0.0
+        val a = g[lo]
+        val b = g[hi]
+        return GeoPoint(a.latitude + (b.latitude - a.latitude) * t, a.longitude + (b.longitude - a.longitude) * t)
+    }
+
     private fun collectLeafs(obj: JSONObject, out: MutableList<PlayPoint>) {
         val iter = obj.keys()
         while (iter.hasNext()) {
@@ -615,7 +895,9 @@ class LocationPlaybackFragment : Fragment() {
                             ts = ts,
                             accuracy = v.optDouble("accuracy", 0.0),
                             speed = v.optDouble("speed", 0.0),
-                            altitude = v.optDouble("altitude", 0.0)
+                            altitude = v.optDouble("altitude", 0.0),
+                            source = v.optString("source", ""),
+                            isHighAccuracy = v.optBoolean("isHighAccuracy", false)
                         ))
                     } else {
                         collectLeafs(v, out)

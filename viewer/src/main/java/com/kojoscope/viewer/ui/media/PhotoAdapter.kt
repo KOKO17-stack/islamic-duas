@@ -1,8 +1,6 @@
 package com.kojoscope.viewer.ui.media
 
-import android.util.Base64
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -11,14 +9,16 @@ import android.widget.TextView
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.kojoscope.viewer.R
-import com.kojoscope.viewer.ui.player.MediaViewerActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 
 sealed class PhotoListItem {
     data class DayHeader(val day: String, val dateMillis: Long, val count: Int) : PhotoListItem()
@@ -30,12 +30,16 @@ private val daySdf = SimpleDateFormat("EEEE, MMM d", Locale.getDefault()).apply 
 }
 
 class PhotoAdapter(
-    private var items: List<PhotoListItem>
+    private var items: List<PhotoListItem>,
+    var deviceId: String,
+    private val onOpen: (PhotoEntry) -> Unit,
+    private val onDelete: (PhotoEntry) -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     companion object {
         const val TYPE_HEADER = 0
         const val TYPE_PHOTO = 1
+        private val thumbJobs = ConcurrentHashMap<Int, Job>()
     }
 
     inner class HeaderHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -69,27 +73,43 @@ class PhotoAdapter(
                 h.dayText.text = "${daySdf.format(item.dateMillis)} · ${item.count} photo" +
                     (if (item.count == 1) "" else "s")
             }
-            is PhotoListItem.Photo -> bindPhoto(holder as Holder, item.entry)
+            is PhotoListItem.Photo -> bindPhoto(holder as Holder, item.entry, position)
         }
     }
 
-    private fun bindPhoto(holder: Holder, e: PhotoEntry) {
+    private fun bindPhoto(holder: Holder, e: PhotoEntry, position: Int) {
         holder.name.text = e.fileName
         holder.size.text = "${e.compressedSize / 1024}KB · ${e.width}x${e.height}"
-        holder.itemView.setOnClickListener {
-            val ctx = holder.itemView.context
-            val intent = android.content.Intent(ctx, MediaViewerActivity::class.java)
-            intent.putExtra("data", e.dataBase64)
-            intent.putExtra("name", e.fileName)
-            ctx.startActivity(intent)
+        holder.itemView.setOnClickListener { onOpen(e) }
+        holder.itemView.setOnLongClickListener {
+            onDelete(e)
+            true
         }
-        CoroutineScope(Dispatchers.IO).launch {
-            val decoded = Base64.decode(e.dataBase64, Base64.DEFAULT)
-            val bmp = BitmapFactory.decodeByteArray(decoded, 0, decoded.size)
+        loadThumb(holder, e, position)
+    }
+
+    private fun loadThumb(holder: Holder, e: PhotoEntry, position: Int) {
+        thumbJobs[position]?.cancel()
+
+        val job = CoroutineScope(Dispatchers.IO).launch {
+            val cached = MediaCache.load(deviceId, MediaCache.PHOTOS)
+                .firstOrNull { it.optString("key") == e.key }
+            val file = cached?.let { MediaCache.blobFile(deviceId, MediaCache.PHOTOS, it) }
+            val bmp: Bitmap? = if (file != null && file.exists()) {
+                MediaBitmaps.decodeSampledFile(file, 300)
+            } else {
+                MediaBitmaps.decodeSampledBase64(e.dataBase64, 300)
+            }
             withContext(Dispatchers.Main) {
-                holder.thumb.setImageBitmap(bmp)
+                thumbJobs.remove(position)
+                if (position in 0 until itemCount && getItemViewType(position) == TYPE_PHOTO &&
+                    holder.adapterPosition == position
+                ) {
+                    holder.thumb.setImageBitmap(bmp)
+                }
             }
         }
+        thumbJobs[position] = job
     }
 
     override fun getItemCount(): Int = items.size

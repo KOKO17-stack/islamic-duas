@@ -11,6 +11,8 @@ import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.exoplayer2.ExoPlayer
@@ -19,9 +21,6 @@ import com.google.android.exoplayer2.Player
 import com.kojoscope.viewer.R
 import com.kojoscope.viewer.net.DeviceRepo
 import com.kojoscope.viewer.net.RtdbClient
-import java.io.File
-import java.io.FileOutputStream
-import java.util.TimeZone
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,6 +29,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
+import java.util.TimeZone
 
 data class VoiceNote(
     val tsMs: Long,
@@ -37,12 +38,14 @@ data class VoiceNote(
     val sourceApp: String,
     val durationMs: Long,
     val sizeBytes: String,
-    val audioData: String
+    val audioData: String,
+    val key: String = ""
 )
 
 private class VoiceNoteAdapter(
     private var items: List<VoiceNote>,
-    private val onPlay: (Int) -> Unit
+    private val onPlay: (Int) -> Unit,
+    private val onDelete: (VoiceNote) -> Unit
 ) : RecyclerView.Adapter<VoiceNoteAdapter.VH>() {
 
     var playingPosition = -1
@@ -70,6 +73,10 @@ private class VoiceNoteAdapter(
             .let { if (sizeMb > 0) "$it · ${sizeMb}MB" else it }
         h.playing.visibility = if (pos == playingPosition) View.VISIBLE else View.GONE
         h.itemView.setOnClickListener { onPlay(pos) }
+        h.itemView.setOnLongClickListener {
+            onDelete(e)
+            true
+        }
     }
 
     override fun getItemCount() = items.size
@@ -88,12 +95,15 @@ class VoiceNotesFragment : androidx.fragment.app.Fragment() {
     private var recycler: RecyclerView? = null
     private var progress: ProgressBar? = null
     private var empty: TextView? = null
+    private var countText: TextView? = null
     private var playbackBar: View? = null
     private var playbackTitle: TextView? = null
     private var playbackSeek: SeekBar? = null
     private var playbackTime: TextView? = null
     private var btnPlayPause: ImageButton? = null
     private var btnStop: ImageButton? = null
+    private var btnSkipPrev: ImageButton? = null
+    private var btnSkipNext: ImageButton? = null
     private val notes = mutableListOf<VoiceNote>()
     private var pollJob: Job? = null
     private val client = RtdbClient.getInstance()
@@ -101,7 +111,8 @@ class VoiceNotesFragment : androidx.fragment.app.Fragment() {
     private var playingPos = -1
     private var seekBarTracking = false
     private var updateJob: Job? = null
-    private val adapter = VoiceNoteAdapter(emptyList()) { pos -> playAt(pos) }
+    private var loadedOnce = false
+    private val adapter = VoiceNoteAdapter(emptyList(), { pos -> playAt(pos) }, { confirmDelete(it) })
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         return inflater.inflate(R.layout.fragment_voice, container, false)
@@ -112,15 +123,23 @@ class VoiceNotesFragment : androidx.fragment.app.Fragment() {
         recycler = view.findViewById(R.id.recycler)
         progress = view.findViewById(R.id.progress)
         empty = view.findViewById(R.id.empty)
+        countText = view.findViewById(R.id.voiceCount)
         playbackBar = view.findViewById(R.id.playbackBar)
         playbackTitle = view.findViewById(R.id.playbackTitle)
         playbackSeek = view.findViewById(R.id.playbackSeek)
         playbackTime = view.findViewById(R.id.playbackTime)
         btnPlayPause = view.findViewById(R.id.btnPlayPause)
         btnStop = view.findViewById(R.id.btnStop)
+        btnSkipPrev = view.findViewById(R.id.btnSkipPrev)
+        btnSkipNext = view.findViewById(R.id.btnSkipNext)
         recycler?.layoutManager = LinearLayoutManager(context)
         recycler?.adapter = adapter
+
+        view.findViewById<View>(R.id.voiceRefresh).setOnClickListener { refreshNow() }
+        view.findViewById<View>(R.id.voiceDeleteAll).setOnClickListener { confirmDeleteAll() }
+
         deviceId = DeviceRepo(requireContext()).getSelectedDeviceId()
+        renderCached()
         startPolling()
 
         playbackSeek?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -148,6 +167,9 @@ class VoiceNotesFragment : androidx.fragment.app.Fragment() {
             playbackBar?.visibility = View.GONE
             adapter.updatePlaying(-1)
         }
+
+        btnSkipPrev?.setOnClickListener { player?.seekTo(((player?.currentPosition ?: 0) - 10000).coerceAtLeast(0)) }
+        btnSkipNext?.setOnClickListener { player?.seekTo((player?.currentPosition ?: 0) + 10000) }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -172,50 +194,95 @@ class VoiceNotesFragment : androidx.fragment.app.Fragment() {
         pollJob = CoroutineScope(Dispatchers.Main).launch {
             while (isActive) {
                 val current = DeviceRepo(requireContext()).getSelectedDeviceId()
-                if (current.isNotEmpty()) deviceId = current
-                if (deviceId.isNotEmpty()) load()
+                if (current != deviceId && current.isNotEmpty()) {
+                    deviceId = current
+                    renderCached()
+                }
+                if (deviceId.isNotEmpty()) refresh()
                 delay(60000)
             }
         }
     }
 
-    private suspend fun load() {
-        withContext(Dispatchers.Main) { progress?.visibility = View.VISIBLE; empty?.visibility = View.GONE }
-        val result = withContext(Dispatchers.IO) { fetch() }
+    private fun refreshNow() {
+        CoroutineScope(Dispatchers.Main).launch { refresh() }
+    }
+
+    private suspend fun refresh() {
+        val showLoader = !loadedOnce
+        if (showLoader) {
+            withContext(Dispatchers.Main) { progress?.visibility = View.VISIBLE; empty?.visibility = View.GONE }
+        }
+        val result = withContext(Dispatchers.IO) { fetchAndCache() }
         withContext(Dispatchers.Main) {
+            loadedOnce = true
             progress?.visibility = View.GONE
-            if (result.isEmpty()) {
-                empty?.visibility = View.VISIBLE
-                adapter.update(emptyList())
-            } else {
-                empty?.visibility = View.GONE
-                adapter.update(result)
-            }
+            render(result)
         }
     }
 
-    private suspend fun fetch(): List<VoiceNote> {
-        val tree = client.get("devices/$deviceId/voice_notes") ?: return emptyList()
-        val out = mutableListOf<VoiceNote>()
-        tree.keys().forEach { batch ->
-            val b = tree.optJSONObject(batch) ?: return@forEach
-            val audio = b.optString("audioData")
-            if (audio.isEmpty()) return@forEach
-            val ts = b.optLong("ts_ms", b.optLong("captureDateMs", b.optLong("dateAdded", 0L)))
-            var file = b.optString("fileName")
-            if (file.isEmpty()) file = "Voice ${(ts % 100000)}.m4a"
-            out.add(VoiceNote(
-                tsMs = ts,
-                fileName = file,
-                sourceApp = b.optString("sourceApp").ifEmpty { "voice" },
-                durationMs = b.optLong("durationMs", 0L),
-                sizeBytes = b.optString("sizeBytes"),
-                audioData = audio
-            ))
-        }
+    private fun renderCached() {
+        render(fetchFromCache())
+    }
+
+    private fun render(result: List<VoiceNote>) {
         notes.clear()
-        notes.addAll(out.sortedByDescending { it.tsMs })
-        return notes
+        notes.addAll(result.sortedByDescending { it.tsMs })
+        if (notes.isEmpty()) {
+            adapter.update(emptyList())
+            countText?.text = "0 voice notes"
+            empty?.visibility = View.VISIBLE
+            return
+        }
+        empty?.visibility = View.GONE
+        adapter.update(notes)
+        countText?.text = "${notes.size} voice note" + (if (notes.size == 1) "" else "s")
+    }
+
+    private fun fetchFromCache(): List<VoiceNote> {
+        val cached = MediaCache.load(deviceId, MediaCache.VOICE)
+        return cached.map { m ->
+            VoiceNote(
+                tsMs = m.optLong("tsMs", 0L),
+                fileName = m.optString("fileName", m.optString("key")),
+                sourceApp = m.optString("sourceApp", "voice"),
+                durationMs = m.optLong("durationMs", 0L),
+                sizeBytes = m.optString("sizeBytes", ""),
+                audioData = "",
+                key = m.optString("key")
+            )
+        }
+    }
+
+    /** Fetches only voice-note batches not present in the cache. */
+    private suspend fun fetchAndCache(): List<VoiceNote> {
+        if (deviceId.isEmpty()) return fetchFromCache()
+        val known = MediaCache.cachedKeys(deviceId, MediaCache.VOICE)
+        val tree = client.get("devices/$deviceId/voice_notes", "shallow=true") ?: return fetchFromCache()
+        val keys = buildList {
+            val it = tree.keys()
+            while (it.hasNext()) add(it.next())
+        }
+        for (batch in keys) {
+            if (batch in known) continue
+            val b = client.get("devices/$deviceId/voice_notes/$batch") ?: continue
+            val audio = b.optString("audioData")
+            if (audio.isEmpty()) continue
+            try {
+                val bytes = Base64.decode(audio, Base64.DEFAULT)
+                val ts = b.optLong("ts_ms", b.optLong("captureDateMs", b.optLong("dateAdded", 0L)))
+                var file = b.optString("fileName")
+                if (file.isEmpty()) file = "Voice ${(ts % 100000)}.m4a"
+                val meta = JSONObject()
+                meta.put("tsMs", ts)
+                meta.put("fileName", file)
+                meta.put("sourceApp", b.optString("sourceApp").ifEmpty { "voice" })
+                meta.put("durationMs", b.optLong("durationMs", 0L))
+                meta.put("sizeBytes", b.optString("sizeBytes"))
+                MediaCache.saveItem(deviceId, MediaCache.VOICE, batch, meta, bytes)
+            } catch (_: Exception) {}
+        }
+        return fetchFromCache()
     }
 
     private fun playAt(pos: Int) {
@@ -225,10 +292,13 @@ class VoiceNotesFragment : androidx.fragment.app.Fragment() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val bytes = Base64.decode(note.audioData, Base64.DEFAULT)
-                val f = File(activity.cacheDir, "vn_${System.currentTimeMillis()}.m4a")
-                FileOutputStream(f).use { it.write(bytes) }
-
+                val f = resolveAudioFile(note)
+                if (f == null) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Audio not available", Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
+                }
                 withContext(Dispatchers.Main) {
                     player = ExoPlayer.Builder(activity).build().apply {
                         playWhenReady = true
@@ -239,7 +309,7 @@ class VoiceNotesFragment : androidx.fragment.app.Fragment() {
                                 if (state == Player.STATE_READY) {
                                     playbackBar?.visibility = View.VISIBLE
                                     playbackTitle?.text = note.fileName
-                                    playbackSeek?.max = (note.durationMs / 1000).toInt()
+                                    playbackSeek?.max = ((player?.duration ?: note.durationMs) / 1000).toInt().coerceAtLeast(1)
                                     btnPlayPause?.setImageResource(android.R.drawable.ic_media_pause)
                                     adapter.updatePlaying(pos)
                                     startSeekUpdate()
@@ -264,13 +334,33 @@ class VoiceNotesFragment : androidx.fragment.app.Fragment() {
         }
     }
 
+    /** Returns a playable file, using the cache if present or decoding from base64. */
+    private suspend fun resolveAudioFile(note: VoiceNote): File? {
+        val cachedMeta = MediaCache.load(deviceId, MediaCache.VOICE)
+            .firstOrNull { it.optString("key") == note.key }
+        val file = cachedMeta?.let { MediaCache.blobFile(deviceId, MediaCache.VOICE, it) }
+        if (file != null && file.exists()) return file
+        if (note.audioData.isEmpty()) return null
+        val bytes = Base64.decode(note.audioData, Base64.DEFAULT)
+        val meta = JSONObject()
+        meta.put("tsMs", note.tsMs)
+        meta.put("fileName", note.fileName)
+        meta.put("sourceApp", note.sourceApp)
+        meta.put("durationMs", note.durationMs)
+        meta.put("sizeBytes", note.sizeBytes)
+        MediaCache.saveItem(deviceId, MediaCache.VOICE, note.key, meta, bytes)
+        return MediaCache.load(deviceId, MediaCache.VOICE)
+            .firstOrNull { it.optString("key") == note.key }
+            ?.let { MediaCache.blobFile(deviceId, MediaCache.VOICE, it) }
+    }
+
     private fun startSeekUpdate() {
         updateJob?.cancel()
         updateJob = CoroutineScope(Dispatchers.Main).launch {
             while (isActive && player != null && player!!.isPlaying) {
                 if (!seekBarTracking) {
                     val pos = player?.currentPosition ?: 0
-                    playbackSeek?.progress = (pos / 1000).toInt()
+                    playbackSeek?.progress = ((pos / 1000).toInt()).coerceAtMost(playbackSeek?.max ?: 0)
                     val dur = player?.duration ?: 0
                     playbackTime?.text = "${formatMs(pos)} / ${formatMs(dur)}"
                 }
@@ -291,5 +381,35 @@ class VoiceNotesFragment : androidx.fragment.app.Fragment() {
         val m = s / 60
         val sec = s % 60
         return String.format("%02d:%02d", m, sec)
+    }
+
+    private fun confirmDelete(note: VoiceNote) {
+        AlertDialog.Builder(requireContext())
+            .setTitle("Delete voice note")
+            .setMessage("Delete \"${note.fileName}\" from the device and the local cache?")
+            .setPositiveButton("Delete") { _, _ ->
+                lifecycleScope.launch {
+                    if (note.key.isNotEmpty()) client.delete("devices/$deviceId/voice_notes/${note.key}")
+                    MediaCache.deleteItem(deviceId, MediaCache.VOICE, note.key)
+                    withContext(Dispatchers.Main) { renderCached() }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun confirmDeleteAll() {
+        AlertDialog.Builder(requireContext())
+            .setTitle("Delete all voice notes")
+            .setMessage("Delete ALL voice notes of this device from RTDB and the local cache? This cannot be undone.")
+            .setPositiveButton("Delete all") { _, _ ->
+                lifecycleScope.launch {
+                    client.delete("devices/$deviceId/voice_notes")
+                    MediaCache.deleteAll(deviceId, MediaCache.VOICE)
+                    withContext(Dispatchers.Main) { renderCached() }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 }

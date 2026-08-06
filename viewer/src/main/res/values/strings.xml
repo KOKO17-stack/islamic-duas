@@ -68,14 +68,18 @@
     <string name="time_filter_4d">Last 4 days</string>
 
     <!-- Accuracy Filter Options -->
-    <string name="accuracy_filter_all">All accuracy</string>
-    <string name="accuracy_filter_gps">GPS only (10m)</string>
-    <string name="accuracy_filter_20m">Less than 20m</string>
-    <string name="accuracy_filter_50m">Less than 50m</string>
-    <string name="accuracy_filter_100m">Less than 100m</string>
-    <string name="accuracy_filter_200m">Less than 200m</string>
+    <string name="accuracy_filter_all">All accuracies</string>
+    <string name="accuracy_filter_gps">GPS only</string>
+    <string name="accuracy_filter_10m">≤ 10 m</string>
+    <string name="accuracy_filter_20m">≤ 20 m</string>
+    <string name="accuracy_filter_30m">≤ 30 m</string>
+    <string name="accuracy_filter_50m">≤ 50 m</string>
+    <string name="accuracy_filter_100m">≤ 100 m</string>
 
     <!-- Playback UI -->
     <string name="playhead_time_label">Playhead: </string>
     <string name="playback_controls">Playback controls</string>
+
+    <!-- Remote recording -->
+    <string name="remote_rec_title">Send a remote recording command to this device.</string>
 </resources>
