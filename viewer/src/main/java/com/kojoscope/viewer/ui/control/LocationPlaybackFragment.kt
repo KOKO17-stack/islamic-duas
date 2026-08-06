@@ -1,5 +1,6 @@
 package com.kojoscope.viewer.ui.control
 
+import android.app.AlertDialog
 import android.content.Context
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -18,7 +19,6 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
-import com.google.android.material.datepicker.MaterialDatePicker
 import com.kojoscope.viewer.R
 import com.kojoscope.viewer.net.DeviceRepo
 import com.kojoscope.viewer.net.RtdbClient
@@ -35,7 +35,6 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
-import java.util.Calendar
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -53,6 +52,7 @@ class LocationPlaybackFragment : Fragment() {
     private var percentText: TextView? = null
     private var speedSpinner: Spinner? = null
     private var scrubber: SeekBar? = null
+    private var playheadTimeDisplay: TextView? = null
     private var stPoints: TextView? = null
     private var stDuration: TextView? = null
     private var stDistance: TextView? = null
@@ -70,10 +70,23 @@ class LocationPlaybackFragment : Fragment() {
     private var btnMapType: ImageButton? = null
     private val client = RtdbClient.getInstance()
 
+    private val timeWindows: List<Pair<Int, Long?>> = listOf(
+        R.string.time_filter_1hr to 3_600_000L,
+        R.string.time_filter_2hr to 7_200_000L,
+        R.string.time_filter_3hr to 10_800_000L,
+        R.string.time_filter_4hr to 14_400_000L,
+        R.string.time_filter_6hr to 21_600_000L,
+        R.string.time_filter_12hr to 43_200_000L,
+        R.string.time_filter_24h to 86_400_000L,
+        R.string.time_filter_2d to 172_800_000L,
+        R.string.time_filter_3d to 259_200_000L,
+        R.string.time_filter_4d to 345_600_000L,
+        R.string.time_filter_all to null
+    )
+
     private var points: List<PlayPoint> = emptyList()
     private var filteredPoints: List<PlayPoint> = emptyList()
-    private var dateRangeStart: Long? = null
-    private var dateRangeEnd: Long? = null
+    private var timeWindowMs: Long? = null
     private var isSatellite = false
     private var playing = false
     private var playbackJob: Job? = null
@@ -106,6 +119,7 @@ class LocationPlaybackFragment : Fragment() {
         percentText = view.findViewById(R.id.percentText)
         speedSpinner = view.findViewById(R.id.speedSpinner)
         scrubber = view.findViewById(R.id.scrubber)
+        playheadTimeDisplay = view.findViewById(R.id.playheadTimeDisplay)
         stPoints = view.findViewById(R.id.stPoints)
         stDuration = view.findViewById(R.id.stDuration)
         stDistance = view.findViewById(R.id.stDistance)
@@ -133,17 +147,19 @@ class LocationPlaybackFragment : Fragment() {
         btnLoop?.setOnClickListener { toggleLoop() }
         btnFollow?.setOnClickListener { toggleFollow() }
         btnMapType?.setOnClickListener { toggleMapType() }
-        btnDateRange?.setOnClickListener { showDateRangePicker() }
-        btnClearDate?.setOnClickListener { clearDateRange() }
+        btnDateRange?.setOnClickListener { showTimeWindowPicker() }
+        btnClearDate?.setOnClickListener { clearTimeWindow() }
+        updateTimeWindowButton()
 
         scrubber?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
-                if (fromUser && points.size >= 2) {
-                    val totalSegs = points.size - 1
+                val pts = getDisplayPoints()
+                if (fromUser && pts.size >= 2) {
+                    val totalSegs = pts.size - 1
                     val targetSeg = (progress / 1000.0 * totalSegs).toInt().coerceIn(0, totalSegs)
                     segFrom = targetSeg
-                    segTo = (targetSeg + 1).coerceAtMost(points.size - 1)
-                    updateMarkerTo(points[segFrom])
+                    segTo = (targetSeg + 1).coerceAtMost(pts.size - 1)
+                    updateMarkerTo(pts[segFrom])
                 }
             }
             override fun onStartTrackingTouch(sb: SeekBar) {}
@@ -220,48 +236,42 @@ class LocationPlaybackFragment : Fragment() {
         Toast.makeText(context, if (isSatellite) "Satellite view" else "Map view", Toast.LENGTH_SHORT).show()
     }
 
-    private fun showDateRangePicker() {
-        val picker = MaterialDatePicker.Builder.dateRangePicker()
-            .setTitleText("Select date range")
-            .build()
-        picker.addOnPositiveButtonClickListener { selection ->
-            dateRangeStart = selection.first
-            dateRangeEnd = selection.second
-            updateDateRangeButton()
-            applyDateFilter()
-        }
-        picker.show(parentFragmentManager, "date_range_picker")
+    private fun showTimeWindowPicker() {
+        val labels = timeWindows.map { getString(it.first) }.toTypedArray()
+        val current = timeWindows.indexOfFirst { it.second == timeWindowMs }.coerceAtLeast(0)
+        AlertDialog.Builder(requireContext())
+            .setTitle("Select time range")
+            .setSingleChoiceItems(labels, current) { dialog, which ->
+                val (_, window) = timeWindows[which]
+                timeWindowMs = window
+                dialog.dismiss()
+                updateTimeWindowButton()
+                applyTimeFilter()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
-    private fun clearDateRange() {
-        dateRangeStart = null
-        dateRangeEnd = null
-        updateDateRangeButton()
-        applyDateFilter()
+    private fun clearTimeWindow() {
+        timeWindowMs = null
+        updateTimeWindowButton()
+        applyTimeFilter()
     }
 
-    private fun updateDateRangeButton() {
+    private fun updateTimeWindowButton() {
         val btn = btnDateRange ?: return
-        if (dateRangeStart != null && dateRangeEnd != null) {
-            val sdf = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
-            val start = sdf.format(java.util.Date(dateRangeStart!!))
-            val end = sdf.format(java.util.Date(dateRangeEnd!!))
-            btn.text = "$start \u2192 $end"
-            btn.visibility = View.VISIBLE
-            btnClearDate?.visibility = View.VISIBLE
-        } else {
-            btn.text = "All dates"
-            btnClearDate?.visibility = View.GONE
-        }
+        val label = timeWindows.firstOrNull { it.second == timeWindowMs }?.let { getString(it.first) }
+            ?: getString(R.string.time_filter_all)
+        btn.text = label
+        btnClearDate?.visibility = if (timeWindowMs == null) View.GONE else View.VISIBLE
     }
 
-    private fun applyDateFilter() {
+    private fun applyTimeFilter() {
         if (points.isEmpty()) return
-        filteredPoints = if (dateRangeStart != null && dateRangeEnd != null) {
-            points.filter { it.ts >= dateRangeStart!! && it.ts <= dateRangeEnd!! }
-        } else {
-            points
-        }
+        filteredPoints = timeWindowMs?.let { win ->
+            val cutoff = System.currentTimeMillis() - win
+            points.filter { it.ts >= cutoff }
+        } ?: points
         renderPlayback()
         Toast.makeText(context, "${filteredPoints.size} of ${points.size} points shown", Toast.LENGTH_SHORT).show()
     }
@@ -322,8 +332,10 @@ class LocationPlaybackFragment : Fragment() {
         val to = pts[(idx + 1).coerceAtMost(pts.size - 1)]
         val lat = lerp(from.lat, to.lat, frac)
         val lng = lerp(from.lng, to.lng, frac)
+        val ts = lerp(from.ts.toDouble(), to.ts.toDouble(), frac).toLong()
         val geo = GeoPoint(lat, lng)
         playheadMarker?.position = geo
+        updatePlayheadTime(ts)
         if (autoFollow) panIfNeeded(geo)
         val totalPts = pts.size
         val currentPoint = idx + 1
@@ -338,6 +350,7 @@ class LocationPlaybackFragment : Fragment() {
 
     private fun updateMarkerTo(p: PlayPoint) {
         playheadMarker?.position = GeoPoint(p.lat, p.lng)
+        updatePlayheadTime(p.ts)
         val pts = getDisplayPoints()
         val idx = pts.indexOf(p)
         val totalPts = pts.size
@@ -352,6 +365,15 @@ class LocationPlaybackFragment : Fragment() {
 
     private fun panIfNeeded(geo: GeoPoint) {
         if (autoFollow) map?.controller?.animateTo(geo)
+    }
+
+    private fun updatePlayheadTime(ts: Long) {
+        val tv = playheadTimeDisplay ?: return
+        val fmt = java.text.SimpleDateFormat("hh:mm:ss a \u00B7 MMM dd", java.util.Locale.getDefault()).apply {
+            timeZone = java.util.TimeZone.getTimeZone("Asia/Karachi")
+        }
+        tv.text = "\u25CF ${fmt.format(ts)}"
+        tv.visibility = View.VISIBLE
     }
 
     private fun speedMultiplier(): Long {
@@ -400,6 +422,14 @@ class LocationPlaybackFragment : Fragment() {
             return
         }
 
+        stopPlaybackLoop()
+        playing = false
+        playBtn?.text = "\u25B6 Play"
+        segFrom = 0
+        segTo = (1).coerceAtMost(pts.size - 1)
+        segStartElapsed = SystemClock.elapsedRealtime()
+        totalDurationMs = 0L
+
         val totalDist = totalDistance(pts)
         val avgSpeed = if (totalDist > 0 && pts.size > 1) totalDist / ((pts.last().ts - pts.first().ts) / 1000.0) else 0.0
         val maxSpeed = pts.maxOfOrNull { it.speed } ?: 0.0
@@ -424,6 +454,7 @@ class LocationPlaybackFragment : Fragment() {
         addWaypointMarker(pts.first(), R.color.success, "Start")
         addWaypointMarker(pts.last(), R.color.danger, "End")
         addPlayheadMarker(pts.first())
+        updatePlayheadTime(pts.first().ts)
 
         pointList?.removeAllViews()
         val dayFmt = java.text.SimpleDateFormat("MMM dd, EEE", java.util.Locale.getDefault()).apply {

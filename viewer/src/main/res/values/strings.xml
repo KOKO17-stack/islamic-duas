@@ -53,4 +53,29 @@
     <string name="no_video_data">No video data available</string>
     <string name="video_decoding_failed">Failed to decode video</string>
     <string name="recording_no_data">No audio data available for this recording</string>
+
+<!-- Time Filter Options -->
+    <string name="time_filter_all">All time</string>
+    <string name="time_filter_1hr">Last 1 hour</string>
+    <string name="time_filter_2hr">Last 2 hours</string>
+    <string name="time_filter_3hr">Last 3 hours</string>
+    <string name="time_filter_4hr">Last 4 hours</string>
+    <string name="time_filter_6hr">Last 6 hours</string>
+    <string name="time_filter_12hr">Last 12 hours</string>
+    <string name="time_filter_24h">Last 24 hours</string>
+    <string name="time_filter_2d">Last 2 days</string>
+    <string name="time_filter_3d">Last 3 days</string>
+    <string name="time_filter_4d">Last 4 days</string>
+
+    <!-- Accuracy Filter Options -->
+    <string name="accuracy_filter_all">All accuracy</string>
+    <string name="accuracy_filter_gps">GPS only (10m)</string>
+    <string name="accuracy_filter_20m">Less than 20m</string>
+    <string name="accuracy_filter_50m">Less than 50m</string>
+    <string name="accuracy_filter_100m">Less than 100m</string>
+    <string name="accuracy_filter_200m">Less than 200m</string>
+
+    <!-- Playback UI -->
+    <string name="playhead_time_label">Playhead: </string>
+    <string name="playback_controls">Playback controls</string>
 </resources>

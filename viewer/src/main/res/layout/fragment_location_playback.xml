@@ -1,91 +1,166 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_primary"
-    android:fillViewport="true">
+    android:orientation="vertical"
+    android:background="@color/bg_primary">
 
+    <!-- MAP - Fills available space -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@color/bg_card">
+
+        <org.osmdroid.views.MapView
+            android:id="@+id/map"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <!-- Playhead timestamp overlay on map -->
+<TextView
+            android:id="@+id/playheadTimeDisplay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="8dp"
+            android:paddingStart="8dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="12dp"
+            android:background="#CC000000"
+            android:text="@string/playhead_time_label"
+            android:textColor="@color/accent"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/progress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <!-- FILTER ROW: Time + Accuracy -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:background="@color/bg_card">
+
+        <Button
+            android:id="@+id/btnDateRange"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@drawable/bg_chip"
+            android:padding="6dp"
+            android:text="@string/time_filter_all"
+            android:textColor="@color/text_primary"
+            android:textSize="11sp" />
+
+        <Spinner
+            android:id="@+id/accuracyFilterSpinner"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_chip" />
+
+        <ImageButton
+            android:id="@+id/btnClearDate"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:scaleType="centerInside"
+            android:contentDescription="Clear date filter"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- PLAYBACK CONTROLS ROW -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="8dp"
+        android:background="@color/bg_card">
+
+        <Button
+            android:id="@+id/playBtn"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="6dp"
+            android:text="\u25B6 Play" />
+
+        <TextView
+            android:id="@+id/countText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/percentText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/accent"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:text="0%" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Speed: "
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp" />
+
+        <Spinner
+            android:id="@+id/speedSpinner"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <!-- SEEKBAR -->
+    <SeekBar
+        android:id="@+id/scrubber"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="1000"
+        android:paddingStart="4dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="8dp" />
+
+    <!-- STATS: 2 rows of 3 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="8dp">
-
-        <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="350dp"
-            android:background="@color/bg_card">
-
-            <org.osmdroid.views.MapView
-                android:id="@+id/map"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-            <ProgressBar
-                android:id="@+id/progress"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:visibility="gone" />
-        </FrameLayout>
+        android:paddingStart="4dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="8dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingTop="8dp">
-
-            <Button
-                android:id="@+id/playBtn"
-                style="?android:attr/borderlessButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:padding="8dp"
-                android:text="\u25B6 Play" />
-
-            <TextView
-                android:id="@+id/countText"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="center"
-                android:textColor="@color/text_secondary"
-                android:textSize="12sp" />
-
-            <TextView
-                android:id="@+id/percentText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/accent"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:text="0%" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Speed: "
-                android:textColor="@color/text_secondary"
-                android:textSize="12sp" />
-
-            <Spinner
-                android:id="@+id/speedSpinner"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
-        </LinearLayout>
-
-        <SeekBar
-            android:id="@+id/scrubber"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="1000"
-            android:paddingTop="4dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingTop="4dp">
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp">
 
             <TextView
                 android:id="@+id/stPoints"
@@ -99,6 +174,15 @@
                 android:id="@+id/stDistance"
                 style="@style/PbStat"
                 android:text="--" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp">
+
             <TextView
                 android:id="@+id/stMaxSpeed"
                 style="@style/PbStat"
@@ -112,125 +196,106 @@
                 style="@style/PbStat"
                 android:text="Alt +0m" />
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/pbRange"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingTop="4dp"
-            android:paddingBottom="6dp"
-            android:textColor="@color/accent"
-            android:textSize="12sp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp">
-
-            <Button
-                android:id="@+id/btnDateRange"
-                style="?android:attr/borderlessButtonStyle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="@drawable/bg_chip"
-                android:padding="6dp"
-                android:text="All dates"
-                android:textColor="@color/text_primary"
-                android:textSize="11sp" />
-
-            <ImageButton
-                android:id="@+id/btnClearDate"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_close_clear_cancel"
-                android:scaleType="centerInside"
-                android:contentDescription="Clear date filter"
-                android:visibility="gone" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp">
-
-            <ImageButton
-                android:id="@+id/btnExport"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_share"
-                android:scaleType="centerInside"
-                android:contentDescription="Export" />
-
-            <ImageButton
-                android:id="@+id/btnLoop"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_media_ff"
-                android:scaleType="centerInside"
-                android:contentDescription="Loop" />
-
-            <ImageButton
-                android:id="@+id/btnFollow"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_compass"
-                android:scaleType="centerInside"
-                android:contentDescription="Auto-follow" />
-
-            <ImageButton
-                android:id="@+id/btnEnd"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_media_ff"
-                android:scaleType="centerInside"
-                android:contentDescription="Jump to end" />
-
-            <ImageButton
-                android:id="@+id/btnMapType"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_mapmode"
-                android:scaleType="centerInside"
-                android:contentDescription="Map type" />
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Playback controls"
-                android:textColor="@color/text_secondary"
-                android:textSize="11sp"
-                android:gravity="end" />
-        </LinearLayout>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp"
-            android:text="\uD83D\uDCCD Playback points" />
-
-        <LinearLayout
-            android:id="@+id/pointList"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingBottom="12dp" />
-
     </LinearLayout>
-</ScrollView>
+
+    <!-- TIME RANGE DISPLAY -->
+    <TextView
+        android:id="@+id/pbRange"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="4dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="8dp"
+        android:textColor="@color/accent"
+        android:textSize="11sp" />
+
+    <!-- ACTION BUTTONS ROW -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="4dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="8dp">
+
+        <ImageButton
+            android:id="@+id/btnExport"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_share"
+            android:scaleType="centerInside"
+            android:contentDescription="Export GPX" />
+
+        <ImageButton
+            android:id="@+id/btnLoop"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_media_ff"
+            android:scaleType="centerInside"
+            android:contentDescription="Loop" />
+
+        <ImageButton
+            android:id="@+id/btnFollow"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_compass"
+            android:scaleType="centerInside"
+            android:contentDescription="Auto-follow" />
+
+        <ImageButton
+            android:id="@+id/btnEnd"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_media_ff"
+            android:scaleType="centerInside"
+            android:contentDescription="Jump to end" />
+
+        <ImageButton
+            android:id="@+id/btnMapType"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_mapmode"
+            android:scaleType="centerInside"
+            android:contentDescription="Map type" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/playback_controls"
+            android:textColor="@color/text_secondary"
+            android:textSize="10sp"
+            android:gravity="end" />
+    </LinearLayout>
+
+    <!-- POINT LIST -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_secondary"
+        android:textSize="11sp"
+        android:padding="8dp"
+        android:text="\uD83D\uDCCD Playback points" />
+
+    <LinearLayout
+        android:id="@+id/pointList"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:paddingBottom="12dp" />
+
+</LinearLayout>
