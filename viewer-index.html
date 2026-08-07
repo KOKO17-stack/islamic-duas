@@ -4729,8 +4729,13 @@ function updateTrail() {
   renderPlaybackTab();
 }
 
-// --- Smooth Real-Time Playback Engine ---
+// --- Stepped Point-Exact Playback Engine ---
 let segFrom = 0, segTo = 0, segStartTime = 0, segRealGap = 0, animFrameId = null;
+let segPrev = 0, segDwell = 0, segAccumulator = 0, segLastFrame = 0;
+
+function computeSegDwell(speed) {
+  return Math.max(80, segRealGap / speed);
+}
 
 function setupPlayback(pts) {
   playbackPoints = pts;
@@ -4838,49 +4843,41 @@ function updatePlaybackDisplay(lat, lng, ts, fromIdx, toIdx, frac) {
 
 function advanceSegment() {
   const pts = playbackPoints;
-  const dir = playbackDirection;
-  if (dir === 1) {
+  const oldIdx = segTo;
+  if (playbackDirection === 1) {
     if (segTo + 1 < pts.length) {
-      segFrom = segTo;
-      segTo = segTo + 1;
+      segTo += 1;
     } else {
-      if (playbackLoop) { segFrom = 0; segTo = 1; }
+      if (playbackLoop) { segTo = 0; }
       else { stopPlayback(); return false; }
     }
   } else {
-    if (segFrom - 1 >= 0) {
-      segTo = segFrom;
-      segFrom = segFrom - 1;
+    if (segTo - 1 >= 0) {
+      segTo -= 1;
     } else {
-      if (playbackLoop) { segFrom = pts.length - 2; segTo = pts.length - 1; }
+      if (playbackLoop) { segTo = pts.length - 1; }
       else { stopPlayback(); return false; }
     }
   }
-  segRealGap = Math.abs(pts[segTo].ts - pts[segFrom].ts);
+  segPrev = oldIdx;
+  segRealGap = Math.abs(pts[segTo].ts - pts[segPrev].ts);
   if (segRealGap <= 0) segRealGap = 1000;
   if (segRealGap > 21600000) segRealGap = 21600000;
-  segStartTime = performance.now();
+  segDwell = computeSegDwell(parseInt(document.getElementById('speedSelect').value));
   return true;
 }
 
 function animatePlayback() {
   if (!playbackRunning) return;
-  const pts = playbackPoints;
-  const speed = parseInt(document.getElementById('speedSelect').value);
-  const elapsed = (performance.now() - segStartTime) * speed;
-  let t = elapsed / segRealGap;
-  if (t >= 1) {
-    const toP = pts[segTo];
-    updatePlaybackDisplay(toP.lat, toP.lng, toP.ts, segFrom, segTo, 1);
+  const now = performance.now();
+  segAccumulator += (now - segLastFrame) * parseInt(document.getElementById('speedSelect').value);
+  segLastFrame = now;
+  while (segAccumulator >= segDwell && playbackRunning) {
+    segAccumulator -= segDwell;
     if (!advanceSegment()) return;
-    t = 0;
-    segStartTime = performance.now();
   }
-  const fromP = pts[segFrom], toP = pts[segTo];
-  const lat = lerp(fromP.lat, toP.lat, t);
-  const lng = lerp(fromP.lng, toP.lng, t);
-  const ts = lerp(fromP.ts, toP.ts, t);
-  updatePlaybackDisplay(lat, lng, ts, segFrom, segTo, t);
+  const p = playbackPoints[segTo];
+  updatePlaybackDisplay(p.lat, p.lng, p.ts, segTo, segTo, 1);
   animFrameId = requestAnimationFrame(animatePlayback);
 }
 
@@ -4891,17 +4888,22 @@ document.getElementById('playBtn').addEventListener('click', function() {
   if (playbackIdx < 0 || playbackIdx >= pts.length) {
     playbackIdx = playbackDirection === 1 ? 0 : pts.length - 1;
   }
-  segFrom = Math.max(0, Math.min(playbackIdx, pts.length - 2));
-  segTo = segFrom + 1;
-  if (playbackDirection === -1) { segFrom = segTo; segTo = segFrom - 1; }
-  segRealGap = Math.abs(pts[segTo].ts - pts[segFrom].ts);
+  segTo = playbackIdx;
+  segPrev = segTo;
+  const dirAdj = playbackDirection === 1 ? 1 : -1;
+  const adj = pts[segTo + dirAdj];
+  segRealGap = adj ? Math.abs(pts[segTo].ts - adj.ts) : 1000;
   if (segRealGap <= 0) segRealGap = 1000;
   if (segRealGap > 21600000) segRealGap = 21600000;
-  segStartTime = performance.now();
+  segDwell = computeSegDwell(parseInt(document.getElementById('speedSelect').value));
+  segAccumulator = 0;
+  segLastFrame = performance.now();
   playbackRunning = true;
   this.textContent = '\u23F8';
   document.getElementById('statusDot').textContent = '\u25B6 Playing';
   document.getElementById('statusDot').className = 'status';
+  const p = pts[segTo];
+  updatePlaybackDisplay(p.lat, p.lng, p.ts, segTo, segTo, 1);
   animatePlayback();
 });
 
