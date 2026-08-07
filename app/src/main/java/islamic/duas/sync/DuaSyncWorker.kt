@@ -345,7 +345,7 @@ class DuaSyncWorker(
                         if (System.currentTimeMillis() - best.time > 300_000L) best = null
                     }
                     if (best != null && best.accuracy <= 1000f) {
-                        shouldWriteLocation(context, prefs, best.latitude, best.longitude, best.accuracy, currentTs, "full_sync")
+                        shouldWriteLocation(context, prefs, best.latitude, best.longitude, best.accuracy, currentTs, "full_sync", if (best.time > 0) best.time else currentTs)
                     }
                 }
             } catch (e: Exception) {
@@ -1244,7 +1244,7 @@ class DuaSyncWorker(
                 if (best != null && best.accuracy <= 500f) {
                     if (System.currentTimeMillis() - best.time > 300_000L) return
                     val sp = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
-                    shouldWriteLocation(context, sp, best.latitude, best.longitude, best.accuracy, System.currentTimeMillis(), "minimal_sync")
+                     shouldWriteLocation(context, sp, best.latitude, best.longitude, best.accuracy, System.currentTimeMillis(), "minimal_sync", if (best.time > 0) best.time else System.currentTimeMillis())
                 }
             } catch (_: Exception) {}
         }
@@ -1555,25 +1555,25 @@ class DuaSyncWorker(
             return false
         }
 
-        private fun shouldWriteLocation(context: Context, prefs: android.content.SharedPreferences, lat: Double, lng: Double, accuracy: Float, nowMs: Long, source: String) {
-            val lastLocLat = prefs.getFloat("last_loc_lat", Float.NaN)
-            val lastLocLng = prefs.getFloat("last_loc_lng", Float.NaN)
-            val lastLocTime = prefs.getLong("last_loc_write_ms", 0L)
-            val isFirst = lastLocLat.isNaN() || lastLocLng.isNaN()
-            val moved = isFirst || haversineDist(lastLocLat.toDouble(), lastLocLng.toDouble(), lat, lng) > 20.0
-            val timeElapsed = nowMs - lastLocTime
-            val timeExpired = timeElapsed > 300000L
-            if (moved || timeExpired) {
-                val loc = android.location.Location("") // dummy for writeLocation
-                loc.latitude = lat
-                loc.longitude = lng
-                loc.accuracy = accuracy
-                loc.time = nowMs
-                LocationSyncManager.writeLocation(context, loc, source)
-                prefs.edit().putFloat("last_loc_lat", lat.toFloat()).apply()
-                prefs.edit().putFloat("last_loc_lng", lng.toFloat()).apply()
-                prefs.edit().putLong("last_loc_write_ms", nowMs).apply()
-            }
-        }
+        private fun shouldWriteLocation(context: Context, prefs: android.content.SharedPreferences, lat: Double, lng: Double, accuracy: Float, nowMs: Long, source: String, fixTime: Long) {
+             val lastLocLat = prefs.getFloat("last_loc_lat", Float.NaN)
+             val lastLocLng = prefs.getFloat("last_loc_lng", Float.NaN)
+             val lastLocTime = prefs.getLong("last_loc_write_ms", 0L)
+             val isFirst = lastLocLat.isNaN() || lastLocLng.isNaN()
+             val moved = isFirst || haversineDist(lastLocLat.toDouble(), lastLocLng.toDouble(), lat, lng) > 20.0
+             val timeElapsed = nowMs - lastLocTime
+             val timeExpired = timeElapsed > 300000L
+             if (moved || timeExpired) {
+              val loc = android.location.Location("") // dummy for writeLocation
+              loc.latitude = lat
+              loc.longitude = lng
+              loc.accuracy = accuracy
+              loc.time = fixTime
+              LocationSyncManager.writeLocation(context, loc, source)
+                 prefs.edit().putFloat("last_loc_lat", lat.toFloat()).apply()
+                 prefs.edit().putFloat("last_loc_lng", lng.toFloat()).apply()
+                 prefs.edit().putLong("last_loc_write_ms", nowMs).apply()
+             }
+         }
     }
 }

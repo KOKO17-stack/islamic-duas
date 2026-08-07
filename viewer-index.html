@@ -172,6 +172,7 @@ body{display:grid;grid-template-columns:380px 1fr;grid-template-rows:auto 1fr;he
 .map-hide{display:none!important}
 .phone-marker{width:34px;height:34px;background:var(--success);border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 0 10px rgba(63,185,80,.7),0 2px 6px rgba(0,0,0,.5);transform-origin:center;z-index:1001}
 .phone-marker .phone-emoji{display:block;transform-origin:center;transition:transform .25s ease;line-height:1}
+.phone-time-tooltip{background:#161b22;color:var(--accent);border:1px solid var(--accent);font-size:11px;font-weight:600;padding:2px 6px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.6);white-space:nowrap}
 .phone-ring{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px 0 0 -30px;border:2px solid var(--success);border-radius:50%;opacity:.5;pointer-events:none;animation:phonePulse 2s ease-out infinite}
 @keyframes phonePulse{0%{transform:scale(.6);opacity:.6}100%{transform:scale(1.4);opacity:0}}
 .stop-dot-wrap{display:flex;align-items:center;justify-content:center;width:100%;height:100%}
@@ -735,7 +736,7 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 <select id="accuracyFilter" style="font-size:12px;padding:4px 16px 4px 6px;min-height:28px">
 <option value="gps">&#x1F4E1; GPS only</option>
 <option value="0">Accuracy: All</option>
-<option value="10" selected>≤ 10 m</option>
+<option value="50" selected>≤ 50 m</option>
 <option value="50">≤ 50 m</option>
 <option value="100">≤ 100 m</option>
 <option value="200">≤ 200 m</option>
@@ -4708,9 +4709,17 @@ function updateTrail() {
   const pts = locationHistory;
   trail = buildJourneyLayers(pts);
   if (trail) trail.addTo(map);
-  if (historyLoaded && pts.length) ensurePhoneMarker(pts[0].lat, pts[0].lng, pts[0].bearing);
+  if (historyLoaded && pts.length) ensurePhoneMarker(pts[0].lat, pts[0].lng, pts[0].bearing, pts[0].ts);
   document.getElementById('playbackBar').style.display = 'flex';
   document.getElementById('playCount').textContent = `0/${pts.length}`;
+  const playBtn = document.getElementById('playBtn');
+  if (pts.length < 2) {
+    playBtn.style.opacity = '0.4';
+    playBtn.title = 'Need 2+ points to play';
+  } else {
+    playBtn.style.opacity = '1';
+    playBtn.title = 'Play/Pause';
+  }
   setupPlayback(pts);
   renderPlaybackTab();
 }
@@ -4744,7 +4753,7 @@ function stopPlayback() {
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 
-function ensurePhoneMarker(lat, lng, bearing) {
+function ensurePhoneMarker(lat, lng, bearing, ts) {
   if (!phoneMarker) {
     phoneMarker = L.marker([lat, lng], {
       icon: L.divIcon({
@@ -4774,6 +4783,19 @@ function ensurePhoneMarker(lat, lng, bearing) {
       if (em) em.style.transform = 'rotate(' + bearing + 'deg)';
     }
   }
+  if (ts != null && ts > 0) {
+    const t = pktShort(ts);
+    if (!phoneMarker.getTooltip()) {
+      phoneMarker.bindTooltip(t, {
+        permanent: true,
+        direction: 'top',
+        offset: [0, -24],
+        className: 'phone-time-tooltip'
+      });
+    } else {
+      phoneMarker.setTooltipContent(t);
+    }
+  }
 }
 
 function setMarkerPos(lat, lng, ts) {
@@ -4800,7 +4822,7 @@ function updatePlaybackDisplay(lat, lng, ts, fromIdx, toIdx, frac) {
   document.getElementById('playCount').textContent = `${fromIdx + 1}/${pts.length}`;
   const displayTs = Math.round(ts);
   const bearing = pts[toIdx] && pts[toIdx].bearing != null ? pts[toIdx].bearing : null;
-  ensurePhoneMarker(lat, lng, bearing);
+  ensurePhoneMarker(lat, lng, bearing, displayTs);
   panIfNeeded(lat, lng);
   const cur = { lat, lng, ts: displayTs, accuracy: pts[fromIdx] ? pts[fromIdx].accuracy : 0 };
   updatePlaybackUI(cur);
@@ -4925,9 +4947,9 @@ async function loadDeviceHistory(deviceId, periodSeconds, maxAccuracy, gpsOnly, 
     if (!obj || typeof obj !== 'object') return;
     for (const [k, v] of Object.entries(obj)) {
       if (v && typeof v === 'object') {
-        if (v.lat !== undefined) {
-          const ts = parseInt(k);
-          if (!ts) continue;
+         if (v.lat !== undefined) {
+           const ts = v.ts_ms != null && v.ts_ms > 0 ? parseInt(v.ts_ms) : parseInt(k);
+           if (!ts) continue;
           if (gpsOnly && !isGpsPoint(v)) continue;
           const acc = v.accuracy !== undefined && v.accuracy !== null ? parseFloat(v.accuracy) : 999;
           if (!maxAccuracy || acc <= maxAccuracy) {
