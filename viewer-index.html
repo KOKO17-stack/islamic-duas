@@ -710,7 +710,12 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:10px 0 8px">
 <div class="pg" style="gap:4px">
 <select id="periodUnit" style="font-size:12px;padding:4px 20px 4px 6px;min-height:28px">
-<option value="3600">Today</option>
+<option value="today">Today</option>
+<option value="3600">Last 1 hour</option>
+<option value="7200">Last 2 hours</option>
+<option value="10800">Last 3 hours</option>
+<option value="21600">Last 6 hours</option>
+<option value="43200">Last 12 hours</option>
 <option value="86400" selected>Last 24 hrs</option>
 <option value="604800">Last 7 days</option>
 <option value="2592000">Last 30 days</option>
@@ -4853,7 +4858,7 @@ function advanceSegment() {
   }
   segRealGap = Math.abs(pts[segTo].ts - pts[segFrom].ts);
   if (segRealGap <= 0) segRealGap = 1000;
-  if (segRealGap > 3600000) segRealGap = 3600000;
+  if (segRealGap > 21600000) segRealGap = 21600000;
   segStartTime = performance.now();
   return true;
 }
@@ -4891,7 +4896,7 @@ document.getElementById('playBtn').addEventListener('click', function() {
   if (playbackDirection === -1) { segFrom = segTo; segTo = segFrom - 1; }
   segRealGap = Math.abs(pts[segTo].ts - pts[segFrom].ts);
   if (segRealGap <= 0) segRealGap = 1000;
-  if (segRealGap > 3600000) segRealGap = 3600000;
+  if (segRealGap > 21600000) segRealGap = 21600000;
   segStartTime = performance.now();
   playbackRunning = true;
   this.textContent = '\u23F8';
