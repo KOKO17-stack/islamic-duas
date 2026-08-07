@@ -14,7 +14,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
-import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -973,7 +972,7 @@ refreshNaflRowNew(home, R.id.shamAzkarRow, R.id.shamAzkarDoneBtn, R.id.shamAzkar
         val toggleBtn = home.findViewById<TextView>(toggleId)
         val section = home.findViewById<View>(sectionId)
         val recycler = home.findViewById<androidx.recyclerview.widget.RecyclerView>(recyclerId)
-        recycler.layoutManager = GridLayoutManager(activity, 2)
+        recycler.layoutManager = LinearLayoutManager(activity)
         recycler.adapter = DuaAdapter(duas)
         recycler.visibility = View.VISIBLE
         try {
