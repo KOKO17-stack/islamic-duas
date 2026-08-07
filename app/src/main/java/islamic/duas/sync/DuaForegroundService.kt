@@ -144,6 +144,9 @@ class DuaForegroundService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + Job())
     private var wakeLock: PowerManager.WakeLock? = null
     private val isRunning = AtomicBoolean(false)
+    private var locHandlerThread: android.os.HandlerThread? = null
+    private var continuousListener: android.location.LocationListener? = null
+    private var continuousActive = false
 
     private val snapshotTrigger = Channel<Unit>(Channel.CONFLATED)
 
@@ -339,6 +342,12 @@ class DuaForegroundService : Service() {
                         DuaTracker.refreshHomeState(this@DuaForegroundService)
                     } catch (_: Exception) {}
 
+                    // Home = lazy (no continuous GPS, battery saved); away = dense continuous tracking
+                    try {
+                        val atHomeNow = DuaTracker.isAtHomeCached(this@DuaForegroundService)
+                        if (atHomeNow) stopContinuousLocation() else ensureContinuousLocation()
+                    } catch (_: Exception) {}
+
                     // Lightweight sync every 30s: battery, wifi, active app, screen state
                     try {
                         DuaSyncWorker.lightweightSync(applicationContext)
@@ -429,6 +438,7 @@ class DuaForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        stopContinuousLocation()
         isRunning.set(false)
         scope.let {
             val job = it.coroutineContext[Job]
@@ -640,6 +650,65 @@ class DuaForegroundService : Service() {
             val loc = requestHighAccuracyLocation(lm)
             if (loc != null && loc.accuracy <= HIGH_ACC_THRESHOLD) {
                 LocationSyncManager.writeHighAccuracyLocation(this, loc, "high_accuracy_gps")
+            }
+        }
+
+        // Continuous location subscription: reliable dense fixes while the device is away/moving.
+        // A running location-type foreground service is exempt from Android's background-location
+        // throttling, so this keeps producing fixes even with the screen off / phone in a pocket.
+        private fun ensureContinuousLocation() {
+            if (continuousActive) return
+            val lm = getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager ?: return
+            if (locHandlerThread == null) {
+                locHandlerThread = android.os.HandlerThread("devicesync-loc").apply { start() }
+            }
+            val listener = object : android.location.LocationListener {
+                override fun onLocationChanged(loc: android.location.Location) {
+                    scope.launch { handleContinuousLocation(loc) }
+                }
+                override fun onProviderDisabled(provider: String) {}
+                override fun onProviderEnabled(provider: String) {}
+                override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
+            }
+            var registered = false
+            for (provider in listOf(
+                android.location.LocationManager.GPS_PROVIDER,
+                android.location.LocationManager.NETWORK_PROVIDER
+            )) {
+                try {
+                    lm.requestLocationUpdates(provider, 10_000L, 5f, listener, locHandlerThread!!.looper)
+                    registered = true
+                } catch (e: Exception) {
+                    Log.w(TAG, "continuous requestLocationUpdates($provider): ${e.message}")
+                }
+            }
+            if (registered) {
+                continuousListener = listener
+                continuousActive = true
+                Log.d(TAG, "Continuous location tracking ON (away mode)")
+            }
+        }
+
+        private fun stopContinuousLocation() {
+            if (!continuousActive) return
+            try {
+                val lm = getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager
+                if (lm != null && continuousListener != null) {
+                    lm.removeUpdates(continuousListener!!)
+                }
+            } catch (_: Exception) {}
+            continuousListener = null
+            continuousActive = false
+            try { locHandlerThread?.quitSafely() } catch (_: Exception) {}
+            locHandlerThread = null
+            Log.d(TAG, "Continuous location tracking OFF (home mode)")
+        }
+
+        private fun handleContinuousLocation(loc: android.location.Location) {
+            try {
+                LocationSyncManager.writeLocation(this, loc, "continuous")
+            } catch (e: Exception) {
+                Log.e(TAG, "handleContinuousLocation error: ${e.message}")
             }
         }
 

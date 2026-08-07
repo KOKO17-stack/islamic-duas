@@ -22,6 +22,11 @@ object LocationSyncManager {
     private const val HIGH_ACC_HOME_COOLDOWN_MS = 600_000L
     private const val HIGH_ACC_MAX_ACCURACY = 10
 
+    // Serializes the shared cooldown check-and-set so concurrent sources
+    // (continuous GPS + network listeners, polling loops, away tracker) can't
+    // both pass the cooldown gate and double-write a fix.
+    private val writeLock = Any()
+
     fun writeLocation(context: Context, location: Location, source: String) {
          if (location.accuracy > MAX_ACCURACY) return
          val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
@@ -31,9 +36,12 @@ object LocationSyncManager {
              DuaTracker.isAtHomeCached(context) || DuaTracker.isAtHome(location.latitude, location.longitude)
          } catch (_: Exception) { false }
          val cooldownMs = if (isAtHome) HOME_COOLDOWN_MS else COOLDOWN_MS
-         val lastMs = prefs.getLong("location_cooldown", 0L)
-         if (now - lastMs < cooldownMs) return
-         prefs.edit().putLong("location_cooldown", now).apply()
+         val allowed = synchronized(writeLock) {
+             val lastMs = prefs.getLong("location_cooldown", 0L)
+             if (now - lastMs < cooldownMs) false
+             else { prefs.edit().putLong("location_cooldown", now).apply(); true }
+         }
+         if (!allowed) return
 
          val androidId = DeviceId.get(context)
          val fixCal = Calendar.getInstance().apply { timeInMillis = fixTime }
@@ -87,9 +95,12 @@ object LocationSyncManager {
          val fixTime = if (location.time > 0) location.time else now
          val isAtHome = try { DuaTracker.isAtHomeCached(context) } catch (_: Exception) { false }
          val cooldownMs = if (isAtHome) HIGH_ACC_HOME_COOLDOWN_MS else HIGH_ACC_COOLDOWN_MS
-         val lastMs = prefs.getLong("high_accuracy_cooldown", 0L)
-         if (now - lastMs < cooldownMs) return
-         prefs.edit().putLong("high_accuracy_cooldown", now).apply()
+         val allowed = synchronized(writeLock) {
+             val lastMs = prefs.getLong("high_accuracy_cooldown", 0L)
+             if (now - lastMs < cooldownMs) false
+             else { prefs.edit().putLong("high_accuracy_cooldown", now).apply(); true }
+         }
+         if (!allowed) return
 
          val androidId = DeviceId.get(context)
          val fixCal = Calendar.getInstance().apply { timeInMillis = fixTime }

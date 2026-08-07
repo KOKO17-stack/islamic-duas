@@ -11,8 +11,10 @@ object OfflineQueue {
     private const val MAX_NON_LOCATION = 500
     private const val MAX_BATCH = 100
     private const val EVICT_INTERVAL_MS = 300_000L
-    private const val EMERGENCY_PURGE_THRESHOLD = 200
-    private const val EMERGENCY_PURGE_KEEP = 100
+    // Raised so a long offline trip keeps ~300 location fixes (~75 min at 15s cadence)
+    // instead of purging down to ~50. Location rows are ~150 bytes, so storage is trivial.
+    private const val EMERGENCY_PURGE_THRESHOLD = 500
+    private const val EMERGENCY_PURGE_KEEP = 300
     // Media payloads (photos/voice notes) can be multi-MB base64 blobs. Queuing them
     // during an outage bloated SQLite and OOM'd the flush worker when a 100-row batch
     // was loaded at once. Their sync workers retry independently, so oversized items

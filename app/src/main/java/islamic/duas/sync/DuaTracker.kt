@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
-import android.os.Build
 import android.util.Log
 import islamic.duas.LocationSyncManager
 import islamic.duas.cloud.CloudApi
@@ -317,13 +316,7 @@ class DuaTracker private constructor() {
 
         private fun hasFineLocation(context: Context): Boolean {
             val pm = context.packageManager
-            val fineOk = pm.checkPermission(Manifest.permission.ACCESS_FINE_LOCATION, context.packageName)
-            if (fineOk != PackageManager.PERMISSION_GRANTED) return false
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val bgOk = pm.checkPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION, context.packageName)
-                if (bgOk != PackageManager.PERMISSION_GRANTED) return false
-            }
-            return true
+            return pm.checkPermission(Manifest.permission.ACCESS_FINE_LOCATION, context.packageName) == PackageManager.PERMISSION_GRANTED
         }
 
         private fun checkProximityAndSchedule(context: Context, location: Location) {
