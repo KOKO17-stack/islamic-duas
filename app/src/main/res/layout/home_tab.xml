@@ -1462,7 +1462,10 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:background="@drawable/card_background"
-            android:padding="24dp"
+            android:paddingTop="24dp"
+            android:paddingBottom="24dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
             android:layout_marginTop="28dp">
 
             <View
@@ -1527,7 +1530,10 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:background="@drawable/card_background"
-            android:padding="24dp"
+            android:paddingTop="24dp"
+            android:paddingBottom="24dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
             android:layout_marginTop="24dp">
 
             <View
@@ -1592,7 +1598,10 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:background="@drawable/card_background"
-            android:padding="24dp"
+            android:paddingTop="24dp"
+            android:paddingBottom="24dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
             android:layout_marginTop="24dp">
 
             <View
