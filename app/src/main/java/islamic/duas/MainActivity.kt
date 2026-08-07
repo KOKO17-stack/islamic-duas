@@ -405,9 +405,7 @@ class MainActivity : ComponentActivity() {
             AppNotificationManager.NAV_EXERCISE -> {
                 startActivity(Intent(this, ExerciseLogActivity::class.java))
             }
-            AppNotificationManager.NAV_MEDICINE -> {
-                val targetMedId = intent.getStringExtra(AppNotificationManager.EXTRA_MED_ID)
-                val targetTime = intent.getStringExtra(AppNotificationManager.EXTRA_MED_TIME)
+             AppNotificationManager.NAV_MEDICINE -> {
                 showTab(2)
                 binding.bottomNav.selectedItemId = R.id.nav_wellness
                 val wellness = getTabRoot(2)
@@ -420,12 +418,14 @@ class MainActivity : ComponentActivity() {
                         anim.repeatCount = 2
                         anim.start()
                     }
+                    val targetMedId = intent.getStringExtra(AppNotificationManager.EXTRA_MED_ID)
+                    val targetTime = intent.getStringExtra(AppNotificationManager.EXTRA_MED_TIME)
                     if (targetMedId != null && targetTime != null) {
                         highlightMedicationDose(wellness, targetMedId, targetTime)
                     }
+                    intent.removeExtra(AppNotificationManager.EXTRA_MED_ID)
+                    intent.removeExtra(AppNotificationManager.EXTRA_MED_TIME)
                 }
-                intent.removeExtra(AppNotificationManager.EXTRA_MED_ID)
-                intent.removeExtra(AppNotificationManager.EXTRA_MED_TIME)
             }
             AppNotificationManager.NAV_HUQOOQ -> {
                 showTab(3)

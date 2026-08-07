@@ -60,8 +60,7 @@ class AppNotificationManager(private val context: Context) {
         private const val NOTIFY_READING = 13001
         private const val NOTIFY_SLEEP_AZKAR = 14001
 
-        private const val MED_REMINDER_BASE = 1_000_000
-        private const val MED_ESCALATION_BASE = 2_000_000
+         private const val MED_REMINDER_BASE = 1_000_000
         private const val MED_SNOOZE_BASE = 3_000_000
 
         const val ACTION_ADHAN_ALARM = "islamic.duas.ADHAN_ALARM"
@@ -70,8 +69,7 @@ class AppNotificationManager(private val context: Context) {
         const val ACTION_EXERCISE_REMINDER = "islamic.duas.EXERCISE_REMINDER"
         const val ACTION_MEDICINE_REMINDER = "islamic.duas.MEDICINE_REMINDER"
         const val ACTION_MEDICINE_TAKEN = "islamic.duas.MEDICINE_TAKEN"
-        const val ACTION_MEDICINE_SNOOZE = "islamic.duas.MEDICINE_SNOOZE"
-        const val ACTION_MEDICINE_ESCALATE = "islamic.duas.MEDICINE_ESCALATE"
+         const val ACTION_MEDICINE_SNOOZE = "islamic.duas.MEDICINE_SNOOZE"
         const val ACTION_DAILY_RECAP = "islamic.duas.DAILY_RECAP"
         const val ACTION_PRAYER_CHECK_ALARM = "islamic.duas.PRAYER_CHECK_ALARM"
         const val ACTION_PRAYER_CHECK_DONE = "islamic.duas.PRAYER_CHECK_DONE"
@@ -87,9 +85,8 @@ class AppNotificationManager(private val context: Context) {
         const val EXTRA_PRAYER_NAME = "prayer_name"
         const val EXTRA_ADHAN_MODE = "adhan_mode"
         const val EXTRA_RAIN_CHANCE = "rain_chance"
-        const val EXTRA_MED_TIME = "med_time"
+         const val EXTRA_MED_TIME = "med_time"
         const val EXTRA_MED_ID = "med_id"
-        const val EXTRA_MED_ESCALATIONS = "med_escalations"
         const val EXTRA_NAV_SECTION = "nav_section"
         const val NAV_HOME = "home"
         const val NAV_WEATHER = "weather"
@@ -324,28 +321,18 @@ fun showExerciseReminder() {
         }
     }
 
-    fun showMedicineReminder(timePeriod: String? = null, escalated: Boolean = false, fullScreen: Boolean = false): Boolean {
+    fun showMedicineReminder(timePeriod: String? = null): Boolean {
         if (!hasPermission()) return false
         val pending = pendingMedicinesForSlot(timePeriod)
         if (pending.isEmpty()) return false
 
         val names = pending.map { it.second }
-        val msg = if (escalated) {
-            "⚠️ " + names.joinToString("، ") + " — ابھی تک نہیں لی گئی، براہ کرم ابھی لیں!"
-        } else {
-            names.joinToString("، ") + " — " + (timePeriod ?: "دوا") + " کا وقت!"
-        }
+        val msg = names.joinToString("، ") + " — " + (timePeriod ?: "دوا") + " کا وقت!"
 
-        val title = when {
-            escalated -> when (timePeriod) {
-                "صبح" -> "⏰ صبح کی دوائیں — ابھی لیں!"
-                "دوپہر" -> "⏰ دوپہر کی دوائیں — ابھی لیں!"
-                "شام" -> "⏰ شام کی دوائیں — ابھی لیں!"
-                else -> "⏰ ${timePeriod ?: "دوا"} کا وقت — ابھی لیں!"
-            }
-            timePeriod == "صبح" -> "🌅 صبح کی دوائیں"
-            timePeriod == "دوپہر" -> "☀️ دوپہر کی دوائیں"
-            timePeriod == "شام" -> "🌆 شام کی دوائیں"
+        val title = when (timePeriod) {
+            "صبح" -> "🌅 صبح کی دوائیں"
+            "دوپہر" -> "☀️ دوپہر کی دوائیں"
+            "شام" -> "🌆 شام کی دوائیں"
             else -> "💊 ${timePeriod ?: "دوا"} کا وقت"
         }
 
@@ -358,30 +345,30 @@ fun showExerciseReminder() {
             .setContentText(msg)
             .setStyle(NotificationCompat.BigTextStyle().bigText(msg))
             .setAutoCancel(true)
-            .setPriority(if (escalated) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
-            .setContentIntent(getNavIntent(NAV_MEDICINE, medId = navMedId, medTime = navTime))
-
-        if (fullScreen) {
-            builder.setFullScreenIntent(getNavIntent(NAV_MEDICINE, medId = navMedId, medTime = navTime), true)
-        }
-
-        if (timePeriod != null) {
-            if (pending.size == 1) {
-                builder.addAction(medicineTakenAction(null, timePeriod))
-                builder.addAction(medicineSnoozeAction(timePeriod))
-            } else {
-                // Multiple meds: one button per med so one dose cannot be over-marked.
-                // Up to 3 actions fit; snooze only kept when buttons don't fill the slot.
-                for ((medId, medName) in pending.take(3)) {
-                    builder.addAction(medicineTakenAction(medId, timePeriod, medName))
-                }
-                if (pending.size < 3) builder.addAction(medicineSnoozeAction(timePeriod))
-            }
-        }
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(getMedicationDoseIntent(navMedId, navTime))
 
         val notifId = NOTIFY_MEDICINE + (timePeriod?.hashCode() ?: 0)
         NotificationManagerCompat.from(context).notify(notifId, builder.build())
         return true
+    }
+
+    private fun getMedicationDoseIntent(medId: String?, medTime: String?): PendingIntent {
+        val intent = Intent(context, MedicationDosePromptActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            medId?.let { putExtra(EXTRA_MED_ID, it) }
+            medTime?.let { putExtra(EXTRA_MED_TIME, it) }
+        }
+        val code = 60000 + (medTime?.hashCode() ?: 0)
+        return PendingIntent.getActivity(
+            context, code, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    fun cancelMedicineNotification(timePeriod: String) {
+        val notifId = NOTIFY_MEDICINE + timePeriod.hashCode()
+        NotificationManagerCompat.from(context).cancel(notifId)
     }
 
     fun refreshMedicineReminder(timePeriod: String) {
@@ -435,32 +422,6 @@ fun showExerciseReminder() {
         NotificationManagerCompat.from(context).notify(
             NOTIFY_MEDICINE_CONFIRM + timePeriod.hashCode(), builder.build()
         )
-    }
-
-    private fun medicineTakenAction(medId: String?, timePeriod: String, medName: String = "لے لی"): NotificationCompat.Action {
-        val intent = Intent(context, NotificationReceiver::class.java).apply {
-            action = ACTION_MEDICINE_TAKEN
-            putExtra(EXTRA_MED_TIME, timePeriod)
-            medId?.let { putExtra(EXTRA_MED_ID, it) }
-        }
-        val reqCode = if (medId != null) 50050 + medId.hashCode() else 50000 + timePeriod.hashCode()
-        val pendingIntent = PendingIntent.getBroadcast(
-            context, reqCode, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        return NotificationCompat.Action(android.R.drawable.ic_input_add, "✅ $medName", pendingIntent)
-    }
-
-    private fun medicineSnoozeAction(timePeriod: String): NotificationCompat.Action {
-        val intent = Intent(context, NotificationReceiver::class.java).apply {
-            action = ACTION_MEDICINE_SNOOZE
-            putExtra(EXTRA_MED_TIME, timePeriod)
-        }
-        val pendingIntent = PendingIntent.getBroadcast(
-            context, 50001 + timePeriod.hashCode(), intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        return NotificationCompat.Action(android.R.drawable.ic_menu_revert, "🔔 بعد میں", pendingIntent)
     }
 
     private fun pendingMedicinesForSlot(timePeriod: String?): List<Pair<String, String>> {
@@ -772,7 +733,6 @@ fun showExerciseReminder() {
         val hm = doseTimeToHourMinute(timePeriod) ?: return
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-        // Re-arm tomorrow's same-label alarm (one-shot daily chain)
         val cal = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, hm.first)
             set(Calendar.MINUTE, hm.second)
@@ -789,27 +749,6 @@ fun showExerciseReminder() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         scheduleExactOrFallback(alarmManager, cal, slotPending)
-
-        // Start escalating only if something is actually still due
-        if (posted) {
-            scheduleMedicineEscalation(timePeriod, 1)
-        }
-    }
-
-    fun scheduleMedicineEscalation(timePeriod: String, count: Int) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val delayMin = if (count <= 1) 30 else 60
-        val cal = Calendar.getInstance().apply { add(Calendar.MINUTE, delayMin) }
-        val intent = Intent(context, NotificationReceiver::class.java).apply {
-            action = ACTION_MEDICINE_ESCALATE
-            putExtra(EXTRA_MED_TIME, timePeriod)
-            putExtra(EXTRA_MED_ESCALATIONS, count)
-        }
-        val pendingIntent = PendingIntent.getBroadcast(
-            context, doseLabelCode(timePeriod, MED_ESCALATION_BASE), intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        scheduleExactOrFallback(alarmManager, cal, pendingIntent)
     }
 
     fun snoozeMedicineReminder(timePeriod: String) {
@@ -832,15 +771,6 @@ fun showExerciseReminder() {
 
     fun cancelMedicineSlotAlarms(timePeriod: String) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val escIntent = Intent(context, NotificationReceiver::class.java).apply {
-            action = ACTION_MEDICINE_ESCALATE
-            putExtra(EXTRA_MED_TIME, timePeriod)
-        }
-        val escPending = PendingIntent.getBroadcast(
-            context, doseLabelCode(timePeriod, MED_ESCALATION_BASE), escIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        alarmManager.cancel(escPending)
         val snoozeIntent = Intent(context, NotificationReceiver::class.java).apply {
             action = ACTION_MEDICINE_REMINDER
             putExtra(EXTRA_MED_TIME, timePeriod)
@@ -1189,24 +1119,11 @@ class NotificationReceiver : BroadcastReceiver() {
             AppNotificationManager.ACTION_EXERCISE_REMINDER -> {
                 notifManager.showExerciseReminder()
             }
-            AppNotificationManager.ACTION_MEDICINE_REMINDER -> {
+             AppNotificationManager.ACTION_MEDICINE_REMINDER -> {
                 val timePeriod = intent.getStringExtra(AppNotificationManager.EXTRA_MED_TIME)
                 val posted = notifManager.showMedicineReminder(timePeriod)
                 if (timePeriod != null) {
                     notifManager.scheduleMedicineFollowUps(timePeriod, posted)
-                }
-            }
-            AppNotificationManager.ACTION_MEDICINE_ESCALATE -> {
-                val timePeriod = intent.getStringExtra(AppNotificationManager.EXTRA_MED_TIME) ?: return
-                val count = intent.getIntExtra(AppNotificationManager.EXTRA_MED_ESCALATIONS, 1)
-                val fullScreenPop = count == 4
-                val posted = notifManager.showMedicineReminder(timePeriod, escalated = true, fullScreen = fullScreenPop)
-                if (posted) {
-                    val cal = Calendar.getInstance()
-                    val hourOfDay = cal.get(Calendar.HOUR_OF_DAY)
-                    if (hourOfDay < 23 && notifManager.medicineSlotHasPending(timePeriod)) {
-                        notifManager.scheduleMedicineEscalation(timePeriod, count + 1)
-                    }
                 }
             }
             AppNotificationManager.ACTION_MEDICINE_TAKEN -> {

@@ -163,10 +163,18 @@
             android:exported="false"
             android:theme="@style/Theme.App.EmeraldDusk.Dark" />
 
-        <activity
-            android:name=".MedicineTrackerActivity"
-            android:exported="false"
-            android:theme="@style/Theme.App.EmeraldDusk.Dark" />
+         <activity
+             android:name=".MedicineTrackerActivity"
+             android:exported="false"
+             android:theme="@style/Theme.App.EmeraldDusk.Dark" />
+
+         <activity
+             android:name=".MedicationDosePromptActivity"
+             android:exported="false"
+             android:launchMode="singleTop"
+             android:theme="@style/Theme.App.EmeraldDusk.MedicationDialog"
+             android:showWhenLocked="true"
+             android:turnScreenOn="true" />
 
         <activity
             android:name=".ExerciseLogActivity"
