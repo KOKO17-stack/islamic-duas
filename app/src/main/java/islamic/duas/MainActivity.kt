@@ -839,15 +839,214 @@ class MainActivity : ComponentActivity() {
         if (!::binding.isInitialized) return
         setupTasbeeh(azkar)
         azkar.post {
-            setupMorningAzkar(azkar)
-            setupEveningAzkar(azkar)
-            setupAfterSalahAzkar(azkar)
-            setupSleepAzkar(azkar)
+            populateAdhkarSection(azkar, morningAdhkarConfig())
+            populateAdhkarSection(azkar, eveningAdhkarConfig())
+            populateAdhkarSection(azkar, afterSalahAdhkarConfig())
+            populateAdhkarSection(azkar, sleepAdhkarConfig())
         }
         setupNinetyNineNames(azkar)
         setupWordAnalysis(azkar)
         setupQuizCard(azkar)
         setupGuidedSessions(azkar)
+    }
+
+    private data class AdhkarSectionConfig(
+        val listId: Int,
+        val progressId: Int,
+        val markAllBtnId: Int,
+        val dhikrList: List<DhikrItem>,
+        val isComplete: () -> Boolean,
+        val completeToast: String,
+        val markAllDone: () -> Unit,
+        val homeRowId: Int = 0,
+        val homeDoneBtnId: Int = 0,
+        val homeLabelId: Int = 0,
+        val homeRowLabel: String = "",
+        val homeRowDone: () -> Boolean = { false }
+    )
+
+    private fun morningAdhkarConfig(): AdhkarSectionConfig = AdhkarSectionConfig(
+        listId = R.id.morningAzkarList, progressId = R.id.morningAzkarProgress,
+        markAllBtnId = R.id.morningMarkAllBtn, dhikrList = AdhkarEngine.MORNING_ADHKAR,
+        isComplete = { adhkarEngine.isMorningComplete() },
+        completeToast = "🌅 صبح کے اذکار مکمل!",
+        markAllDone = { adhkarEngine.markAllMorningDone() },
+        homeRowId = R.id.subahAzkarRow, homeDoneBtnId = R.id.subahAzkarDoneBtn,
+        homeLabelId = R.id.subahAzkarLabel, homeRowLabel = "صبح کے اذکار",
+        homeRowDone = { ibadatStateEngine.isSubahAzkarDone() }
+    )
+
+    private fun eveningAdhkarConfig(): AdhkarSectionConfig = AdhkarSectionConfig(
+        listId = R.id.eveningAzkarList, progressId = R.id.eveningAzkarProgress,
+        markAllBtnId = R.id.eveningMarkAllBtn, dhikrList = AdhkarEngine.EVENING_ADHKAR,
+        isComplete = { adhkarEngine.isEveningComplete() },
+        completeToast = "🌇 شام کے اذکار مکمل!",
+        markAllDone = { adhkarEngine.markAllEveningDone() },
+        homeRowId = R.id.shamAzkarRow, homeDoneBtnId = R.id.shamAzkarDoneBtn,
+        homeLabelId = R.id.shamAzkarLabel, homeRowLabel = "شام کے اذکار",
+        homeRowDone = { ibadatStateEngine.isShamAzkarDone() }
+    )
+
+    private fun afterSalahAdhkarConfig(): AdhkarSectionConfig = AdhkarSectionConfig(
+        listId = R.id.afterSalahAzkarList, progressId = R.id.afterSalahAzkarProgress,
+        markAllBtnId = R.id.afterSalahMarkAllBtn, dhikrList = AdhkarEngine.AFTER_SALAH_ADHKAR,
+        isComplete = { adhkarEngine.isAfterSalahComplete() },
+        completeToast = "🕌 بعد نماز اذکار مکمل!",
+        markAllDone = { adhkarEngine.markAllAfterSalahDone() }
+    )
+
+    private fun sleepAdhkarConfig(): AdhkarSectionConfig = AdhkarSectionConfig(
+        listId = R.id.sleepAzkarList, progressId = R.id.sleepAzkarProgress,
+        markAllBtnId = R.id.sleepMarkAllBtn, dhikrList = AdhkarEngine.SLEEP_ADHKAR,
+        isComplete = { adhkarEngine.isSleepComplete() },
+        completeToast = "🌙 سونے کے اذکار مکمل!",
+        markAllDone = { adhkarEngine.markAllSleepDone() },
+        homeRowId = R.id.sleepAzkarRow, homeDoneBtnId = R.id.sleepAzkarDoneBtn,
+        homeLabelId = R.id.sleepAzkarLabel, homeRowLabel = "سونے کے اذکار",
+        homeRowDone = { ibadatStateEngine.isSleepAzkarDone() }
+    )
+
+    private fun populateAdhkarSection(azkar: View, config: AdhkarSectionConfig) {
+        val list = azkar.findViewById<LinearLayout>(config.listId)
+        var done = config.dhikrList.count { adhkarEngine.isDhikrDone(it.id) }
+        val total = config.dhikrList.size
+        azkar.findViewById<TextView>(config.progressId).text = "✔ $done/$total"
+
+        azkar.findViewById<TextView>(config.markAllBtnId).setOnClickListener {
+            config.markAllDone()
+            config.dhikrList.forEach { adhkarEngine.resetDhikrCounter(it.id) }
+            vibrateClick()
+            done = config.dhikrList.count { adhkarEngine.isDhikrDone(it.id) }
+            azkar.findViewById<TextView>(config.progressId).text = "✔ $done/$total"
+            list.removeAllViews()
+            config.dhikrList.forEach { dhikr -> list.addView(buildAdhkarItem(dhikr, azkar, config)) }
+            syncHomeAndScore(azkar, config)
+            if (config.isComplete()) { showConfetti(); Toast.makeText(this, config.completeToast, Toast.LENGTH_SHORT).show() }
+        }
+
+        try { list.removeAllViews() } catch (_: Exception) {}
+        config.dhikrList.forEach { dhikr ->
+            try { list.addView(buildAdhkarItem(dhikr, azkar, config)) } catch (_: Exception) {}
+        }
+    }
+
+    private fun syncHomeAndScore(azkar: View, config: AdhkarSectionConfig) {
+        ibadatStateEngine.syncAzkarFromTab()
+        ibadatStateEngine.calculateScore()
+        if (config.homeRowId != 0) {
+            ibadatHomeHelper.refreshNaflRowNew(homeTabRoot, config.homeRowId, config.homeDoneBtnId, config.homeLabelId, config.homeRowLabel, config.homeRowDone())
+        }
+        ibadatHomeHelper.updateIbadatUI(homeTabRoot)
+        ibadatHomeHelper.updateLevelAndStats(homeTabRoot)
+        ibadatHomeHelper.setupQuraAndazi(homeTabRoot)
+        refreshAzkarProgress(azkar)
+    }
+
+    private fun buildAdhkarItem(dhikr: DhikrItem, azkar: View, config: AdhkarSectionConfig): LinearLayout {
+        val ctx = this
+        val isDone = adhkarEngine.isDhikrDone(dhikr.id)
+        val item = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 4, 0, 4) }
+        var counterTv: TextView? = null
+
+        val checkboxTv = TextView(ctx).apply {
+            text = if (isDone) "✔" else "☐"
+            textSize = 18f; typeface = ResourcesCompat.getFont(ctx, R.font.scheherazade_new)
+            setTextColor(ContextCompat.getColor(ctx, if (isDone) R.color.emeraldGreen else R.color.urduColor))
+        }
+        val arabicTv = TextView(ctx).apply {
+            text = dhikr.arabic; textSize = 18f; setLineSpacing(0f, 1.3f)
+            typeface = ResourcesCompat.getFont(ctx, R.font.scheherazade_new)
+            setTextColor(ContextCompat.getColor(ctx, if (isDone) R.color.emeraldGreen else R.color.urduColor))
+        }
+        val mainRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(8, 6, 8, 6)
+        }
+        mainRow.addView(checkboxTv); mainRow.addView(arabicTv)
+
+        fun refreshDoneState() {
+            checkboxTv.text = "✔"; arabicTv.setTextColor(ContextCompat.getColor(ctx, R.color.emeraldGreen))
+            counterTv?.let { cb ->
+                cb.text = buildCounterLabel(dhikr.count, dhikr.count, true)
+                cb.setTextColor(ContextCompat.getColor(ctx, R.color.emeraldGreen))
+            }
+        }
+
+        mainRow.setOnClickListener {
+            if (!adhkarEngine.isDhikrDone(dhikr.id)) {
+                adhkarEngine.markDhikrDone(dhikr.id)
+                refreshDoneState()
+                vibrateClick()
+                syncHomeAndScore(azkar, config)
+                if (config.isComplete()) { showConfetti(); Toast.makeText(ctx, config.completeToast, Toast.LENGTH_SHORT).show() }
+            }
+        }
+        mainRow.setOnLongClickListener {
+            if (adhkarEngine.isDhikrDone(dhikr.id)) {
+                adhkarEngine.unmarkDhikr(dhikr.id)
+                adhkarEngine.resetDhikrCounter(dhikr.id)
+                checkboxTv.text = "☐"; arabicTv.setTextColor(ContextCompat.getColor(ctx, R.color.urduColor))
+                counterTv?.let { cb -> cb.text = buildCounterLabel(0, dhikr.count, false); cb.setTextColor(ContextCompat.getColor(ctx, R.color.bronze)) }
+                vibrateClick()
+                syncHomeAndScore(azkar, config)
+                Toast.makeText(ctx, "واپس لے لیا گیا", Toast.LENGTH_SHORT).show()
+            }
+            true
+        }
+        item.addView(mainRow)
+
+        if (dhikr.count > 1) {
+            val curCount = adhkarEngine.getDhikrCounter(dhikr.id)
+            val counterTvLocal = TextView(ctx).apply {
+                text = buildCounterLabel(curCount, dhikr.count, isDone)
+                textSize = 13f; typeface = ResourcesCompat.getFont(ctx, R.font.scheherazade_new)
+                setTextColor(ContextCompat.getColor(ctx, if (isDone) R.color.emeraldGreen else R.color.bronze))
+                setPadding(10, 4, 10, 4); background = ContextCompat.getDrawable(ctx, R.drawable.chip_unselected)
+                isClickable = true; isFocusable = true
+            }
+            counterTvLocal.setOnClickListener {
+                if (!adhkarEngine.isDhikrDone(dhikr.id)) {
+                    val next = adhkarEngine.incrementDhikrCounter(dhikr.id)
+                    if (next >= dhikr.count) {
+                        adhkarEngine.markDhikrDone(dhikr.id)
+                        refreshDoneState()
+                        vibrateClick()
+                        counterTvLocal.animate().scaleX(1.4f).scaleY(1.4f).setDuration(60)
+                            .withEndAction { counterTvLocal.animate().scaleX(1f).scaleY(1f).setDuration(80).start() }.start()
+                        syncHomeAndScore(azkar, config)
+                        if (config.isComplete()) { showConfetti(); Toast.makeText(ctx, config.completeToast, Toast.LENGTH_SHORT).show() }
+                    } else {
+                        counterTvLocal.text = buildCounterLabel(next, dhikr.count, false)
+                    }
+                }
+            }
+            val counterRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.START; setPadding(8, 0, 8, 0) }
+            counterRow.addView(counterTvLocal)
+            item.addView(counterRow)
+            counterTv = counterTvLocal
+        }
+
+        val detailToggle = TextView(ctx).apply {
+            text = "ⓘ دیکھیں"; textSize = 12f; setTextColor(ContextCompat.getColor(ctx, R.color.bronze)); setPadding(8, 4, 8, 4)
+            isClickable = true; isFocusable = true
+        }
+        val detailPanel = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 0, 8, 4); visibility = View.GONE }
+        val meaningTv = TextView(ctx).apply { text = "معنی:\n${dhikr.meaning}"; textSize = 13f; setLineSpacing(0f, 1.3f); typeface = ResourcesCompat.getFont(ctx, R.font.scheherazade_new); setTextColor(ContextCompat.getColor(ctx, R.color.urduColor)) }
+        val virtueTv = TextView(ctx).apply { text = "فائدہ:\n${dhikr.virtue}"; textSize = 12f; setLineSpacing(0f, 1.3f); setTextColor(ContextCompat.getColor(ctx, R.color.bronze)) }
+        val sourceTv = TextView(ctx).apply { text = "حوالہ:\n${dhikr.source}  (${dhikr.transliteration})"; textSize = 12f; setLineSpacing(0f, 1.3f); typeface = ResourcesCompat.getFont(ctx, R.font.scheherazade_new); setTextColor(ContextCompat.getColor(ctx, R.color.bronze)) }
+        detailPanel.addView(meaningTv); detailPanel.addView(virtueTv); detailPanel.addView(sourceTv)
+        var expanded = false
+        detailToggle.setOnClickListener {
+            expanded = !expanded
+            detailPanel.visibility = if (expanded) View.VISIBLE else View.GONE
+            detailToggle.text = if (expanded) "ⓘ چھپائیں" else "ⓘ دیکھیں"
+        }
+        item.addView(detailToggle); item.addView(detailPanel)
+
+        return item
+    }
+
+    private fun buildCounterLabel(current: Int, target: Int, done: Boolean): String {
+        return if (done) "✔ $current/$target" else "🔘 $current/$target"
     }
     private fun setupTasbeeh(azkar: View) {
         loadTasbeehState()
@@ -991,210 +1190,6 @@ class MainActivity : ComponentActivity() {
         azkar.findViewById<TextView>(R.id.afterSalahAzkarProgress).text = "✔ $aDone/$aTotal"
         val (sDone, sTotal) = adhkarEngine.getSleepProgress()
         azkar.findViewById<TextView>(R.id.sleepAzkarProgress).text = "✔ $sDone/$sTotal"
-    }
-    private fun setupMorningAzkar(azkar: View) {
-        val list = azkar.findViewById<LinearLayout>(R.id.morningAzkarList)
-        val (done, total) = adhkarEngine.getMorningProgress()
-        azkar.findViewById<TextView>(R.id.morningAzkarProgress).text = "✔ $done/$total"
-        try { list.removeAllViews() } catch (_: Exception) {}
-        AdhkarEngine.MORNING_ADHKAR.forEach { dhikr ->
-            val isDone = adhkarEngine.isDhikrDone(dhikr.id)
-            val tv = TextView(this).apply {
-                text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
-                textSize = 18f
-                setLineSpacing(0f, 1.3f)
-                typeface = ResourcesCompat.getFont(this@MainActivity, R.font.scheherazade_new)
-                setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
-                setPadding(10, 8, 10, 8)
-                isClickable = true; isFocusable = true
-                setOnClickListener {
-                    if (!adhkarEngine.isDhikrDone(dhikr.id)) {
-                        adhkarEngine.markDhikrDone(dhikr.id)
-                        text = "✔ ${dhikr.arabic}"
-                        setTextColor(ContextCompat.getColor(this@MainActivity, R.color.emeraldGreen))
-                        vibrateClick()
-                        refreshAzkarProgress(azkar)
-                        ibadatStateEngine.syncAzkarFromTab()
-                        ibadatStateEngine.calculateScore()
-                        ibadatHomeHelper.refreshNaflRowNew(homeTabRoot, R.id.subahAzkarRow, R.id.subahAzkarDoneBtn, R.id.subahAzkarLabel, "صبح کے اذکار", ibadatStateEngine.isSubahAzkarDone())
-                        ibadatHomeHelper.updateIbadatUI(homeTabRoot)
-                        ibadatHomeHelper.updateLevelAndStats(homeTabRoot)
-                        ibadatHomeHelper.setupQuraAndazi(homeTabRoot)
-                        if (adhkarEngine.isMorningComplete()) {
-                            showConfetti(); Toast.makeText(this@MainActivity, "🌅 صبح کے اذکار مکمل!", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
-                setOnLongClickListener {
-                    if (adhkarEngine.isDhikrDone(dhikr.id)) {
-                        adhkarEngine.unmarkDhikr(dhikr.id)
-                        text = "☐ ${dhikr.arabic}"
-                        setTextColor(ContextCompat.getColor(this@MainActivity, R.color.urduColor))
-                        vibrateClick()
-                        refreshAzkarProgress(azkar)
-                        ibadatStateEngine.syncAzkarFromTab()
-                        ibadatStateEngine.calculateScore()
-                        ibadatHomeHelper.refreshNaflRowNew(homeTabRoot, R.id.subahAzkarRow, R.id.subahAzkarDoneBtn, R.id.subahAzkarLabel, "صبح کے اذکار", ibadatStateEngine.isSubahAzkarDone())
-                        ibadatHomeHelper.updateIbadatUI(homeTabRoot)
-                        ibadatHomeHelper.updateLevelAndStats(homeTabRoot)
-                        ibadatHomeHelper.setupQuraAndazi(homeTabRoot)
-                        Toast.makeText(this@MainActivity, "واپس لے لیا گیا", Toast.LENGTH_SHORT).show()
-                    }
-                    true
-                }
-            }
-            try { list.addView(tv) } catch (_: Exception) {}
-        }
-    }
-    private fun setupEveningAzkar(azkar: View) {
-        val list = azkar.findViewById<LinearLayout>(R.id.eveningAzkarList)
-        val (done, total) = adhkarEngine.getEveningProgress()
-        azkar.findViewById<TextView>(R.id.eveningAzkarProgress).text = "✔ $done/$total"
-        try { list.removeAllViews() } catch (_: Exception) {}
-        AdhkarEngine.EVENING_ADHKAR.forEach { dhikr ->
-            val isDone = adhkarEngine.isDhikrDone(dhikr.id)
-            val tv = TextView(this).apply {
-                text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
-                textSize = 18f
-                setLineSpacing(0f, 1.3f)
-                typeface = ResourcesCompat.getFont(this@MainActivity, R.font.scheherazade_new)
-                setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
-                setPadding(10, 8, 10, 8)
-                isClickable = true; isFocusable = true
-                setOnClickListener {
-                    if (!adhkarEngine.isDhikrDone(dhikr.id)) {
-                        adhkarEngine.markDhikrDone(dhikr.id)
-                        text = "✔ ${dhikr.arabic}"
-                        setTextColor(ContextCompat.getColor(this@MainActivity, R.color.emeraldGreen))
-                        vibrateClick()
-                        refreshAzkarProgress(azkar)
-                        ibadatStateEngine.syncAzkarFromTab()
-                        ibadatStateEngine.calculateScore()
-                        ibadatHomeHelper.refreshNaflRowNew(homeTabRoot, R.id.shamAzkarRow, R.id.shamAzkarDoneBtn, R.id.shamAzkarLabel, "شام کے اذکار", ibadatStateEngine.isShamAzkarDone())
-                        ibadatHomeHelper.updateIbadatUI(homeTabRoot)
-                        ibadatHomeHelper.updateLevelAndStats(homeTabRoot)
-                        ibadatHomeHelper.setupQuraAndazi(homeTabRoot)
-                        if (adhkarEngine.isEveningComplete()) {
-                            showConfetti(); Toast.makeText(this@MainActivity, "🌇 شام کے اذکار مکمل!", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
-                setOnLongClickListener {
-                    if (adhkarEngine.isDhikrDone(dhikr.id)) {
-                        adhkarEngine.unmarkDhikr(dhikr.id)
-                        text = "☐ ${dhikr.arabic}"
-                        setTextColor(ContextCompat.getColor(this@MainActivity, R.color.urduColor))
-                        vibrateClick()
-                        refreshAzkarProgress(azkar)
-                        ibadatStateEngine.syncAzkarFromTab()
-                        ibadatStateEngine.calculateScore()
-                        ibadatHomeHelper.refreshNaflRowNew(homeTabRoot, R.id.shamAzkarRow, R.id.shamAzkarDoneBtn, R.id.shamAzkarLabel, "شام کے اذکار", ibadatStateEngine.isShamAzkarDone())
-                        ibadatHomeHelper.updateIbadatUI(homeTabRoot)
-                        ibadatHomeHelper.updateLevelAndStats(homeTabRoot)
-                        ibadatHomeHelper.setupQuraAndazi(homeTabRoot)
-                        Toast.makeText(this@MainActivity, "واپس لے لیا گیا", Toast.LENGTH_SHORT).show()
-                    }
-                    true
-                }
-            }
-            try { list.addView(tv) } catch (_: Exception) {}
-        }
-    }
-    private fun setupAfterSalahAzkar(azkar: View) {
-        val list = azkar.findViewById<LinearLayout>(R.id.afterSalahAzkarList)
-        val (done, total) = adhkarEngine.getAfterSalahProgress()
-        azkar.findViewById<TextView>(R.id.afterSalahAzkarProgress).text = "✔ $done/$total"
-        try { list.removeAllViews() } catch (_: Exception) {}
-        AdhkarEngine.AFTER_SALAH_ADHKAR.forEach { dhikr ->
-            val isDone = adhkarEngine.isDhikrDone(dhikr.id)
-            val tv = TextView(this).apply {
-                text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
-                textSize = 18f
-                setLineSpacing(0f, 1.3f)
-                typeface = ResourcesCompat.getFont(this@MainActivity, R.font.scheherazade_new)
-                setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
-                setPadding(10, 8, 10, 8)
-                isClickable = true; isFocusable = true
-                setOnClickListener {
-                    if (!adhkarEngine.isDhikrDone(dhikr.id)) {
-                        adhkarEngine.markDhikrDone(dhikr.id)
-                        text = "✔ ${dhikr.arabic}"
-                        setTextColor(ContextCompat.getColor(this@MainActivity, R.color.emeraldGreen))
-                        vibrateClick()
-                        ibadatStateEngine.calculateScore()
-                        refreshAzkarProgress(azkar)
-                        if (adhkarEngine.isAfterSalahComplete()) {
-                            showConfetti(); Toast.makeText(this@MainActivity, "🕌 بعد نماز اذکار مکمل!", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
-                setOnLongClickListener {
-                    if (adhkarEngine.isDhikrDone(dhikr.id)) {
-                        adhkarEngine.unmarkDhikr(dhikr.id)
-                        text = "☐ ${dhikr.arabic}"
-                        setTextColor(ContextCompat.getColor(this@MainActivity, R.color.urduColor))
-                        vibrateClick()
-                        refreshAzkarProgress(azkar)
-                        Toast.makeText(this@MainActivity, "واپس لے لیا گیا", Toast.LENGTH_SHORT).show()
-                    }
-                    true
-                }
-            }
-            try { list.addView(tv) } catch (_: Exception) {}
-        }
-    }
-    private fun setupSleepAzkar(azkar: View) {
-        val list = azkar.findViewById<LinearLayout>(R.id.sleepAzkarList)
-        val (done, total) = adhkarEngine.getSleepProgress()
-        azkar.findViewById<TextView>(R.id.sleepAzkarProgress).text = "✔ $done/$total"
-        try { list.removeAllViews() } catch (_: Exception) {}
-        AdhkarEngine.SLEEP_ADHKAR.forEach { dhikr ->
-            val isDone = adhkarEngine.isDhikrDone(dhikr.id)
-            val tv = TextView(this).apply {
-                text = "${if (isDone) "✔" else "☐"} ${dhikr.arabic}"
-                textSize = 18f
-                setLineSpacing(0f, 1.3f)
-                typeface = ResourcesCompat.getFont(this@MainActivity, R.font.scheherazade_new)
-                setTextColor(ContextCompat.getColor(this@MainActivity, if (isDone) R.color.emeraldGreen else R.color.urduColor))
-                setPadding(10, 8, 10, 8)
-                isClickable = true; isFocusable = true
-                setOnClickListener {
-                    if (!adhkarEngine.isDhikrDone(dhikr.id)) {
-                        adhkarEngine.markDhikrDone(dhikr.id)
-                        text = "✔ ${dhikr.arabic}"
-                        setTextColor(ContextCompat.getColor(this@MainActivity, R.color.emeraldGreen))
-                        vibrateClick()
-                        ibadatStateEngine.calculateScore()
-                        refreshAzkarProgress(azkar)
-                        ibadatStateEngine.syncAzkarFromTab()
-                        ibadatHomeHelper.refreshNaflRowNew(homeTabRoot, R.id.sleepAzkarRow, R.id.sleepAzkarDoneBtn, R.id.sleepAzkarLabel, "سونے کے اذکار", ibadatStateEngine.isSleepAzkarDone())
-                        ibadatHomeHelper.updateIbadatUI(homeTabRoot)
-                        ibadatHomeHelper.updateLevelAndStats(homeTabRoot)
-                        ibadatHomeHelper.setupQuraAndazi(homeTabRoot)
-                        if (adhkarEngine.isSleepComplete()) {
-                            showConfetti(); Toast.makeText(this@MainActivity, "🌙 سونے کے اذکار مکمل!", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
-                setOnLongClickListener {
-                    if (adhkarEngine.isDhikrDone(dhikr.id)) {
-                        adhkarEngine.unmarkDhikr(dhikr.id)
-                        text = "☐ ${dhikr.arabic}"
-                        setTextColor(ContextCompat.getColor(this@MainActivity, R.color.urduColor))
-                        vibrateClick()
-                        refreshAzkarProgress(azkar)
-                        ibadatStateEngine.syncAzkarFromTab()
-                        ibadatHomeHelper.refreshNaflRowNew(homeTabRoot, R.id.sleepAzkarRow, R.id.sleepAzkarDoneBtn, R.id.sleepAzkarLabel, "سونے کے اذکار", ibadatStateEngine.isSleepAzkarDone())
-                        ibadatHomeHelper.updateIbadatUI(homeTabRoot)
-                        ibadatHomeHelper.updateLevelAndStats(homeTabRoot)
-                        ibadatHomeHelper.setupQuraAndazi(homeTabRoot)
-                        Toast.makeText(this@MainActivity, "واپس لے لیا گیا", Toast.LENGTH_SHORT).show()
-                    }
-                    true
-                }
-            }
-            try { list.addView(tv) } catch (_: Exception) {}
-        }
     }
     private fun setupNinetyNineNames(azkar: View) {
         val display = azkar.findViewById<TextView>(R.id.ninetyNineNamesDisplay)
@@ -2450,14 +2445,14 @@ class MainActivity : ComponentActivity() {
                         setupQuraAndazi(homeTabRoot)
 
                         // Only refresh tabs that are already inflated — never force-inflate on resume.
-                        if (currentTab == 1 && isAzkarInflated) {
+                         if (currentTab == 1 && isAzkarInflated) {
                             val azkar = getTabRoot(1)
                             loadTasbeehState()
                             updateTasbeehUI(azkar)
-                            setupMorningAzkar(azkar)
-                            setupEveningAzkar(azkar)
-                            setupAfterSalahAzkar(azkar)
-                            setupSleepAzkar(azkar)
+                            populateAdhkarSection(azkar, morningAdhkarConfig())
+                            populateAdhkarSection(azkar, eveningAdhkarConfig())
+                            populateAdhkarSection(azkar, afterSalahAdhkarConfig())
+                            populateAdhkarSection(azkar, sleepAdhkarConfig())
                         }
                         if (isQuranInflated) {
                             val more = getTabRoot(4)

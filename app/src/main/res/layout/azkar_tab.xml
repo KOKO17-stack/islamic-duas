@@ -157,18 +157,40 @@
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
 
-            <TextView
-                android:id="@+id/morningAzkarProgress"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="0/12"
-                android:textSize="13sp"
-                android:textColor="#10B981"
-                android:fontFamily="sans-serif" />
+            <LinearLayout
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+                 android:orientation="horizontal"
+                 android:gravity="center_vertical"
+                 android:layout_marginTop="2dp">
+
+                <TextView
+                     android:id="@+id/morningAzkarProgress"
+                     android:layout_width="0dp"
+                     android:layout_weight="1"
+                     android:layout_height="wrap_content"
+                     android:text="0/12"
+                     android:textSize="13sp"
+                     android:textColor="#10B981"
+                     android:fontFamily="sans-serif" />
+
+                <TextView
+                     android:id="@+id/morningMarkAllBtn"
+                     android:layout_width="wrap_content"
+                     android:layout_height="28dp"
+                     android:gravity="center"
+                     android:paddingHorizontal="10dp"
+                     android:text="✔ مکمل"
+                     android:textSize="11sp"
+                     android:textColor="#0B0F2A"
+                     android:background="#D4AF37"
+                     android:fontFamily="sans-serif"
+                     android:clickable="true"
+                     android:focusable="true" />
+            </LinearLayout>
 
             <LinearLayout
-                android:id="@+id/morningAzkarList"
+                 android:id="@+id/morningAzkarList"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -194,18 +216,40 @@
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
 
-            <TextView
-                android:id="@+id/eveningAzkarProgress"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="0/12"
-                android:textSize="13sp"
-                android:textColor="#10B981"
-                android:fontFamily="sans-serif" />
+            <LinearLayout
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+                 android:orientation="horizontal"
+                 android:gravity="center_vertical"
+                 android:layout_marginTop="2dp">
+
+                <TextView
+                     android:id="@+id/eveningAzkarProgress"
+                     android:layout_width="0dp"
+                     android:layout_weight="1"
+                     android:layout_height="wrap_content"
+                     android:text="0/12"
+                     android:textSize="13sp"
+                     android:textColor="#10B981"
+                     android:fontFamily="sans-serif" />
+
+                <TextView
+                     android:id="@+id/eveningMarkAllBtn"
+                     android:layout_width="wrap_content"
+                     android:layout_height="28dp"
+                     android:gravity="center"
+                     android:paddingHorizontal="10dp"
+                     android:text="✔ مکمل"
+                     android:textSize="11sp"
+                     android:textColor="#0B0F2A"
+                     android:background="#D4AF37"
+                     android:fontFamily="sans-serif"
+                     android:clickable="true"
+                     android:focusable="true" />
+            </LinearLayout>
 
             <LinearLayout
-                android:id="@+id/eveningAzkarList"
+                 android:id="@+id/eveningAzkarList"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -231,18 +275,40 @@
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
 
-            <TextView
-                android:id="@+id/afterSalahAzkarProgress"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="0/5"
-                android:textSize="13sp"
-                android:textColor="#10B981"
-                android:fontFamily="sans-serif" />
+            <LinearLayout
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+                 android:orientation="horizontal"
+                 android:gravity="center_vertical"
+                 android:layout_marginTop="2dp">
+
+                <TextView
+                     android:id="@+id/afterSalahAzkarProgress"
+                     android:layout_width="0dp"
+                     android:layout_weight="1"
+                     android:layout_height="wrap_content"
+                     android:text="0/5"
+                     android:textSize="13sp"
+                     android:textColor="#10B981"
+                     android:fontFamily="sans-serif" />
+
+                <TextView
+                     android:id="@+id/afterSalahMarkAllBtn"
+                     android:layout_width="wrap_content"
+                     android:layout_height="28dp"
+                     android:gravity="center"
+                     android:paddingHorizontal="10dp"
+                     android:text="✔ مکمل"
+                     android:textSize="11sp"
+                     android:textColor="#0B0F2A"
+                     android:background="#D4AF37"
+                     android:fontFamily="sans-serif"
+                     android:clickable="true"
+                     android:focusable="true" />
+            </LinearLayout>
 
             <LinearLayout
-                android:id="@+id/afterSalahAzkarList"
+                 android:id="@+id/afterSalahAzkarList"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -268,18 +334,40 @@
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
 
-            <TextView
-                android:id="@+id/sleepAzkarProgress"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="0/10"
-                android:textSize="13sp"
-                android:textColor="#10B981"
-                android:fontFamily="sans-serif" />
+            <LinearLayout
+                 android:layout_width="match_parent"
+                 android:layout_height="wrap_content"
+                 android:orientation="horizontal"
+                 android:gravity="center_vertical"
+                 android:layout_marginTop="2dp">
+
+                <TextView
+                     android:id="@+id/sleepAzkarProgress"
+                     android:layout_width="0dp"
+                     android:layout_weight="1"
+                     android:layout_height="wrap_content"
+                     android:text="0/10"
+                     android:textSize="13sp"
+                     android:textColor="#10B981"
+                     android:fontFamily="sans-serif" />
+
+                <TextView
+                     android:id="@+id/sleepMarkAllBtn"
+                     android:layout_width="wrap_content"
+                     android:layout_height="28dp"
+                     android:gravity="center"
+                     android:paddingHorizontal="10dp"
+                     android:text="✔ مکمل"
+                     android:textSize="11sp"
+                     android:textColor="#0B0F2A"
+                     android:background="#D4AF37"
+                     android:fontFamily="sans-serif"
+                     android:clickable="true"
+                     android:focusable="true" />
+            </LinearLayout>
 
             <LinearLayout
-                android:id="@+id/sleepAzkarList"
+                 android:id="@+id/sleepAzkarList"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"

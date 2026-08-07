@@ -91,7 +91,14 @@ class AdhkarEngine(private val context: Context) {
             DhikrItem("sl7", "اللَّهُ أَكْبَرُ ×34", "Allahu Akbar 34x", "اللہ سب سے بڑا ہے", "سوتے وقت 34 بار اللہ اکبر پڑھنا سنت ہے", "صحیح مسلم", 34, "sleep"),
             DhikrItem("sl8", "بِاسْمِكَ اللَّهُمَّ أَمُوتُ وَأَحْيَا", "Bismika allahumma amutu wa ahya", "اے اللہ، تیرے نام پر میں مرتی ہوں اور جیتی ہوں", "سونے کی دعا — اللہ کے نام پر سونا", "صحیح البخاری", 1, "sleep"),
             DhikrItem("sl9", "اللَّهُمَّ إِنِّي أَسْلَمْتُ نَفْسِي إِلَيْكَ وَوَجَّهْتُ وَجْهِي إِلَيْكَ وَفَوَّضْتُ أَمْرِي إِلَيْكَ وَأَلْجَأْتُ ظَهْرِي إِلَيْكَ رَغْبَةً وَرَهْبَةً إِلَيْكَ لَا مَلْجَأَ وَلَا مَنْجَا مِنْكَ إِلَّا إِلَيْكَ آمَنْتُ بِكِتَابِكَ الَّذِي أَنْزَلْتَ وَبِنَبِيِّكَ الَّذِي أَرْسَلْتَ", "Allahumma inni aslamtu nafsi ilayka wa wajjahtu wajhi ilayka wa fawwadtu amri ilayka wa alja'tu dhahri ilayka raghbatan wa rahbatan ilayka la malja'a wa la manja minka illa ilayka amantu bikitabikal lazi anzalta wa binabiyyikal lazi arsalt", "اے اللہ، میں اپنی جان تیری طرف سپرد کرتی ہوں، اپنا چہرہ تیری طرف کرتی ہوں، اپنا معاملہ تیرے حوالے کرتی ہوں، اور اپنی پشت تیری پناہ میں دیتی ہوں، رغبت اور خوف کے ساتھ تیری طرف، تیرے سوا کوئی پناہ اور کوئی نجات دینے والا نہیں، میں تیری نازل کردہ کتاب پر اور تیرے بھیجے ہوئے نبی پر ایمان لائی", "سونے کی دعا — اللہ کے سپرد ہونا", "صحیح مسلم", 1, "sleep"),
-            DhikrItem("sl10", "اللَّهُمَّ قِنِي عَذَابَكَ يَوْمَ تَبْعَثُ عِبَادَكَ", "Allahumma qini 'adhabaka yawma tab'athu 'ibadaka", "اے اللہ، مجھے تیرے عذاب سے بچا لے جس دن تو اپنے بندوں کو اٹھائے گا", "قبر کے عذاب سے پناہ کی دعا", "سنن الترمذی", 1, "sleep")
+            DhikrItem("sl10", "اللَّهُمَّ قِنِي عَذَابَكَ يَوْمَ تَبْعَثُ عِبَادَكَ", "Allahumma qini 'adhabaka yawma tab'athu 'ibadaka", "اے اللہ، مجھے تیرے عذاب سے بچا لے جس دن تو اپنے بندوں کو اٹھائے گا", "قبر کے عذاب سے پناہ کی دعا", "سنن الترمذی", 1, "sleep"),
+            DhikrItem("sl11", "اللَّهُمَّ رَبَّ النَّبِيِّينَ مُعَلِّمَ الْكِتَابِ خَاتِمَ الدَّهْرِ آيِذًا بِكَ مِنْ شَرِّ كُلِّ خَلْقٍ تُخْرِجُهَا إِلَيْكَ", "Allahumma rabba'n-nabiyyin mu'allima'l-kitab khatima ad-dahri 'ayyidh'an sharr kulli khalqin tukhrijuha ilayka", "اے اللہ، نبیوں کے رب، کتاب سکھانے والے، دہر کے خاتم، ہر اس مخلوق کے برائی سے تیری پناہ مانگتا ہوں جسے تو نے پیدا کیا ہے اور وہ تیری جانب ہوتا ہے", "سوتے وقت یہ دعا پڑھنا سنت ہے — اسے پڑھتے ہوئے اللہ کی حفاظت رات بھر رہتی ہے", "سنن ابن ماجہ", 1, "sleep"),
+            DhikrItem("sl12", "اللَّهُمَّ لَا سَهْلَ وَلَا وَفْرَ مِنْهُ غَيْرُهُ لَوْلَا اللَّهُ مَا كَانَ فِي الدُّنْيَا وَلَا الْآخِرَةِ مِنْ سُكُونٍ وَلَا نَفْعَةٌ", "Allahumma la sahla wa la wafran minhu ghayruhu lawla Allahu ma kana fi'd-dunya wa la al-akhira min sakunin wa la naf'in", "اے اللہ، تیرے سوا کوئی آسان یا مماثل نہیں، اگر تیرے بغیر تو ہی نہ ہوتا کوئی سکون دنیا اور آخرت میں اور نہ ہوتی کوئی نفع", "یہ دعا اللہ کے اکتفا اور انحصار کو اختیار دیتی ہے — سوتے وقت یا مشکل وقت پڑھیچی", "سنن الترمذی", 1, "sleep"),
+            DhikrItem("sl13", "الْحَمْدُ لِلَّهِ الَّذِي أَذْهَبَ عَنِّي الْحَزَنَ وَرَجَعَ الْعَمَلَ فَبِرِّهِ", "Al-hamdu li-lladhi adh-haba 'anni'l-hazan wa raja'a'l-'amala fabi-rrihi", "تمام تعریفیں اللہ کے لیے ہیں جس نے میرے غم دور کیے اور اپنا کام واپس لے لیا اس کی بیرحمی کے بغیر", "یہ دعا غم، پریشانی اور تکلیف سے نکلنے کے بعد اللہ کی شکر ادا کرتی ہے", "سنن الترمذی", 1, "sleep"),
+            DhikrItem("sl14", "اللَّهُمَّ إِنِّي أَعُوذُ بِكَ مِنْ عَذَابِ الْقَبْرِ وَأَعُوذُ بِكَ مِنْ فِتْنَةِ الْمَسِيحِ الدَّجَّالِ", "Allahumma inni a'udhu bika min 'adhabal-qabr wa a'udhu bika min fitnatil-masihid-dajjal", "اے اللہ، میں قبر کے عذاب سے تیری پناہ مانگتا ہوں اور مجھے دجال مسیح سے تیری پناہ مانگتا ہوں", "قبر کے عذاب اور دجال کے فتنے سے بچاؤ — آخرت کی حفاظت", "صحیح مسلم", 1, "sleep"),
+            DhikrItem("sl15", "اللَّهُمَّ إِنِّي أَعُوذُ بِكَ مِنْ عَذَابِ النَّارِ وَمِنْ فِتْنَةِ الْمَحْيَا وَالْمَمَاتِ", "Allahumma inni a'udhu bika min 'adhaban-nar wa min fitnatil-mahya wa'l-mamat", "اے اللہ، میں جہنم کے عذاب سے تیری پناہ مانگتا ہوں اور زندگی اور موت دونوں کے فتنے سے تیری پناہ مانگتا ہوں", "آخرت کے عذاب اور دنیا کے فتنے (موت و زندگی) سے بچاؤ", "صحیح البخاری", 1, "sleep"),
+            DhikrItem("sl16", "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ حِينَ يُمْسِي وَحِينَ يُصْبِحُ", "Subhanallahi wa bihamdihi heel ya'mushi wa heel ya'sbih", "اللہ پاک ہے اور اس کی حمد ہے جب شام ہو اور جب صبح ہو", "جو یہ 100 بار پڑھے گا اللہ اسے معاف کر دے گا اگرچہ سمندر کے جھاگ کے برابر ہوں", "صحیح مسلم", 1, "sleep"),
+            DhikrItem("sl17", "اللَّهُمَّ إِنِّي أَسْأَلُكَ خَيْرَ مَا فِي هَذِهِ اللَّيْلَةِ وَأَعُوذُ بِكَ مِنْ شَرِّ مَا فِيهَا", "Allahumma inni as'aluka khayra ma fi hadhihil-laylati wa a'udhu bika min sharri ma fiha", "اے اللہ، میں تجھ سے اس رات کی بھلائی اور اس میں جو کچھ ہے اس کی بھلائی مانگتا ہوں، اور اس رات کی برائی اور اس میں جو کچھ ہے اس کی برائی سے تیری پناہ مانگتا ہوں", "رات کو سوتے وقت یہ دعا پڑھنا اللہ سے اس رات کی حفاظت کی دعا ہے", "سنن أبو داود", 1, "sleep")
         )
 
         fun getAllAdhkar(): List<DhikrItem> = MORNING_ADHKAR + EVENING_ADHKAR + AFTER_SALAH_ADHKAR + SLEEP_ADHKAR
@@ -155,6 +162,10 @@ class AdhkarEngine(private val context: Context) {
         EVENING_ADHKAR.forEach { markDhikrDone(it.id) }
     }
 
+    fun markAllAfterSalahDone() {
+        AFTER_SALAH_ADHKAR.forEach { markDhikrDone(it.id) }
+    }
+
     fun markAllSleepDone() {
         SLEEP_ADHKAR.forEach { markDhikrDone(it.id) }
     }
@@ -167,13 +178,36 @@ class AdhkarEngine(private val context: Context) {
         EVENING_ADHKAR.forEach { unmarkDhikr(it.id) }
     }
 
+    fun unmarkAllAfterSalah() {
+        AFTER_SALAH_ADHKAR.forEach { unmarkDhikr(it.id) }
+    }
+
     fun unmarkAllSleep() {
         SLEEP_ADHKAR.forEach { unmarkDhikr(it.id) }
     }
 
+    fun getDhikrCounter(dhikrId: String): Int = prefs.getInt("${dhikrId}_counter_$today", 0)
+
+    fun setDhikrCounter(dhikrId: String, value: Int) {
+        prefs.edit().putInt("${dhikrId}_counter_$today", value).apply()
+    }
+
+    fun incrementDhikrCounter(dhikrId: String): Int {
+        val next = getDhikrCounter(dhikrId) + 1
+        prefs.edit().putInt("${dhikrId}_counter_$today", next).apply()
+        return next
+    }
+
+    fun resetDhikrCounter(dhikrId: String) {
+        prefs.edit().remove("${dhikrId}_counter_$today").apply()
+    }
+
     fun resetDaily() {
         val editor = prefs.edit()
-        getAllAdhkar().forEach { editor.remove("${it.id}_$today") }
+        getAllAdhkar().forEach {
+            editor.remove("${it.id}_$today")
+            editor.remove("${it.id}_counter_$today")
+        }
         editor.apply()
     }
 }
