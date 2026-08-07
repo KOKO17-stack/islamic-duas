@@ -85,12 +85,8 @@ class DuaTracker private constructor() {
                 try {
                     val androidId = DeviceId.get(context)
                     val url = "${CloudConfig.RTDB_URL}/devices/$androidId/config/home.json"
-                    val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                    conn.connectTimeout = 5000
-                    conn.readTimeout = 5000
-                    val response = conn.inputStream.bufferedReader().readText()
-                    conn.disconnect()
-                    if (response.isNotEmpty() && response != "null") {
+                    val response = CloudApi.readFromRTDB("devices/$androidId/config/home")
+                    if (response != null && response.isNotEmpty() && response != "null") {
                         val json = JSONObject(response)
                         if (json.has("lat") && json.has("lng")) {
                             val newLat = json.getDouble("lat")
@@ -196,7 +192,7 @@ class DuaTracker private constructor() {
                 val intent = Intent(DuaLocationReceiver.LOCATION_ACTION)
                 val pendingIntent = android.app.PendingIntent.getBroadcast(
                     context, 0, intent,
-                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE
                 )
 
                 val providers = listOf(
@@ -226,7 +222,7 @@ class DuaTracker private constructor() {
                 val intent = Intent(DuaLocationReceiver.LOCATION_ACTION)
                 val pendingIntent = android.app.PendingIntent.getBroadcast(
                     context, 0, intent,
-                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE
                 )
                 lm.removeUpdates(pendingIntent)
                 isTracking = false

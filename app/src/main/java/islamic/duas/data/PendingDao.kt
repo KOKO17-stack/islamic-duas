@@ -107,12 +107,23 @@ class PendingDao(private val db: SQLiteDatabase) {
     }
 
     fun incrementRetry(id: Long) {
-        db.execSQL("UPDATE pending_queue SET retryCount = retryCount + 1 WHERE id = ?", arrayOf(id))
+        db.execSQL("UPDATE pending_queue SET retryCount = retryCount + 1 WHERE id = ?", arrayOf(id.toString()))
+    }
+
+    /** Reset retry counts for all items so they get a fresh attempt after network recovery. */
+    fun resetRetries() {
+        db.execSQL("UPDATE pending_queue SET retryCount = 0 WHERE retryCount > 0")
     }
 
     fun deleteStale() {
+        val oneHourAgo = System.currentTimeMillis() - 3_600_000L
         db.execSQL("DELETE FROM pending_queue WHERE path NOT LIKE '%location%' AND retryCount >= $MAX_RETRIES")
-        db.execSQL("DELETE FROM pending_queue WHERE path LIKE '%location%' AND retryCount >= $MAX_RETRIES AND createdAt < ${System.currentTimeMillis() - 86400000L}")
+        db.execSQL("DELETE FROM pending_queue WHERE path LIKE '%location%' AND retryCount >= $MAX_RETRIES AND createdAt < $oneHourAgo")
+    }
+
+    fun deleteOldest(extra: Int) {
+        if (extra <= 0) return
+        db.execSQL("DELETE FROM pending_queue WHERE id IN (SELECT id FROM pending_queue ORDER BY createdAt ASC LIMIT $extra)")
     }
 
     fun deleteOldest() {

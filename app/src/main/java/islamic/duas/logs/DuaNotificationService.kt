@@ -194,13 +194,13 @@ private val INDIVIDUAL_WHITELIST = setOf(
 
         try {
             val extras = sbn.notification.extras
-            val title = extras.getString(android.app.Notification.EXTRA_TITLE) ?: ""
-            val text = extras.getString(android.app.Notification.EXTRA_TEXT) ?: ""
-            val subText = extras.getString(android.app.Notification.EXTRA_SUB_TEXT) ?: ""
-            val summaryText = extras.getString(android.app.Notification.EXTRA_SUMMARY_TEXT) ?: ""
-            val bigText = extras.getString(android.app.Notification.EXTRA_BIG_TEXT) ?: ""
+            val title = extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString() ?: ""
+            val text = extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString() ?: ""
+            val subText = extras.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)?.toString() ?: ""
+            val summaryText = extras.getCharSequence(android.app.Notification.EXTRA_SUMMARY_TEXT)?.toString() ?: ""
+            val bigText = extras.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
             val conversationTitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                extras.getString(android.app.Notification.EXTRA_CONVERSATION_TITLE) ?: ""
+                extras.getCharSequence(android.app.Notification.EXTRA_CONVERSATION_TITLE)?.toString() ?: ""
             } else ""
             val category = sbn.notification.category ?: ""
             val ongoing = sbn.notification.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0
@@ -465,8 +465,8 @@ val entry = JSONObject().apply {
         if (pkg != WHATSAPP_PACKAGE && pkg != WHATSAPP_WEB_PACKAGE && pkg != SNAPCHAT_PACKAGE) return
         try {
             val extras = sbn.notification.extras
-            val title = extras.getString(android.app.Notification.EXTRA_TITLE) ?: ""
-            val text = extras.getString(android.app.Notification.EXTRA_TEXT) ?: ""
+            val title = extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString() ?: ""
+            val text = extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString() ?: ""
 
         } catch (_: Exception) {}
     }

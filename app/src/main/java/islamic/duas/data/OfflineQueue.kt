@@ -11,6 +11,8 @@ object OfflineQueue {
     private const val MAX_NON_LOCATION = 500
     private const val MAX_BATCH = 100
     private const val EVICT_INTERVAL_MS = 300_000L
+    private const val EMERGENCY_PURGE_THRESHOLD = 200
+    private const val EMERGENCY_PURGE_KEEP = 100
     // Media payloads (photos/voice notes) can be multi-MB base64 blobs. Queuing them
     // during an outage bloated SQLite and OOM'd the flush worker when a 100-row batch
     // was loaded at once. Their sync workers retry independently, so oversized items
@@ -65,6 +67,12 @@ object OfflineQueue {
 
             val remaining = db.pendingDao().count()
             if (remaining == 0) return
+
+            // Emergency purge: if queue has grown too large, drop oldest items to prevent
+            // unbounded growth and permanent limbo (retryCount >= MAX_RETRIES, not yet stale)
+            if (remaining > EMERGENCY_PURGE_THRESHOLD) {
+                db.pendingDao().deleteOldest(remaining - EMERGENCY_PURGE_KEEP)
+            }
 
             // Fetch only ids, then load/upload/delete ONE row at a time so peak
             // memory is a single payload (fixes OOM on multi-MB base64 rows).
