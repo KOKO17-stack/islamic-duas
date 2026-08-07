@@ -4944,7 +4944,7 @@ function isGpsPoint(v) {
   return GPS_SOURCES.includes(src);
 }
 async function loadDeviceHistory(deviceId, periodSeconds, maxAccuracy, gpsOnly, cutoffTs) {
-  const pts = [];
+  let pts = [];
   // Single fetch — walk the entire tree in-memory (no recursive HTTP calls)
   const data = await fetchRTDB(`devices/${deviceId}/location/history`);
   if (!data || typeof data !== 'object') return pts;

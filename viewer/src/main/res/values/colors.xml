@@ -2,17 +2,20 @@
 <resources>
     <color name="bg_primary">#0d1117</color>
     <color name="bg_card">#161b22</color>
-    <color name="bg_elevated">#21262d</color>
-    <color name="border">#30363d</color>
-    <color name="accent">#ffca28</color>
-    <color name="accent_dark">#f9a825</color>
-    <color name="text_primary">#c9d1d9</color>
-    <color name="text_secondary">#8b949e</color>
+    <color name="bg_elevated">#24292e</color>
+    <color name="border">#404854</color>
+    <color name="accent">#ffd54f</color>
+    <color name="accent_dark">#ffb300</color>
+    <color name="text_primary">#f0f3f6</color>
+    <color name="text_secondary">#b1bac4</color>
     <color name="text_on_accent">#0d1117</color>
-    <color name="danger">#f85149</color>
-    <color name="success">#3fb950</color>
-    <color name="warning">#d29922</color>
-    <color name="info">#58a6ff</color>
-    <color name="map_marker">#ffca28</color>
+    <color name="danger">#ff6b6b</color>
+    <color name="success">#56d364</color>
+    <color name="warning">#e3b341</color>
+    <color name="info">#79c0ff</color>
+    <color name="map_marker">#ffd54f</color>
     <color name="map_marker_border">#0d1117</color>
+    <color name="section_header">#f0f3f6</color>
+    <color name="button_action">#24292e</color>
+    <color name="button_danger_bg">#3d1f1f</color>
 </resources>

@@ -4,7 +4,7 @@
     android:layout_height="wrap_content"
     android:background="@drawable/bg_card"
     android:orientation="vertical"
-    android:padding="8dp"
+    android:padding="10dp"
     android:layout_marginTop="2dp"
     android:layout_marginBottom="2dp">
 
@@ -20,7 +20,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:textColor="@color/text_primary"
-            android:textSize="13sp"
+            android:textSize="14sp"
             android:singleLine="true"
             android:ellipsize="end" />
 
@@ -29,7 +29,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@color/accent"
-            android:textSize="12sp"
+            android:textSize="13sp"
             android:textStyle="bold"
             android:paddingStart="8dp" />
     </LinearLayout>
@@ -39,15 +39,15 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textColor="@color/text_secondary"
-        android:textSize="11sp"
-        android:paddingTop="2dp" />
+        android:textSize="12sp"
+        android:paddingTop="3dp" />
 
     <ProgressBar
         android:id="@+id/itemBar"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="4dp"
-        android:layout_marginTop="4dp"
+        android:layout_height="5dp"
+        android:layout_marginTop="5dp"
         android:max="100"
         android:progress="0"
         android:progressTint="@color/accent"

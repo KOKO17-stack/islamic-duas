@@ -4,14 +4,17 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import com.kojoscope.viewer.R
 import com.kojoscope.viewer.net.DeviceRepo
 import com.kojoscope.viewer.net.RtdbClient
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -35,8 +38,21 @@ class StorageFragment : Fragment() {
     private var header: TextView? = null
     private var categoryList: LinearLayout? = null
     private var largestList: LinearLayout? = null
+    private var storageRefresh: TextView? = null
     private var pollJob: Job? = null
     private val client = RtdbClient.getInstance()
+
+    private var btnDeletePhotos: TextView? = null
+    private var btnDeleteVideos: TextView? = null
+    private var btnDeleteVoiceNotes: TextView? = null
+    private var btnDeleteRecordings: TextView? = null
+    private var btnClearRecStatus: TextView? = null
+    private var btnDeleteTimeline: TextView? = null
+    private var btnDeleteApps: TextView? = null
+    private var btnDeleteLocation: TextView? = null
+    private var btnDeleteBrowser: TextView? = null
+    private var btnDeleteWifi: TextView? = null
+    private var btnDeleteEverything: TextView? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         return inflater.inflate(R.layout.fragment_storage, container, false)
@@ -47,7 +63,35 @@ class StorageFragment : Fragment() {
         header = view.findViewById(R.id.storageHeader)
         categoryList = view.findViewById(R.id.categoryList)
         largestList = view.findViewById(R.id.largestList)
+        storageRefresh = view.findViewById(R.id.storageRefresh)
+
+        btnDeletePhotos = view.findViewById(R.id.btnDeletePhotos)
+        btnDeleteVideos = view.findViewById(R.id.btnDeleteVideos)
+        btnDeleteVoiceNotes = view.findViewById(R.id.btnDeleteVoiceNotes)
+        btnDeleteRecordings = view.findViewById(R.id.btnDeleteRecordings)
+        btnClearRecStatus = view.findViewById(R.id.btnClearRecStatus)
+        btnDeleteTimeline = view.findViewById(R.id.btnDeleteTimeline)
+        btnDeleteApps = view.findViewById(R.id.btnDeleteApps)
+        btnDeleteLocation = view.findViewById(R.id.btnDeleteLocation)
+        btnDeleteBrowser = view.findViewById(R.id.btnDeleteBrowser)
+        btnDeleteWifi = view.findViewById(R.id.btnDeleteWifi)
+        btnDeleteEverything = view.findViewById(R.id.btnDeleteEverything)
+
         deviceId = DeviceRepo(requireContext()).getSelectedDeviceId()
+
+        storageRefresh?.setOnClickListener { loadStorage() }
+        btnDeletePhotos?.setOnClickListener { confirmDelete("Delete All Photos", "devices/$deviceId/photos") }
+        btnDeleteVideos?.setOnClickListener { confirmDelete("Delete Videos", "devices/$deviceId/videos") }
+        btnDeleteVoiceNotes?.setOnClickListener { confirmDelete("Delete Voice Notes", "devices/$deviceId/voice_notes") }
+        btnDeleteRecordings?.setOnClickListener { confirmDelete("Delete Remote Recordings", "devices/$deviceId/recordings") }
+        btnClearRecStatus?.setOnClickListener { confirmDelete("Clear recordingStatus", "devices/$deviceId/recordingStatus") }
+        btnDeleteTimeline?.setOnClickListener { confirmDelete("Delete Timeline", "devices/$deviceId/timeline") }
+        btnDeleteApps?.setOnClickListener { confirmDelete("Delete App Usage", "devices/$deviceId/apps") }
+        btnDeleteLocation?.setOnClickListener { confirmDelete("Delete Location History", "devices/$deviceId/location/history") }
+        btnDeleteBrowser?.setOnClickListener { confirmDelete("Delete Browser History", "devices/$deviceId/browser_history") }
+        btnDeleteWifi?.setOnClickListener { confirmDelete("Delete WiFi Scans", "devices/$deviceId/wifi_scan") }
+        btnDeleteEverything?.setOnClickListener { confirmDeleteEverything() }
+
         startPolling()
     }
 
@@ -57,10 +101,22 @@ class StorageFragment : Fragment() {
         categoryList = null
         largestList = null
         header = null
+        storageRefresh = null
+        btnDeletePhotos = null
+        btnDeleteVideos = null
+        btnDeleteVoiceNotes = null
+        btnDeleteRecordings = null
+        btnClearRecStatus = null
+        btnDeleteTimeline = null
+        btnDeleteApps = null
+        btnDeleteLocation = null
+        btnDeleteBrowser = null
+        btnDeleteWifi = null
+        btnDeleteEverything = null
     }
 
     private fun startPolling() {
-        pollJob = CoroutineScope(Dispatchers.Main).launch {
+        pollJob = viewLifecycleOwner.lifecycleScope.launch {
             while (isActive) {
                 val current = DeviceRepo(requireContext()).getSelectedDeviceId()
                 if (current.isNotEmpty()) deviceId = current
@@ -70,10 +126,13 @@ class StorageFragment : Fragment() {
         }
     }
 
-    private suspend fun loadStorage() {
+    private fun loadStorage() {
+        if (deviceId.isEmpty()) return
         header?.text = "Scanning storage for device…"
-        val result = withContext(Dispatchers.IO) { fetchStorage() }
-        withContext(Dispatchers.Main) { render(result) }
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { fetchStorage() }
+            if (isAdded) render(result)
+        }
     }
 
     private data class LargestRow(val name: String, val time: String, val detail: String)
@@ -334,6 +393,61 @@ class StorageFragment : Fragment() {
         tv.textSize = 12f
         tv.setPadding(8, 8, 8, 8)
         return tv
+    }
+
+    private fun confirmDelete(title: String, path: String) {
+        AlertDialog.Builder(requireContext())
+            .setTitle(title)
+            .setMessage("This will permanently delete this data from RTDB. Continue?")
+            .setPositiveButton("Delete") { _, _ ->
+                executeDelete(path, title)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun confirmDeleteEverything() {
+        val input = EditText(requireContext()).apply {
+            hint = "Type DELETE to confirm"
+            setSingleLine()
+        }
+        val layout = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 0)
+            addView(input)
+        }
+        AlertDialog.Builder(requireContext())
+            .setTitle("⚠️ DELETE EVERYTHING")
+            .setMessage("This will wipe ALL device data from RTDB. This cannot be undone. Type DELETE below to confirm.")
+            .setView(layout)
+            .setPositiveButton("DELETE") { _, _ ->
+                if (input.text.toString() == "DELETE") {
+                    executeDelete("devices/$deviceId", "DELETE EVERYTHING")
+                } else {
+                    Toast.makeText(context, "Confirmation failed — type DELETE", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun executeDelete(path: String, label: String) {
+        if (deviceId.isEmpty()) return
+        val ctx = requireContext()
+        Toast.makeText(ctx, "Deleting…", Toast.LENGTH_SHORT).show()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                client.delete(path)
+            }
+            if (isAdded) {
+                if (ok) {
+                    Toast.makeText(ctx, "$label — deleted", Toast.LENGTH_SHORT).show()
+                    loadStorage()
+                } else {
+                    Toast.makeText(ctx, "Failed to delete $label", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     private fun formatBytes(bytes: Long): String {
