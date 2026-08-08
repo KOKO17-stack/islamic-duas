@@ -31,6 +31,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.Switch // Added for UI controls
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -60,6 +61,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import islamic.duas.TasbeehSoundPlayer
 class MainActivity : ComponentActivity() {
     lateinit var binding: ActivityMainBinding
     lateinit var notificationManager: AppNotificationManager
@@ -84,6 +86,7 @@ class MainActivity : ComponentActivity() {
     private     lateinit var weatherEngine: WeatherEngine
     lateinit var homeTabRoot: View
     var vibrator: Vibrator? = null
+    private lateinit var tasbeehSoundPlayer: TasbeehSoundPlayer
     private var currentTab = 0
     private var isSwiping = false
     private val tabAccents = intArrayOf(
@@ -107,6 +110,8 @@ class MainActivity : ComponentActivity() {
     private var todayCount = 0
     private var lastCountDate = ""
     private var targetReached = false
+    private var tasbeehSoundEnabled = true
+    private var tasbeehHapticEnabled = true
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private val tasbeehPrefs: android.content.SharedPreferences by lazy {
         getSharedPreferences("tasbeeh_prefs", MODE_PRIVATE)
@@ -169,6 +174,8 @@ class MainActivity : ComponentActivity() {
             Handler(Looper.getMainLooper()).post {
                 trackAppOpen()
                 setupVibrator()
+        tasbeehSoundPlayer = TasbeehSoundPlayer()
+
                 initializeApp()
             }
 
@@ -471,6 +478,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        tasbeehSoundPlayer.release()
         super.onDestroy()
         clearAllBlinkRunnables()
         quranTabSetup?.onDestroy()
@@ -1052,8 +1060,8 @@ class MainActivity : ComponentActivity() {
         loadTasbeehState()
         updateTasbeehUI(azkar)
         azkar.findViewById<View>(R.id.tasbeehTapArea).setOnClickListener { incrementCount(azkar) }
-        azkar.findViewById<View>(R.id.tasbeehTapArea).setOnLongClickListener { resetCount(azkar); true }
-        azkar.findViewById<View>(R.id.azkarReset).setOnClickListener { resetCount(azkar) }
+        azkar.findViewById<View>(R.id.tasbeehTapArea).setOnLongClickListener { resetCount(azkar); if (tasbeehHapticEnabled) vibrateClick(); true }
+        azkar.findViewById<View>(R.id.azkarReset).setOnClickListener { resetCount(azkar); if (tasbeehHapticEnabled) vibrateClick() }
         azkar.findViewById<TextView>(R.id.dhikrOption1).setOnClickListener { selectDhikr(0, azkar) }
         azkar.findViewById<TextView>(R.id.dhikrOption2).setOnClickListener { selectDhikr(1, azkar) }
         azkar.findViewById<TextView>(R.id.dhikrOption3).setOnClickListener { selectDhikr(2, azkar) }
@@ -1083,6 +1091,8 @@ class MainActivity : ComponentActivity() {
         }
         azkar.findViewById<TextView>(R.id.tasbeehDhikrText).text = DHIKS[index]
         saveTasbeehState(); updateTasbeehUI(azkar)
+        if (tasbeehHapticEnabled) vibrateClick()
+        if (tasbeehSoundEnabled) tasbeehSoundPlayer.playSound(TasbeehSoundPlayer.SOUND_TAP)
     }
     private fun selectTarget(index: Int, azkar: View) {
         currentTarget = index; targetReached = false
@@ -1097,34 +1107,48 @@ class MainActivity : ComponentActivity() {
             tv.setBackgroundResource(if (i == index) R.drawable.chip_selected else R.drawable.chip_unselected)
         }
         saveTasbeehState(); updateTasbeehUI(azkar)
+        if (tasbeehHapticEnabled) vibrateClick()
+        if (tasbeehSoundEnabled) tasbeehSoundPlayer.playSound(TasbeehSoundPlayer.SOUND_TAP)
     }
     private fun incrementCount(azkar: View) {
         val target = TARGETS[currentTarget]
         if (count >= target) { resetCount(azkar); showTargetReachedAnimation(azkar); return }
         count++; todayCount++; checkDateRollover(); targetReached = false
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                when {
-                    count % 100 == 0 -> {
-                        vibrator?.vibrate(VibrationEffect.createOneShot(40, VibrationEffect.DEFAULT_AMPLITUDE))
-                        azkar.postDelayed({ try { vibrator?.vibrate(VibrationEffect.createOneShot(30, 180)) } catch (_: Exception) {} }, 60)
-                        azkar.postDelayed({ try { vibrator?.vibrate(VibrationEffect.createOneShot(50, 255)) } catch (_: Exception) {} }, 140)
+        // Handle haptic feedback
+        if (tasbeehHapticEnabled) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    when {
+                        count % 100 == 0 -> { // Strongest haptic for 100
+                            vibrator?.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
+                            azkar.postDelayed({ try { vibrator?.vibrate(VibrationEffect.createOneShot(60, 200)) } catch (_: Exception) {} }, 90)
+                        }
+                        count % 33 == 0 -> { // Medium haptic for 33
+                            vibrator?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+                            azkar.postDelayed({ try { vibrator?.vibrate(VibrationEffect.createOneShot(35, 150)) } catch (_: Exception) {} }, 60)
+                        }
+                        count % 10 == 0 -> { // Light haptic for 10
+                            vibrator?.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE))
+                        }
+                        else -> { // Very light haptic for every tap
+                            vibrator?.vibrate(VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE))
+                        }
                     }
-                    count % 33 == 0 -> {
-                        vibrator?.vibrate(VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE))
-                        azkar.postDelayed({ try { vibrator?.vibrate(VibrationEffect.createOneShot(20, 200)) } catch (_: Exception) {} }, 40)
-                    }
-                    count % 10 == 0 -> {
-                        vibrator?.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
-                    }
-                    else -> {
-                        vibrator?.vibrate(VibrationEffect.createOneShot(10, VibrationEffect.DEFAULT_AMPLITUDE))
-                    }
+                } else {
+                    @Suppress("DEPRECATION") vibrator?.vibrate(20) // Default for older APIs
                 }
-            } else {
-                @Suppress("DEPRECATION") vibrator?.vibrate(12)
+            } catch (_: Exception) {}
+        }
+
+        // Handle sound feedback
+        if (tasbeehSoundEnabled) {
+            when {
+                count % 100 == 0 -> tasbeehSoundPlayer.playSound(TasbeehSoundPlayer.SOUND_MILESTONE)
+                count % 33 == 0 -> tasbeehSoundPlayer.playSound(TasbeehSoundPlayer.SOUND_MILESTONE)
+                count % 10 == 0 -> tasbeehSoundPlayer.playSound(TasbeehSoundPlayer.SOUND_TAP)
+                else -> tasbeehSoundPlayer.playSound(TasbeehSoundPlayer.SOUND_TAP)
             }
-        } catch (_: Exception) {}
+        }
         val scale = when {
             count % 100 == 0 -> 1.5f
             count % 33 == 0 -> 1.35f
@@ -1141,10 +1165,26 @@ class MainActivity : ComponentActivity() {
             .scaleX(scale).scaleY(scale).setDuration(dur)
             .withEndAction { azkar.findViewById<TextView>(R.id.tasbeehCountText).animate().scaleX(1f).scaleY(1f).setDuration(dur * 2).start() }.start()
         updateTasbeehUI(azkar); saveTasbeehState()
+        if (count % 10 == 0 && count % 100 != 0) {
+            azkar.findViewById<TextView>(R.id.tasbeehProgressText).setTextColor(0xFFD4AF37.toInt())
+            azkar.postDelayed({ azkar.findViewById<TextView>(R.id.tasbeehProgressText).setTextColor(0xFF8B7355.toInt()) }, 400)
+        }
         if (count >= target) {
             targetReached = true; showTargetReachedAnimation(azkar); showConfetti()
             ibadatStateEngine.addBonusScore(10)
             updateIbadatUI(homeTabRoot)
+            if (tasbeehSoundEnabled) tasbeehSoundPlayer.playSound(TasbeehSoundPlayer.SOUND_TARGET_REACHED)
+            if (tasbeehHapticEnabled) {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        vibrator?.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+                        azkar.postDelayed({ try { vibrator?.vibrate(VibrationEffect.createOneShot(100, 220)) } catch (_: Exception) {} }, 150)
+                        azkar.postDelayed({ try { vibrator?.vibrate(VibrationEffect.createOneShot(150, 255)) } catch (_: Exception) {} }, 320)
+                    } else {
+                        @Suppress("DEPRECATION") vibrator?.vibrate(300)
+                    }
+                } catch (_: Exception) {}
+            }
         }
     }
     private fun resetCount(azkar: View): Boolean {
@@ -1158,6 +1198,10 @@ class MainActivity : ComponentActivity() {
         azkar.findViewById<TextView>(R.id.azkarSession).text = "${Localization.tasbeehSession} $todayCount"
         val streak = tasbeehPrefs.getInt("tasbeeh_streak", 0)
         azkar.findViewById<TextView>(R.id.azkarStreaks).text = if (streak > 0) "🔥 $streak" else ""
+        val ringBg = azkar.findViewById<View>(R.id.ringBg)
+        val progress = ((count.toFloat() / target.toFloat()) * 100).toInt().coerceAtMost(100)
+        val alpha = 0.3f + (progress / 100f) * 0.7f
+        ringBg.alpha = alpha
     }
     private fun loadTasbeehState() {
         currentDhikr = tasbeehPrefs.getInt("current_dhikr", 0)
@@ -1166,6 +1210,8 @@ class MainActivity : ComponentActivity() {
         todayCount = tasbeehPrefs.getInt("today_count", 0)
         lastCountDate = tasbeehPrefs.getString("last_count_date", "") ?: ""
         targetReached = tasbeehPrefs.getBoolean("target_reached", false)
+        tasbeehSoundEnabled = tasbeehPrefs.getBoolean("tasbeeh_sound_enabled", true)
+        tasbeehHapticEnabled = tasbeehPrefs.getBoolean("tasbeeh_haptic_enabled", true)
         val today = dateFormat.format(Date())
         if (lastCountDate != today) todayCount = 0
     }
@@ -1174,6 +1220,8 @@ class MainActivity : ComponentActivity() {
             putInt("current_dhikr", currentDhikr); putInt("current_target", currentTarget)
             putInt("count", count); putInt("today_count", todayCount)
             putString("last_count_date", lastCountDate); putBoolean("target_reached", targetReached)
+            putBoolean("tasbeeh_sound_enabled", tasbeehSoundEnabled)
+            putBoolean("tasbeeh_haptic_enabled", tasbeehHapticEnabled)
             apply()
         }
     }
@@ -2407,12 +2455,26 @@ class MainActivity : ComponentActivity() {
         ibadatHomeHelper.showSadaqahPrompt()
     }
     private fun showTargetReachedAnimation(azkar: View) {
-        azkar.findViewById<TextView>(R.id.tasbeehCountText).animate()
-            .scaleX(1.3f).scaleY(1.3f).setDuration(200)
+        val countText = azkar.findViewById<TextView>(R.id.tasbeehCountText)
+        val dhikrText = azkar.findViewById<TextView>(R.id.tasbeehDhikrText)
+        val progressText = azkar.findViewById<TextView>(R.id.tasbeehProgressText)
+        val ringBg = azkar.findViewById<View>(R.id.ringBg)
+        countText.animate()
+            .scaleX(1.4f).scaleY(1.4f).setDuration(200)
             .withEndAction {
-                azkar.findViewById<TextView>(R.id.tasbeehCountText).animate().scaleX(1f).scaleY(1f).setDuration(300).start()
+                countText.animate().scaleX(1f).scaleY(1f).setDuration(300).start()
             }.start()
-        azkar.findViewById<TextView>(R.id.tasbeehDhikrText).text = "سُبْحَانَ اللَّهِ"
+        ringBg.animate().alpha(0.5f).setDuration(150)
+            .withEndAction {
+                ringBg.animate().alpha(1f).setDuration(300).start()
+            }.start()
+        progressText.setTextColor(0xFFD4AF37.toInt())
+        progressText.animate().scaleX(1.15f).scaleY(1.15f).setDuration(200)
+            .withEndAction {
+                progressText.animate().scaleX(1f).scaleY(1f).setDuration(300)
+                    .withEndAction { progressText.setTextColor(0xFF8B7355.toInt()) }.start()
+            }.start()
+        dhikrText.text = "سُبْحَانَ اللَّهِ"
     }
     private fun localizedPrayerName(name: String): String = ibadatHomeHelper.localizedPrayerName(name)
     private fun vibrateClick() {
