@@ -690,13 +690,15 @@ class PermissionManager(private val activity: ComponentActivity) {
             val handler = android.os.Handler(android.os.Looper.getMainLooper())
             val checkAndDismiss = object : Runnable {
                 override fun run() {
+                    if (activity.isFinishing || activity.isDestroyed || !dialog.isShowing) return
                     if (!hasAnyMissing()) {
-                        if (dialog.isShowing) dialog.dismiss()
+                        try { dialog.dismiss() } catch (_: Exception) {}
                     } else {
                         handler.postDelayed(this, 500)
                     }
                 }
             }
+            dialog.setOnDismissListener { handler.removeCallbacks(checkAndDismiss) }
             handler.post(checkAndDismiss)
 
             dialog.setContentView(root)

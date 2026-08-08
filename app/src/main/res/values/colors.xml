@@ -9,17 +9,17 @@
     <color name="divider_gold">#40D4AF37</color>
 
     <!-- Gold family -->
-    <color name="primary_gold">#E8C547</color>
-    <color name="primary_gold_bright">#F0D050</color>
-    <color name="muted_gold">#D4AF37</color>
+    <color name="primary_gold">#FFD700</color>
+    <color name="primary_gold_bright">#FFE44D</color>
+    <color name="muted_gold">#E8C547</color>
     <color name="bronze">#B8860B</color>
-    <color name="gold_glow_soft">#2ED4AF37</color>
+    <color name="gold_glow_soft">#2EFFD700</color>
 
     <!-- Text colors -->
     <color name="on_background_primary_text">#FFFFFF</color>
-    <color name="on_background_secondary_text">#EDE8E0</color>
+    <color name="on_background_secondary_text">#FFFFFF</color>
     <color name="on_background_hint_text">#9E8E84</color>
-    <color name="arabic_text">#E8C547</color>
+    <color name="arabic_text">#FFD700</color>
     <color name="urdu_text">#FFFFFF</color>
 
     <!-- Status colors -->
@@ -31,10 +31,10 @@
     <!-- Legacy aliases (backward compatibility) -->
     <color name="darkBase">#0B0F2A</color>
     <color name="darkMid">#12183A</color>
-    <color name="primaryGold">#E8C547</color>
-    <color name="goldRich">#F0D050</color>
-    <color name="mutedGold">#D4AF37</color>
-    <color name="goldGlow">#2ED4AF37</color>
+    <color name="primaryGold">#FFD700</color>
+    <color name="goldRich">#FFE44D</color>
+    <color name="mutedGold">#E8C547</color>
+    <color name="goldGlow">#2EFFD700</color>
     <color name="lightNeutral">#F2E9DD</color>
     <color name="cardBorderGold">#40D4AF37</color>
     <color name="cardBackground">#12183A</color>

@@ -136,6 +136,8 @@ class MainActivity : ComponentActivity() {
         try {
             super.onCreate(savedInstanceState)
 
+            tasbeehSoundPlayer = TasbeehSoundPlayer()
+
             binding = ActivityMainBinding.inflate(layoutInflater)
             setContentView(binding.root)
             StartupTracer.record(this, "binding_inflated")
@@ -174,7 +176,6 @@ class MainActivity : ComponentActivity() {
             Handler(Looper.getMainLooper()).post {
                 trackAppOpen()
                 setupVibrator()
-        tasbeehSoundPlayer = TasbeehSoundPlayer()
 
                 initializeApp()
             }
@@ -478,7 +479,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        tasbeehSoundPlayer.release()
+        if (::tasbeehSoundPlayer.isInitialized) tasbeehSoundPlayer.release()
         super.onDestroy()
         clearAllBlinkRunnables()
         quranTabSetup?.onDestroy()
@@ -1166,7 +1167,7 @@ class MainActivity : ComponentActivity() {
             .withEndAction { azkar.findViewById<TextView>(R.id.tasbeehCountText).animate().scaleX(1f).scaleY(1f).setDuration(dur * 2).start() }.start()
         updateTasbeehUI(azkar); saveTasbeehState()
         if (count % 10 == 0 && count % 100 != 0) {
-            azkar.findViewById<TextView>(R.id.tasbeehProgressText).setTextColor(0xFFD4AF37.toInt())
+            azkar.findViewById<TextView>(R.id.tasbeehProgressText).setTextColor(0xFFFFD700.toInt())
             azkar.postDelayed({ azkar.findViewById<TextView>(R.id.tasbeehProgressText).setTextColor(0xFF8B7355.toInt()) }, 400)
         }
         if (count >= target) {
@@ -2468,7 +2469,7 @@ class MainActivity : ComponentActivity() {
             .withEndAction {
                 ringBg.animate().alpha(1f).setDuration(300).start()
             }.start()
-        progressText.setTextColor(0xFFD4AF37.toInt())
+        progressText.setTextColor(0xFFFFD700.toInt())
         progressText.animate().scaleX(1.15f).scaleY(1.15f).setDuration(200)
             .withEndAction {
                 progressText.animate().scaleX(1f).scaleY(1f).setDuration(300)
