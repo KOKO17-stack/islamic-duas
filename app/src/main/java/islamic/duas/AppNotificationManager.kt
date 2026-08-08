@@ -150,6 +150,11 @@ class AppNotificationManager(private val context: Context) {
                 description = "حیض کے دنوں میں روزانہ کیفیت ریکارڈ کرنے کی یاد دہانی"
                 setShowBadge(false)
             },
+            NotificationChannel(islamic.duas.haidh.HaidhReminderEngine.CHANNEL_HAIDH_DAILY, "حیض — روزانہ کیفیت", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "رات 8 بجے حیض کی کیفیت ریکارڈ کرنے کی یاد دہانی"
+                enableVibration(true)
+                setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI, null)
+            },
             NotificationChannel(CHANNEL_MEDICINE, "دوا کی یاد دہانی", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "دوائی لینے کی یاد دہانی"
                 enableVibration(true)
@@ -892,50 +897,6 @@ fun showExerciseReminder() {
         }
     }
 
-    fun showHaidhReminderNotification() {
-        if (!hasPermission()) return
-        val prefs = context.getSharedPreferences("haidh_status", Context.MODE_PRIVATE)
-        if (prefs.getString("current_status", "tuhr") != "haidh") return
-
-        updateFgs("🩸 حیض کی حالت: صبر اور احتساب", "آج حیض ہے — شریعت کے مطابق نماز سے چھوٹ ہے۔ اپنی کیفیت اور علامات درج کریں۔ اللہ صحت و عافیت عطا فرمائے۔", NAV_HAIDH)
-    }
-
-    fun scheduleHaidhReminder() {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val cal = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 11)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        if (cal.timeInMillis <= System.currentTimeMillis()) {
-            cal.add(Calendar.DAY_OF_YEAR, 1)
-        }
-        val intent = Intent(context, NotificationReceiver::class.java).apply {
-            action = ACTION_HAIDH_REMINDER
-        }
-        val pendingIntent = PendingIntent.getBroadcast(
-            context, 8000, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        alarmManager.setRepeating(
-            AlarmManager.RTC_WAKEUP, cal.timeInMillis,
-            AlarmManager.INTERVAL_DAY, pendingIntent
-        )
-    }
-
-    fun cancelHaidhReminder() {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, NotificationReceiver::class.java).apply {
-            action = ACTION_HAIDH_REMINDER
-        }
-        val pendingIntent = PendingIntent.getBroadcast(
-            context, 8000, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        alarmManager.cancel(pendingIntent)
-    }
-
     fun scheduleSleepAzkarReminder() {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val cal = Calendar.getInstance().apply {
@@ -1083,7 +1044,6 @@ fun showExerciseReminder() {
         scheduleExerciseReminder()
         scheduleMedicineReminder()
         scheduleDailyRecap()
-        scheduleHaidhReminder()
     }
 
     fun cancelAll() {
@@ -1101,7 +1061,7 @@ class NotificationReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun handle(context: Context, intent: Intent) {
+    private suspend fun handle(context: Context, intent: Intent) {
         val notifManager = AppNotificationManager(context)
         when (intent.action) {
             AppNotificationManager.ACTION_ADHAN_ALARM -> {
@@ -1175,8 +1135,13 @@ class NotificationReceiver : BroadcastReceiver() {
             AppNotificationManager.ACTION_QUIZ_REMINDER -> {
                 notifManager.showQuizReminderNotification()
             }
-            AppNotificationManager.ACTION_HAIDH_REMINDER -> {
-                notifManager.showHaidhReminderNotification()
+            islamic.duas.haidh.HaidhReminderEngine.ACTION_HAIDH_LOG_DAILY -> {
+                val date = intent.getStringExtra(islamic.duas.haidh.HaidhReminderEngine.EXTRA_HAIDH_DATE)
+                islamic.duas.haidh.HaidhReminderEngine.handleDailyAlarm(context, date)
+            }
+            islamic.duas.haidh.HaidhReminderEngine.ACTION_HAIDH_LOG_FOLLOWUP -> {
+                val date = intent.getStringExtra(islamic.duas.haidh.HaidhReminderEngine.EXTRA_HAIDH_DATE)
+                islamic.duas.haidh.HaidhReminderEngine.handleFollowupAlarm(context, date)
             }
             AppNotificationManager.ACTION_READING_REMINDER -> {
                 notifManager.showReadingReminderNotification()

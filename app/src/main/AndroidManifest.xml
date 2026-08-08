@@ -144,6 +144,14 @@
             android:theme="@style/Theme.App.EmeraldDusk.Dark" />
 
         <activity
+            android:name=".haidh.HaidhDailyLogActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:theme="@style/Theme.App.EmeraldDusk.MedicationDialog"
+            android:turnScreenOn="true" />
+
+        <activity
             android:name=".OnboardingActivity"
             android:exported="false"
             android:theme="@style/Theme.App.EmeraldDusk.Dark" />

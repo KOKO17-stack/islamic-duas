@@ -318,7 +318,11 @@ class HaidhTrackerActivity : ComponentActivity() {
                         lifecycleScope.launch {
                             dao.upsertDayStatus(newEntry)
                             if (newStatus == MenstrualStatus.HAIDH) {
-                                updatePhaseTracking(dateStr, newStatus)
+                                CyclePhaseHelper.updatePhaseTracking(dao, dateStr, newStatus)
+                            }
+                            HaidhReminderEngine.onStatusLogged(this@HaidhTrackerActivity, newStatus, newIstihada)
+                            if (dateStr == LocalDate.now().format(dateFormatter)) {
+                                syncCurrentStatus(newStatus, newIstihada)
                             }
                             selectedYear = year
                             selectedMonth = month
@@ -399,60 +403,14 @@ class HaidhTrackerActivity : ComponentActivity() {
         }
     }
 
-    // ── Phase tracking (needed for Haidh saves) ──
-
-    private suspend fun updatePhaseTracking(dateStr: String, status: MenstrualStatus) {
-        val blockStart = findHaidhBlockStart(dateStr)
-        val blockEnd = findHaidhBlockEnd(dateStr)
-
-        dao.deletePhasesInRange(blockStart, blockEnd, MenstrualStatus.HAIDH)
-
-        var scanDate = LocalDate.parse(blockStart, dateFormatter)
-        val endDate = LocalDate.parse(blockEnd, dateFormatter)
-        var cycleDay = 1
-        while (!scanDate.isAfter(endDate)) {
-            val scanDateStr = scanDate.format(dateFormatter)
-            val entry = dao.getDayStatus(scanDateStr)
-            if (entry?.status == MenstrualStatus.HAIDH) {
-                dao.upsertPhase(CyclePhaseEntity(
-                    startDate = scanDateStr,
-                    endDate = scanDateStr,
-                    status = MenstrualStatus.HAIDH,
-                    cycleDay = cycleDay
-                ))
-                cycleDay++
-            }
-            scanDate = scanDate.plusDays(1)
+    private fun syncCurrentStatus(status: MenstrualStatus, istihadaType: IstihadaType) {
+        val key = when {
+            status == MenstrualStatus.HAIDH -> "haidh"
+            else -> "tuhr" // taharat and istihada both mean prayers are allowed
         }
-    }
-
-    private suspend fun findHaidhBlockStart(fromDate: String): String {
-        var date = LocalDate.parse(fromDate, dateFormatter)
-        while (true) {
-            val prevDate = date.minusDays(1)
-            val prevDateStr = prevDate.format(dateFormatter)
-            val prevEntry = dao.getDayStatus(prevDateStr)
-            if (prevEntry?.status != MenstrualStatus.HAIDH) {
-                return date.format(dateFormatter)
-            }
-            date = prevDate
-        }
+        getSharedPreferences("haidh_status", MODE_PRIVATE)
+            .edit().putString("current_status", key).apply()
     }
 
     private fun dp(dp: Int): Int = (dp * resources.displayMetrics.density + 0.5f).toInt()
-
-    private suspend fun findHaidhBlockEnd(fromDate: String): String {
-        var date = LocalDate.parse(fromDate, dateFormatter)
-        val todayStr = LocalDate.now().format(dateFormatter)
-        while (true) {
-            val nextDate = date.plusDays(1)
-            val nextDateStr = nextDate.format(dateFormatter)
-            if (nextDateStr > todayStr) return date.format(dateFormatter)
-            val nextEntry = dao.getDayStatus(nextDateStr)
-            if (nextEntry?.status != MenstrualStatus.HAIDH) {
-                return date.format(dateFormatter)
-            }
-            date = nextDate
-        }
-    }
 }

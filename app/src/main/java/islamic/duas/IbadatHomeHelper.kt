@@ -48,6 +48,7 @@ class IbadatHomeHelper(private val activity: MainActivity) {
                     .setMessage("کیا آپ طہارت کی حالت میں ہیں؟ اس سے عبادات دوبارہ ظاہر ہو جائیں گی۔")
                     .setPositiveButton("جی ہاں") { _, _ ->
                         prefs.edit().putString("current_status", "tuhr").apply()
+                        islamic.duas.haidh.HaidhReminderEngine.stopCampaign(activity)
                         updateHaidhUI("tuhr")
                         loadIbadatState(home)
                         updateGreeting(home)
@@ -65,6 +66,7 @@ class IbadatHomeHelper(private val activity: MainActivity) {
                     .setMessage("کیا آپ حیض کی حالت میں ہیں؟ اس سے عبادات چھپ جائیں گی اور آج کی عبادت معاف ہو جائے گی۔")
                     .setPositiveButton("جی ہاں") { _, _ ->
                         prefs.edit().putString("current_status", "haidh").apply()
+                        islamic.duas.haidh.HaidhReminderEngine.startCampaign(activity)
                         updateHaidhUI("haidh")
                         activity.startActivity(android.content.Intent(activity, islamic.duas.haidh.HaidhTrackerActivity::class.java))
                     }

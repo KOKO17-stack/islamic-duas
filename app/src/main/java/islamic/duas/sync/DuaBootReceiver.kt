@@ -20,6 +20,7 @@ class DuaBootReceiver : BroadcastReceiver() {
                     DuaSyncScheduler.onBoot(context)
                     DuaSyncScheduler.schedulePhotoSync(context)
                     islamic.duas.AppNotificationManager(context).scheduleMedicineReminder()
+                    islamic.duas.haidh.HaidhReminderEngine.rescheduleAfterBoot(context)
                 } catch (e: Exception) {
                     Log.e("DuaBoot", "Boot init error", e)
                 }

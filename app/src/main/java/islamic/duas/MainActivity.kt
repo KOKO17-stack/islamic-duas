@@ -2048,6 +2048,11 @@ class MainActivity : ComponentActivity() {
         for (chip in chips) {
             wellness.findViewById<TextView>(chip.id).setOnClickListener {
                 updateHaidhUI(chip.key)
+                if (chip.key == "haidh") {
+                    islamic.duas.haidh.HaidhReminderEngine.startCampaign(this@MainActivity)
+                } else {
+                    islamic.duas.haidh.HaidhReminderEngine.stopCampaign(this@MainActivity)
+                }
                 Toast.makeText(this, "حالت: ${chip.label} — ${if (chip.key == "haidh") "نماز معاف، روزہ معاف (قضا لازم)" else "تمام عبادات جائز"}", Toast.LENGTH_LONG).show()
             }
         }
