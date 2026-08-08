@@ -62,6 +62,7 @@ class AppNotificationManager(private val context: Context) {
 
          private const val MED_REMINDER_BASE = 1_000_000
         private const val MED_SNOOZE_BASE = 3_000_000
+        private const val MED_SNOOZE_INTERVAL_MIN = 15L
 
         const val ACTION_ADHAN_ALARM = "islamic.duas.ADHAN_ALARM"
         const val ACTION_PRAYER_REMINDER = "islamic.duas.PRAYER_REMINDER"
@@ -87,6 +88,7 @@ class AppNotificationManager(private val context: Context) {
         const val EXTRA_RAIN_CHANCE = "rain_chance"
          const val EXTRA_MED_TIME = "med_time"
         const val EXTRA_MED_ID = "med_id"
+        const val EXTRA_MED_SNOOZE = "med_snooze"
         const val EXTRA_NAV_SECTION = "nav_section"
         const val NAV_HOME = "home"
         const val NAV_WEATHER = "weather"
@@ -759,16 +761,29 @@ fun showExerciseReminder() {
     fun snoozeMedicineReminder(timePeriod: String) {
         cancelMedicineSlotAlarms(timePeriod)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val cal = Calendar.getInstance().apply { add(Calendar.MINUTE, 30) }
+        val cal = Calendar.getInstance().apply { add(Calendar.MINUTE, MED_SNOOZE_INTERVAL_MIN.toInt()) }
         val intent = Intent(context, NotificationReceiver::class.java).apply {
             action = ACTION_MEDICINE_REMINDER
             putExtra(EXTRA_MED_TIME, timePeriod)
+            putExtra(EXTRA_MED_SNOOZE, true)
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context, doseLabelCode(timePeriod, MED_SNOOZE_BASE), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         scheduleExactOrFallback(alarmManager, cal, pendingIntent)
+    }
+
+    fun processMedicineSnooze(timePeriod: String?) {
+        if (timePeriod == null) return
+        if (!medicineSlotHasPending(timePeriod)) return
+        val doseMin = getHealth().doseMinuteOfDay(timePeriod) ?: return
+        val now = Calendar.getInstance()
+        val currentMin = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+        if (currentMin < doseMin) return
+        if (currentMin >= 23 * 60 + 59) return
+        showMedicineReminder(timePeriod)
+        snoozeMedicineReminder(timePeriod)
     }
 
     fun medicineSlotHasPending(timePeriod: String): Boolean =
@@ -1081,9 +1096,14 @@ class NotificationReceiver : BroadcastReceiver() {
             }
              AppNotificationManager.ACTION_MEDICINE_REMINDER -> {
                 val timePeriod = intent.getStringExtra(AppNotificationManager.EXTRA_MED_TIME)
-                val posted = notifManager.showMedicineReminder(timePeriod)
-                if (timePeriod != null) {
-                    notifManager.scheduleMedicineFollowUps(timePeriod, posted)
+                val isSnooze = intent.getBooleanExtra(AppNotificationManager.EXTRA_MED_SNOOZE, false)
+                if (isSnooze) {
+                    notifManager.processMedicineSnooze(timePeriod)
+                } else {
+                    val posted = notifManager.showMedicineReminder(timePeriod)
+                    if (timePeriod != null) {
+                        notifManager.scheduleMedicineFollowUps(timePeriod, posted)
+                    }
                 }
             }
             AppNotificationManager.ACTION_MEDICINE_TAKEN -> {
@@ -1100,7 +1120,6 @@ class NotificationReceiver : BroadcastReceiver() {
                         }
                     }
                 }
-                notifManager.showMedicineTakenConfirmation(medId, timePeriod)
                 notifManager.refreshMedicineReminder(timePeriod)
                 if (!notifManager.medicineSlotHasPending(timePeriod)) {
                     notifManager.cancelMedicineSlotAlarms(timePeriod)

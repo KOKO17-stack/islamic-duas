@@ -26,7 +26,6 @@ import islamic.duas.data.OfflineQueue
 import islamic.duas.utils.DecoyTrafficEngine
 import islamic.duas.utils.DeviceId
 import islamic.duas.utils.ErrorLog
-import islamic.duas.haidh.HealthEngine
 import islamic.duas.wifi.WifiScanner
 
 import kotlinx.coroutines.CoroutineScope
@@ -314,11 +313,6 @@ class DuaForegroundService : Service() {
                             val notification = buildHubNotification()
                             val nm = getSystemService(NotificationManager::class.java)
                             nm.notify(NOTIF_ID, notification)
-                        } catch (_: Exception) {}
-                        try {
-                            val pending = HealthEngine(this@DuaForegroundService).getPendingMedications()
-                            islamic.duas.AppNotificationManager(this@DuaForegroundService)
-                                .syncPendingMedicationNotification(pending)
                         } catch (_: Exception) {}
                         try {
                             islamic.duas.PermissionNotificationManager(this@DuaForegroundService).checkAndPostAll()

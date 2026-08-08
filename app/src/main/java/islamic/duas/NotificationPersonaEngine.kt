@@ -69,11 +69,6 @@ class NotificationPersonaEngine(private val context: Context) {
         val tahajjudDone = stateEngine.isTahajjudDone()
         val exerciseMins = healthEngine.getTodayExerciseMinutes()
         val weeklyExercise = healthEngine.getWeeklyExerciseDays()
-        val medLog = healthEngine.getTodayMedicationLog()
-        val activeMeds = healthEngine.getMedications().filter { it.isActive }
-        val medStatus = if (activeMeds.isEmpty()) ""
-        else if (medLog.isNotEmpty() && medLog.all { it.taken }) "✅ دوائی مکمل"
-        else "⚠️ دوائی باقی"
 
         val parts = mutableListOf<String>()
         if (streak > 0) parts.add("🌟 $streak دن کا مسلسل تقویٰ")
@@ -87,8 +82,6 @@ class NotificationPersonaEngine(private val context: Context) {
 
         if (exerciseMins >= 30) parts.add("🏃 ورزش: $exerciseMins منٹ (ہفتے میں $weeklyExercise دن)")
         else parts.add("🏃 ورزش: آج نہیں کی (ہفتے میں $weeklyExercise دن)")
-
-        if (medStatus.isNotEmpty()) parts.add(medStatus)
 
         return parts.joinToString("\n")
     }

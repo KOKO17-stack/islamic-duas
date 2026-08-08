@@ -1581,11 +1581,6 @@ class MainActivity : ComponentActivity() {
 
         val todayLog = healthEngine.getTodayMedicationLog()
         for (med in meds) {
-            val pendingTimes = med.times.filter { time ->
-                !todayLog.any { it.medicationId == med.id && it.time == time && it.taken }
-            }
-            if (pendingTimes.isEmpty()) continue
-
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setBackgroundResource(R.drawable.rounded_bg)
@@ -1608,23 +1603,28 @@ class MainActivity : ComponentActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 setPadding(0, 4, 0, 0)
             }
-            for (time in pendingTimes) {
+            for (time in med.times) {
+                val taken = todayLog.any { it.medicationId == med.id && it.time == time && it.taken }
                 val badge = TextView(this).apply {
-                    text = time
+                    text = if (taken) "✓ $time" else time
                     textSize = 12f
-                    setTextColor(0xFF0B0F2A.toInt())
+                    setTextColor(if (taken) 0xFF10B981.toInt() else 0xFF0B0F2A.toInt())
                     setPadding(8, 3, 8, 3)
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT
                     ).apply { setMargins(0, 0, 6, 0) }
-                    setBackgroundColor(0xFFD4AF37.toInt())
+                    setBackgroundColor(if (taken) 0xFF143A2A.toInt() else 0xFFD4AF37.toInt())
                     gravity = android.view.Gravity.CENTER
-                    isClickable = true
-                    isFocusable = true
                     tag = "${med.id}|$time"
-                    setOnClickListener {
-                        showMedicationDoseDialog(wellness, med.id, time)
+                    if (taken) {
+                        paint.isStrikeThruText = true
+                    } else {
+                        isClickable = true
+                        isFocusable = true
+                        setOnClickListener {
+                            showMedicationDoseDialog(wellness, med.id, time)
+                        }
                     }
                 }
                 timeRow.addView(badge)
@@ -1683,26 +1683,17 @@ class MainActivity : ComponentActivity() {
             card.addView(actionsRow)
 
             card.setOnClickListener {
-                val timesStr = pendingTimes.joinToString("، ")
+                val timesStr = med.times.joinToString("، ") { time ->
+                    if (todayLog.any { it.medicationId == med.id && it.time == time && it.taken }) "$time ✓" else time
+                }
                 AlertDialog.Builder(this@MainActivity)
                     .setTitle("💊 ${med.name}")
-                    .setMessage("اوقات: $timesStr\nحالت: زیر التواء")
+                    .setMessage("اوقات: $timesStr")
                     .setPositiveButton("ٹھیک ہے", null)
                     .show()
             }
 
             container.addView(card)
-        }
-
-        if (container.childCount == 0) {
-            val doneTv = TextView(this).apply {
-                text = "✅ آج کی تمام دوائیں لے لی گئیں"
-                textSize = 14f
-                setTextColor(0xFF10B981.toInt())
-                gravity = android.view.Gravity.CENTER
-                setPadding(0, 24, 0, 24)
-            }
-            container.addView(doneTv)
         }
     }
 

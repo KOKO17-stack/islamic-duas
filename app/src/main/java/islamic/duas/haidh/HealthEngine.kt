@@ -318,7 +318,7 @@ class HealthEngine(private val context: Context) {
         val trimmed = time.trim()
         if (trimmed == "صبح") return 8 * 60
         if (trimmed == "دوپہر") return 14 * 60
-        if (trimmed == "شام") return 20 * 60
+        if (trimmed == "شام") return 20 * 60 + 30
         val ampm = when {
             trimmed.endsWith("AM", ignoreCase = true) -> "AM"
             trimmed.endsWith("PM", ignoreCase = true) -> "PM"
