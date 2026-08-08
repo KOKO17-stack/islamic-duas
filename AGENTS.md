@@ -20,8 +20,11 @@ Every instruction, code change, or step must be so precise and unambiguous that 
 - Must always be 100% correct — no room for error since remote debugging is impossible.
 - Refer to `DEVICE_PROFILE_A26.md` for full hardware/software specifications.
 
-#### Secondary: Huawei (Android 10)
-- Always available via USB debugging and physically connected to the development machine.
+#### Secondary: Huawei (Android 10) (MED-LX9)
+- **ALWAYS connected via USB debugging and reachable through the Android SDK (adb).**
+  Physically connected to the development machine at all times.
+- Do NOT search for the device or scan paths. It is ALWAYS available — invoke `adb`
+  directly (e.g., `adb install -r <apk>`, `adb shell ...`) with no discovery step.
 - Use for initial testing and debugging before deploying to the Samsung A26.
 
 ### 5. DEPLOYMENT WORKFLOW
@@ -49,6 +52,28 @@ cd /Users/apple/Documents/islamic-duas
 - Output: `viewer/build/outputs/apk/debug/viewer-debug.apk` (for Huawei USB testing)
 - Build the RELEASE APK (`./gradlew :viewer:assembleRelease`) ONLY when explicitly asked to deploy to the Samsung A26.
 - Never build `:viewer:assembleRelease` unless the user explicitly requests it.
+
+### 5ac. DATA PRESERVATION ON REINSTALL (MANDATORY)
+Every APK built must install onto the target device WITHOUT wiping existing app data:
+exercise calendar, health tracker, medication records, settings, and all other in-app data.
+
+Mechanism:
+- Both debug and release builds are signed with the SAME keystore
+  (`~/.android/debug.keystore`, key alias `androiddebugkey`). Installing a new build OVER an
+  existing install with the same signature is an in-place update that keeps ALL data.
+- NEVER delete, modify, or regenerate `~/.android/debug.keystore`. If the signature changes,
+  Android forces an uninstall → ALL app data is lost.
+
+Rules:
+1. ALWAYS install as an UPGRADE over the existing app. NEVER uninstall first, NEVER
+   "Clear data" — unless the user explicitly instructs it.
+2. Huawei (adb): use `adb install -r <apk>` — the `-r` flag reinstalls while keeping data.
+3. Samsung A26 (manual install via WhatsApp): install the new APK directly over the old one
+   (same signature = update). Do NOT uninstall first.
+4. Never lower `versionCode` in `app/build.gradle.kts` between installs; bump it on each
+   release build so the device always accepts the new APK as an update.
+5. If data loss is ever unavoidable (e.g., recovering from a signature mismatch), say so
+   EXPLICITLY and get the user's approval before proceeding.
 
 ### 5a. SOURCE CODE SYNC WORKFLOW (manual — not automatic)
 After any local code changes, you MUST explicitly sync to GitHub:
